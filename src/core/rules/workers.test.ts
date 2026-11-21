@@ -28,8 +28,24 @@ describe('workers', () => {
     const w = assignWorkers(s, 0, connectedBuildingIds(s, 0));
     expect(w[farm]).toBe(2);
     expect(w[woodcutter]).toBe(1);
-    expect(w[mine]).toBe(1); // partial: only 1 of 2 left
-    expect(w[sawmill]).toBe(0);
+    expect(w[mine]).toBe(0); // only 1 of 2 left: no partial crew
+    expect(w[sawmill]).toBe(1); // smaller crew later in order still gets staffed
+  });
+  it('skips a building whose crew does not fit and continues', () => {
+    const s = setup(); // 4 residents
+    addBuilding(s, 'farm', at(1, 2)); // food, 2 -> 2 left
+    addBuilding(s, 'woodcutter', at(2, 2)); // raw, 1 -> 1 left
+    const mine = addBuilding(s, 'mine', at(3, 2)); // raw, 2 -> does not fit
+    const late = addBuilding(s, 'woodcutter', at(4, 2)); // raw, 1 (newer) -> still staffed
+    const w = assignWorkers(s, 0, connectedBuildingIds(s, 0));
+    expect([w[mine], w[late]]).toEqual([0, 1]);
+  });
+  it('staffs a crew when exactly enough residents remain', () => {
+    const s = setup(); // 4 residents
+    const farm = addBuilding(s, 'farm', at(1, 2)); // 2
+    const mine = addBuilding(s, 'mine', at(2, 2)); // 2
+    const w = assignWorkers(s, 0, connectedBuildingIds(s, 0));
+    expect([w[farm], w[mine]]).toEqual([2, 2]);
   });
   it('older buildings first within a category', () => {
     const s = setup();

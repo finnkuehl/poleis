@@ -118,7 +118,7 @@ Woodcutter ─Wood─┴► Smelter ──Bronze──► Units, wonder
 - **Roads** only on walkable land in the player's own territory (plains, forest, hills – not mountains, not water). A road may pass through the player's own buildings at no cost.
 - **Demolishing** buildings and roads is allowed, **without refund**. The city center cannot be demolished.
 - **Production order:** raw-material buildings (no inputs) produce first, then processing buildings – so freshly cut wood can become planks in the same turn. If goods run short, older buildings go first.
-- **Workers** go only to connected buildings, in this order: food (farm, fishery, bakery), then raw materials, then processing; older buildings first within a group.
+- **Workers** go only to connected buildings, in this order: food (farm, fishery, bakery), then raw materials, then processing; older buildings first within a group. A building only gets workers if its **whole crew** can be filled – otherwise it gets none and the workers go on to the next building, so no worker is wasted.
 - **Interim rule until M3:** housing is filled immediately (city center 4 residents, each house +4). No food consumption, growth or taxes yet – food simply piles up.
 
 ## 6. Population & city levels
