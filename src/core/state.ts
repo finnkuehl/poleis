@@ -1,8 +1,16 @@
 // GameState types (plain, JSON-serializable object).
 
-import { economyConfig, GOOD_IDS, type BuildingId, type Stock, type TerrainId } from '../data';
+import {
+  BUILDINGS,
+  economyConfig,
+  GOOD_IDS,
+  type BuildingId,
+  type Stock,
+  type TerrainId,
+} from '../data';
 import type { Hex } from './hex';
-import { generateMap } from './mapgen';
+import { generateMap, findStartPositions } from './mapgen';
+import { claimTerritory } from './rules/territory';
 import type { TurnReport } from './rules/production';
 import { createRng, seedFromText, type Rng } from './rng';
 
@@ -59,18 +67,24 @@ export function createGameState(seedText: string): GameState {
   for (const [id, amount] of Object.entries(economyConfig.startGoods)) {
     goods[id as keyof Stock] = amount;
   }
-  return {
+  // Starting city: same RNG as the map generation, so everything depends on the seed only.
+  const gameRng = createRng(rng.state);
+  const start = findStartPositions(map, 1, gameRng)[0];
+  const territory = map.tiles.map(() => -1);
+  const state: GameState = {
     version: 1,
     seedText,
     map,
-    rng: createRng(rng.state),
+    rng: gameRng,
     turn: 1,
     currentPlayer: 0,
     players: [{ id: 0, isHuman: true, goods }],
-    buildings: [],
+    buildings: [{ id: 1, type: 'cityCenter', owner: 0, hex: start }],
     roads: map.tiles.map(() => false),
-    territory: map.tiles.map(() => -1),
-    nextId: 1,
+    territory,
+    nextId: 2,
     lastReport: null,
   };
+  claimTerritory(state, start, BUILDINGS.cityCenter.territoryRadius, 0);
+  return state;
 }

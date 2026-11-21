@@ -9,3 +9,4 @@ export * from './placement';
 export * from './connection';
 export * from './workers';
 export * from './production';
+export * from './roads';
