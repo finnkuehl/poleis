@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyAction } from '../actions';
-import { addBuilding, addCity, addUnit, at, makeTestState } from '../testing';
+import { addBuilding, addCity, addRoad, addUnit, at, makeTestState } from '../testing';
 import { tileIndex } from '../map';
 import type { Hex } from '../hex';
 import type { GameState } from '../state';
@@ -80,5 +80,12 @@ describe('foundCity', () => {
     expect(code(found(s, close))).toBe('tooCloseToCity');
     const ok = addUnit(s, 'settler', at(6, 4));
     expect(code(found(s, ok))).toBe('ok');
+  });
+
+  it('refuses a tile with a road', () => {
+    const s = world();
+    const id = addUnit(s, 'settler', at(7, 4));
+    addRoad(s, at(7, 4));
+    expect(code(found(s, id))).toBe('tileOccupied');
   });
 });

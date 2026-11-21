@@ -255,6 +255,7 @@ export const en = {
     cannotDemolishCityCenter: 'The city center cannot be demolished.',
     cannotPause: 'Only buildings with workers can be paused.',
     notOwnUnit: 'That is not your unit.',
+    blockedByUnseen: 'An unseen unit blocks the way.',
     cannotReach: "This unit can't reach that tile this turn.",
     notOwnBuilding: 'That is not your building.',
     alreadyTraining: 'This barracks is already training a unit this turn.',

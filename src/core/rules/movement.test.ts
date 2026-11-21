@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { applyAction } from '../actions';
 import { hexEquals } from '../hex';
 import { addRoad, addUnit, at, makeTestState } from '../testing';
+import { tileIndex } from '../map';
 import { reachableTiles } from './movement';
+import { isVisible } from './vision';
 
 const costTo = (s: ReturnType<typeof makeTestState>, id: number, col: number, row = 0) =>
   reachableTiles(s, id).find((r) => hexEquals(r.hex, at(col, row)))?.cost;
@@ -86,5 +88,47 @@ describe('move action', () => {
     expect(other.ok === false && other.error.code).toBe('notOwnUnit');
     const far = applyAction(s, { type: 'move', unitId: own, to: at(2, 0) });
     expect(far.ok === false && far.error.code).toBe('cannotReach');
+  });
+});
+
+describe('fog and unseen units', () => {
+  it('never reaches unexplored tiles', () => {
+    const s = makeTestState(['pppppp'], { explored: false });
+    const id = addUnit(s, 'scout', at(0, 0));
+    for (const c of [0, 1, 2]) s.players[0].explored[tileIndex(s.map, at(c, 0))] = true;
+    const tiles = reachableTiles(s, id).map((r) => r.hex);
+    expect(tiles).toHaveLength(2);
+    expect(tiles.some((h) => hexEquals(h, at(3, 0)))).toBe(false);
+  });
+
+  it('a hidden enemy is skipped in the display reach but blocks the move', () => {
+    // Own scout at 0, enemy at 3 (explored but out of sight: scout vision is 2... use far tile).
+    const s = makeTestState(['pppppppppp']);
+    const id = addUnit(s, 'scout', at(0, 0), { hasMoved: true, movesLeft: 3 });
+    const enemy = addUnit(s, 'spearman', at(3, 0), { owner: 1 });
+    expect(isVisible(s, 0, at(3, 0))).toBe(false);
+    expect(costTo(s, id, 3)).toBeUndefined();
+    const shown = reachableTiles(s, id, { ignoreHiddenUnits: true });
+    expect(shown.some((r) => hexEquals(r.hex, at(3, 0)))).toBe(true);
+    const res = applyAction(s, { type: 'move', unitId: id, to: at(3, 0) });
+    expect(res.ok === false && res.error.code).toBe('blockedByUnseen');
+    expect(s.units.find((u) => u.id === enemy)).toBeDefined();
+  });
+
+  it('a visible enemy blocks normally, also in the display reach', () => {
+    const s = makeTestState(['pppppp']);
+    const id = addUnit(s, 'scout', at(0, 0));
+    addUnit(s, 'spearman', at(1, 0), { owner: 1 });
+    expect(isVisible(s, 0, at(1, 0))).toBe(true);
+    const shown = reachableTiles(s, id, { ignoreHiddenUnits: true });
+    expect(shown.some((r) => hexEquals(r.hex, at(1, 0)))).toBe(false);
+    const res = applyAction(s, { type: 'move', unitId: id, to: at(1, 0) });
+    expect(res.ok === false && res.error.code).toBe('cannotReach');
+  });
+
+  it('a unit that has attacked reaches nothing', () => {
+    const s = makeTestState(['pppp']);
+    const id = addUnit(s, 'spearman', at(0, 0), { attacked: true });
+    expect(reachableTiles(s, id)).toEqual([]);
   });
 });

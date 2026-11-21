@@ -183,6 +183,7 @@ An enemy land unit that stands on a city center undisturbed for one turn takes o
 ### Detailed rules (decided in M4)
 - **Movement:** a unit's movement points are spent on the cost of each tile it enters (plains 1, forest/hills 2; mountains and water are impassable for land units; a road on the entered tile halves the cost, minimum 0.5). **A unit that has not moved yet this turn may always step onto one neighboring tile**, whatever it costs.
 - **One unit per tile.** Units block each other; a unit can stand on buildings and roads.
+- **Only into explored land:** a unit can only move onto tiles its civilization has already explored (so the fog reveals nothing). A scout explores step by step: move, see further, move on. If an unseen enemy unit stands in the way, the move is blocked ("An unseen unit blocks the way.").
 - **Training:** all land units – settlers included – are trained in a barracks; the cost is paid when ordering, the unit appears at the start of the next turn on the barracks tile (or the nearest free walkable tile next to it). One order per barracks per turn.
 - **Settlers** take 2 residents from the barracks' city (that city needs at least 3). A settler founds a city on a free plains tile at least 4 tiles from every city center; the settler is used up, the new city starts with **2 residents** and claims the unclaimed land in radius 2.
 - **Upkeep:** units eat after the residents; if food runs out, every unit loses 2 HP. A unit at 0 HP is gone.

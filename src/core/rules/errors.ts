@@ -26,6 +26,7 @@ export type RuleErrorCode =
   | 'cannotPause'
   | 'notOwnUnit'
   | 'cannotReach'
+  | 'blockedByUnseen'
   | 'notOwnBuilding'
   | 'alreadyTraining'
   | 'notEnemy'

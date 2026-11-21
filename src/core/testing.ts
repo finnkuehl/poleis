@@ -38,7 +38,7 @@ export function at(col: number, row: number): Hex {
  */
 export function makeTestState(
   rows: string[],
-  opts: { goods?: Goods; ownAll?: boolean } = {},
+  opts: { goods?: Goods; ownAll?: boolean; explored?: boolean } = {},
 ): GameState {
   const width = rows[0].length;
   const tiles = rows.flatMap((row) =>
@@ -57,7 +57,7 @@ export function makeTestState(
     rng: createRng(1),
     turn: 1,
     currentPlayer: 0,
-    players: [{ id: 0, isHuman: true, goods, explored: tiles.map(() => false) }],
+    players: [{ id: 0, isHuman: true, goods, explored: tiles.map(() => opts.explored ?? true) }],
     buildings: [],
     roads: tiles.map(() => false),
     territory: tiles.map(() => ((opts.ownAll ?? true) ? 0 : -1)),

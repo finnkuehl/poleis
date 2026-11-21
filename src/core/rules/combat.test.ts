@@ -157,3 +157,16 @@ describe('attack action', () => {
     expect(code(attack(first.state, a, adjacent))).toBe('alreadyAttacked');
   });
 });
+
+describe('attack ends the turn', () => {
+  it('an attacking unit cannot move afterwards', () => {
+    const s = world();
+    const a = addUnit(s, 'spearman', at(1, 2));
+    const d = addUnit(s, 'spearman', at(2, 2), { owner: 1 });
+    const res = attack(s, a, d);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const mv = applyAction(res.state, { type: 'move', unitId: a, to: at(1, 1) });
+    expect(mv.ok === false && mv.error.code).toBe('cannotReach');
+  });
+});

@@ -20,6 +20,7 @@ export function checkFoundCity(
     return { code: 'wrongTerrain', terrains: ['plains'] };
   }
   if (state.buildings.some((b) => hexEquals(b.hex, unit.hex))) return { code: 'tileOccupied' };
+  if (state.roads[tileIndex(state.map, unit.hex)]) return { code: 'tileOccupied' };
   const owner = ownerAt(state, unit.hex);
   if (owner !== -1 && owner !== player) return { code: 'foreignTerritory' };
   const tooClose = state.cities.some(

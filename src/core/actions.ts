@@ -147,7 +147,12 @@ function applyActionInner(state: GameState, action: Action): ActionResult {
       const unit = next.units.find((u) => u.id === action.unitId);
       if (!unit || unit.owner !== player) return fail({ code: 'notOwnUnit' });
       const target = reachableTiles(next, unit.id).find((r) => hexEquals(r.hex, action.to));
-      if (!target) return fail({ code: 'cannotReach' });
+      if (!target) {
+        const seen = reachableTiles(next, unit.id, { ignoreHiddenUnits: true });
+        return fail({
+          code: seen.some((r) => hexEquals(r.hex, action.to)) ? 'blockedByUnseen' : 'cannotReach',
+        });
+      }
       unit.hex = target.hex;
       unit.movesLeft = Math.max(0, unit.movesLeft - target.cost);
       unit.hasMoved = true;
@@ -169,6 +174,7 @@ function applyActionInner(state: GameState, action: Action): ActionResult {
       if (result.damage > 0) target.capturing = null;
       unit.hp -= result.counter;
       unit.attacked = true;
+      unit.hasMoved = true;
       unit.acted = true;
       unit.movesLeft = 0;
       next.units = next.units.filter((u) => u.hp > 0);

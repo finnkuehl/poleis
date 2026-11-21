@@ -93,7 +93,7 @@ describe('fog of war', () => {
   it('founding a city extends explored (city vision 3)', () => {
     const s = makeTestState(
       Array.from({ length: 9 }, () => 'p'.repeat(14)),
-      { ownAll: false },
+      { ownAll: false, explored: false },
     );
     addBuilding(s, 'cityCenter', at(2, 4));
     s.cities.push({

@@ -104,6 +104,10 @@ export async function createGame(
   const banner = createModeBanner(uiContainer, () => resetToIdle());
   const confirm = createConfirmSheet(uiContainer);
   const panel = createTileInfoPanel(uiContainer, () => {
+    if (mode.kind === 'unit') {
+      resetToIdle();
+      return;
+    }
     selected = null;
     renderer.selectTile(null);
   });
@@ -441,7 +445,11 @@ export async function createGame(
 
   /** Can the unit still do something this turn (a reachable tile or an attack target)? */
   function canAct(unit: Unit): boolean {
-    if (!unit.attacked && unit.movesLeft > 0 && reachableTiles(state, unit.id).length > 0) {
+    if (
+      !unit.attacked &&
+      unit.movesLeft > 0 &&
+      reachableTiles(state, unit.id, { ignoreHiddenUnits: true }).length > 0
+    ) {
       return true;
     }
     return attackTargets(state, unit.id).some((t) => isVisible(state, PLAYER, t.hex));
@@ -460,7 +468,8 @@ export async function createGame(
       ...sorted.filter((u) => u.id < currentId),
       ...sorted.filter((u) => u.id === currentId && !inUnitMode),
     ];
-    const next = ordered.find(canAct);
+    // If the selected unit is the only one that can still act, keep it (and re-center on it).
+    const next = ordered.find(canAct) ?? sorted.find((u) => u.id === currentId && canAct(u));
     if (!next) {
       toast.show(en.unitText.allDone);
       return;
@@ -521,7 +530,9 @@ export async function createGame(
       showPanel();
       return;
     }
-    renderer.setHighlights(reachableTiles(state, unit.id).map((r) => r.hex));
+    renderer.setHighlights(
+      reachableTiles(state, unit.id, { ignoreHiddenUnits: true }).map((r) => r.hex),
+    );
     renderer.setAttackTargets(visibleTargets(unit).map((t) => t.hex));
     showUnitPanel(unit);
   }
@@ -561,7 +572,9 @@ export async function createGame(
       askAttack(unit, target);
       return;
     }
-    if (reachableTiles(state, unit.id).some((r) => hexEquals(r.hex, hex))) {
+    if (
+      reachableTiles(state, unit.id, { ignoreHiddenUnits: true }).some((r) => hexEquals(r.hex, hex))
+    ) {
       commit({ type: 'move', unitId: unit.id, to: hex });
       return;
     }
