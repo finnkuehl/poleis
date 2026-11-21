@@ -1,0 +1,28 @@
+# Prüft bei jedem Push, ob das Projekt sauber ist.
+name: CI
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      # Code aus dem Repository holen
+      - uses: actions/checkout@v5
+      # Node.js in der Version aus .nvmrc einrichten (npm-Cache beschleunigt es)
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      # Abhängigkeiten exakt nach package-lock.json installieren
+      - run: npm ci
+      # TypeScript-Typen prüfen
+      - run: npm run typecheck
+      # Codestil und Architekturregeln prüfen
+      - run: npm run lint
+      # Unit-Tests ausführen
+      - run: npm test
+      # Kontrolle, dass sich das Spiel bauen lässt
+      - run: npm run build
