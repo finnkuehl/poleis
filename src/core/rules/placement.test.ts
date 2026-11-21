@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { at, addBuilding, addRoad, makeTestState } from '../testing';
+import { at, addBuilding, addCity, addRoad, makeTestState } from '../testing';
 import { checkPlacement, validPlacements } from './placement';
 
 const rich = { wood: 50, stone: 50, planks: 50 };
@@ -66,5 +66,26 @@ describe('placement', () => {
     const s = makeTestState(['pfp'], { goods: rich });
     const valid = validPlacements(s, 0, 'house');
     expect(valid).toHaveLength(2);
+  });
+});
+
+describe('level-gated placement', () => {
+  it('vineyard in a settlement: levelTooLow; in a polis: hills ok, plains wrong', () => {
+    const s = makeTestState(['hpp', 'ppp'], { goods: rich, ownAll: false });
+    addCity(s, at(1, 1), { radius: 3 });
+    expect(checkPlacement(s, 0, 'vineyard', at(0, 0))).toEqual({
+      code: 'levelTooLow',
+      level: 'polis',
+    });
+    s.cities[0].level = 'polis';
+    expect(checkPlacement(s, 0, 'vineyard', at(0, 0))).toBeNull();
+    expect(checkPlacement(s, 0, 'vineyard', at(1, 0))?.code).toBe('wrongTerrain');
+    expect(validPlacements(s, 0, 'vineyard')).toEqual([at(0, 0)]);
+  });
+  it('outside any city the territory error wins', () => {
+    const s = makeTestState(['hpp', 'ppp'], { goods: rich, ownAll: false });
+    addCity(s, at(0, 1), { radius: 1 });
+    expect(checkPlacement(s, 0, 'temple', at(0, 0))?.code).toBe('levelTooLow');
+    expect(checkPlacement(s, 0, 'temple', at(2, 0))?.code).toBe('notOwnTerritory');
   });
 });

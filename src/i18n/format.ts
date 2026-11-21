@@ -26,6 +26,9 @@ export function formatError(err: RuleError): string {
   return fill(en.errors[err.code], {
     goods: formatGoods(err.missing ?? {}),
     terrains: formatTerrains(err.terrains ?? []),
+    level: err.level ? en.levels[err.level] : '',
+    good: err.good ? en.goods[err.good].toLowerCase() : '',
+    turns: err.turns ?? 0,
   });
 }
 

@@ -1,6 +1,6 @@
 // Error codes of the rules. Texts come from i18n (see i18n/format.ts).
 
-import type { Goods, TerrainId } from '../../data';
+import type { CityLevel, GoodId, Goods, TerrainId } from '../../data';
 
 export type RuleErrorCode =
   | 'outOfBounds'
@@ -11,6 +11,13 @@ export type RuleErrorCode =
   | 'notAffordable'
   | 'cannotBuildType'
   | 'levelTooLow'
+  | 'notOwnCity'
+  | 'cityMaxLevel'
+  | 'notEnoughResidents'
+  | 'supplyNotReady'
+  | 'noMarketplace'
+  | 'cannotTradeGood'
+  | 'invalidAmount'
   // The following codes are used by later steps (roads, demolishing).
   | 'noPath'
   | 'roadNotAllowed'
@@ -24,4 +31,9 @@ export interface RuleError {
   missing?: Goods;
   /** wrongTerrain / needsNeighbor: the terrains that would work. */
   terrains?: readonly TerrainId[];
+  /** levelTooLow: the city level that is needed. */
+  level?: CityLevel;
+  /** supplyNotReady: the good that must be supplied and for how many turns in a row. */
+  good?: GoodId;
+  turns?: number;
 }

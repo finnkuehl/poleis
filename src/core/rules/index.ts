@@ -11,3 +11,5 @@ export * from './workers';
 export * from './population';
 export * from './production';
 export * from './roads';
+export * from './advance';
+export * from './trade';

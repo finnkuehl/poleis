@@ -101,3 +101,21 @@ describe('workers', () => {
     expect(w[lonely]).toBeUndefined();
   });
 });
+
+describe('city buildings and workers', () => {
+  it('a marketplace gets a worker only after the producers', () => {
+    const s = setup();
+    s.cities[0].residents = 2;
+    const market = addBuilding(s, 'marketplace', at(1, 2));
+    const wc = addBuilding(s, 'woodcutter', at(2, 2));
+    const farm = addBuilding(s, 'farm', at(3, 2));
+    const w = assignWorkers(s, 0, connectedBuildingIds(s, 0));
+    expect([w[farm], w[wc], w[market]]).toEqual([2, 0, 0]);
+    s.cities[0].residents = 3;
+    const w2 = assignWorkers(s, 0, connectedBuildingIds(s, 0));
+    expect([w2[farm], w2[wc], w2[market]]).toEqual([2, 1, 0]);
+    s.cities[0].residents = 4;
+    const w3 = assignWorkers(s, 0, connectedBuildingIds(s, 0));
+    expect([w3[farm], w3[wc], w3[market]]).toEqual([2, 1, 1]);
+  });
+});

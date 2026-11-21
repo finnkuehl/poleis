@@ -9,7 +9,9 @@ import { assignWorkers } from './workers';
 
 export type BuildingStatus =
   | { kind: 'producing' }
-  // No outputs (house, storehouse, city center).
+  // Staffed service building without outputs (marketplace): open for business.
+  | { kind: 'working' }
+  // No outputs and no workers (house, storehouse, city center, temple).
   | { kind: 'noProduction' }
   | { kind: 'paused' }
   | { kind: 'notConnected' }
@@ -60,7 +62,8 @@ function simulate(state: GameState, player: PlayerId, stock: Stock): TurnReport 
       consumed: {},
     };
     reports.push(report);
-    if (!hasGoods(def.outputs)) {
+    const isService = !hasGoods(def.outputs) && def.workers > 0;
+    if (!hasGoods(def.outputs) && !isService) {
       report.status = { kind: 'noProduction' };
     } else if (b.paused) {
       report.status = { kind: 'paused' };
@@ -68,6 +71,8 @@ function simulate(state: GameState, player: PlayerId, stock: Stock): TurnReport 
       report.status = { kind: 'notConnected' };
     } else if ((workers[b.id] ?? 0) < def.workers) {
       report.status = { kind: 'missingWorkers', assigned: workers[b.id] ?? 0, needed: def.workers };
+    } else if (isService) {
+      report.status = { kind: 'working' };
     } else if (!canAfford(stock, def.inputs)) {
       report.status = { kind: 'missingInput', missing: missingGoods(stock, def.inputs) };
     } else {

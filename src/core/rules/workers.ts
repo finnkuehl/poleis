@@ -4,8 +4,8 @@ import { BUILDINGS, type BuildingCategory } from '../../data';
 import { tileIndex } from '../map';
 import type { Building, GameState, PlayerId } from '../state';
 
-/** Worker priority: food first, then raw materials, then processing. */
-const CATEGORY_ORDER: readonly BuildingCategory[] = ['food', 'raw', 'processing'];
+/** Worker priority: food first, then raw materials, processing, and city buildings last. */
+const CATEGORY_ORDER: readonly BuildingCategory[] = ['food', 'raw', 'processing', 'city'];
 
 /** Id of the city whose territory the building stands in; -1 = none. */
 export function cityIdOf(state: GameState, building: Building): number {

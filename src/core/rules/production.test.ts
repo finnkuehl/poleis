@@ -99,3 +99,27 @@ describe('production', () => {
     expect(runProduction(s, 0)).toEqual(preview);
   });
 });
+
+describe('service buildings', () => {
+  it('marketplace is working when connected and staffed; temple has no production', () => {
+    const s = setup();
+    const market = addBuilding(s, 'marketplace', at(1, 2));
+    const temple = addBuilding(s, 'temple', at(2, 2));
+    const statuses = previewProduction(s, 0).buildings;
+    expect(statuses.find((b) => b.buildingId === market)?.status).toEqual({ kind: 'working' });
+    expect(statuses.find((b) => b.buildingId === temple)?.status).toEqual({ kind: 'noProduction' });
+  });
+  it('marketplace can be paused, unconnected or unstaffed', () => {
+    const s = setup();
+    const market = addBuilding(s, 'marketplace', at(1, 2));
+    const far = addBuilding(s, 'marketplace', at(4, 0));
+    const kind = (id: number) =>
+      previewProduction(s, 0).buildings.find((b) => b.buildingId === id)?.status.kind;
+    expect(kind(far)).toBe('notConnected');
+    s.buildings.find((b) => b.id === market)!.paused = true;
+    expect(kind(market)).toBe('paused');
+    s.buildings.find((b) => b.id === market)!.paused = false;
+    s.cities[0].residents = 0;
+    expect(kind(market)).toBe('missingWorkers');
+  });
+});

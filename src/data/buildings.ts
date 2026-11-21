@@ -17,9 +17,13 @@ export type BuildingId =
   | 'oliveGrove'
   | 'oilPress'
   | 'mine'
-  | 'smelter';
+  | 'smelter'
+  | 'vineyard'
+  | 'winery'
+  | 'marketplace'
+  | 'temple';
 
-/** City levels (the level system itself comes in M3). */
+/** City levels (see cityLevels.ts). */
 export type CityLevel = 'settlement' | 'polis' | 'metropolis';
 
 /** Build-menu group AND worker priority (food first, then raw materials, then processing). */
@@ -74,6 +78,10 @@ export const BUILDING_IDS: readonly BuildingId[] = [
   'oilPress',
   'mine',
   'smelter',
+  'vineyard',
+  'winery',
+  'marketplace',
+  'temple',
 ];
 
 const onPlains: readonly PlacementOption[] = [{ on: ['plains'] }];
@@ -278,5 +286,65 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     minLevel: 'settlement',
     playerCanBuild: true,
     icon: '🔥',
+  },
+  // Polis: hills only: +2 grapes per turn.
+  vineyard: {
+    category: 'raw',
+    placement: [{ on: ['hills'] }],
+    cost: { planks: 4, stone: 2 },
+    workers: 1,
+    inputs: {},
+    outputs: { grapes: 2 },
+    housing: 0,
+    isStorage: false,
+    territoryRadius: 0,
+    minLevel: 'polis',
+    playerCanBuild: true,
+    icon: '🍇',
+  },
+  // Polis: 2 grapes -> 2 wine per turn.
+  winery: {
+    category: 'processing',
+    placement: onPlains,
+    cost: { planks: 4, stone: 4 },
+    workers: 1,
+    inputs: { grapes: 2 },
+    outputs: { wine: 2 },
+    housing: 0,
+    isStorage: false,
+    territoryRadius: 0,
+    minLevel: 'polis',
+    playerCanBuild: true,
+    icon: '🛢️',
+  },
+  // Polis: no production; while connected and staffed, goods can be traded for drachmas.
+  marketplace: {
+    category: 'city',
+    placement: onPlains,
+    cost: { planks: 6, stone: 6 },
+    workers: 1,
+    inputs: {},
+    outputs: {},
+    housing: 0,
+    isStorage: false,
+    territoryRadius: 0,
+    minLevel: 'polis',
+    playerCanBuild: true,
+    icon: '⚖️',
+  },
+  // Polis: no workers, no production (victory points come in M5).
+  temple: {
+    category: 'city',
+    placement: [{ on: ['plains', 'hills'] }],
+    cost: { stone: 10, oil: 4 },
+    workers: 0,
+    inputs: {},
+    outputs: {},
+    housing: 0,
+    isStorage: false,
+    territoryRadius: 0,
+    minLevel: 'polis',
+    playerCanBuild: true,
+    icon: '🔱',
   },
 };
