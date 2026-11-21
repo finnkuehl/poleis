@@ -930,3 +930,9 @@
   color: var(--wine);
   font-weight: 600;
 }
+
+/* "Stop" button of a unit on a move order (compact, full width of the panel). */
+.unit-stop {
+  width: 100%;
+  min-height: 44px;
+}

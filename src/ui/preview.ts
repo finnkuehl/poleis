@@ -463,6 +463,15 @@ addControl('Unit: own, done', () =>
     own: true,
   }),
 );
+addControl('Unit: own, on the way', () =>
+  panel.showUnit({
+    hex,
+    terrain: 'plains',
+    unit: sampleUnit('scout'),
+    own: true,
+    order: { turns: 3, onStop: () => toast.show(en.orders.stopped) },
+  }),
+);
 addControl('Unit: enemy', () =>
   panel.showUnit({
     hex,
@@ -568,6 +577,20 @@ addControl('Turn summary: units', () => {
     ...turnSummary({ ...base, units: { spawned: 0, upkeepEaten: {}, starving: true, lost: 1 } }),
     ...turnSummary({ ...base, captured: [2] }),
   ];
+
+  sequence.forEach((line, i) =>
+    window.setTimeout(() => toast.show(line.text, line.kind), i * 3200),
+  );
+});
+addControl('Turn summary: move orders', () => {
+  const base = turnReport();
+  const sequence = turnSummary({
+    ...base,
+    orders: [
+      { unitId: 1, unitType: 'scout', outcome: 'arrived' },
+      { unitId: 2, unitType: 'spearman', outcome: 'enemySpotted' },
+    ],
+  });
   sequence.forEach((line, i) =>
     window.setTimeout(() => toast.show(line.text, line.kind), i * 3200),
   );
