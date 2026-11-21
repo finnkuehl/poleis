@@ -5,6 +5,12 @@ import { terrainAt, tileIndex } from '../core/map';
 import { TERRAIN, type TerrainId } from '../data/terrain';
 import {
   advanceCheck,
+  attackTargets,
+  checkFoundCity,
+  combatPreview,
+  isVisible,
+  reachableTiles,
+  unitAt,
   assignWorkers,
   canAfford,
   canTrade,
@@ -22,7 +28,7 @@ import {
   validPlacements,
   type BuildingStatus,
 } from '../core/rules';
-import type { GameState } from '../core/state';
+import type { GameState, Unit } from '../core/state';
 import {
   BUILDING_IDS,
   BUILDINGS,
@@ -32,12 +38,14 @@ import {
   type CityLevel,
   type GoodId,
   type Stock,
+  type UnitId,
 } from '../data';
 import { en } from '../i18n/en';
 import {
   fill,
   formatAdvanced,
   formatAdvanceTo,
+  formatAttacked,
   formatBought,
   formatError,
   formatGoods,
@@ -57,7 +65,9 @@ import {
   createSeedLabel,
   createTileInfoPanel,
   createToast,
+  attackPreviewLines,
   perTurnText,
+  trainOptions,
   turnSummary,
 } from './index';
 
@@ -67,7 +77,8 @@ type Mode =
   | { kind: 'idle' }
   | { kind: 'placing'; building: BuildingId }
   | { kind: 'roadStart' }
-  | { kind: 'roadEnd'; from: Hex };
+  | { kind: 'roadEnd'; from: Hex }
+  | { kind: 'unit'; unitId: number };
 
 /** Creates the renderer and all UI components and runs the interaction. Rejects on renderer errors. */
 export async function createGame(
@@ -81,6 +92,8 @@ export async function createGame(
   let selected: Hex | null = null;
   let statuses: Record<number, BuildingStatus> = {};
   let menuOpen = false;
+  // A unit stands on the selected building tile and the player asked for the building panel.
+  let preferBuilding = false;
 
   // Seed label first: later elements stack above it.
   createSeedLabel(uiContainer, state.seedText, testMode);
@@ -123,6 +136,13 @@ export async function createGame(
       bottomBar.setMode('road');
       banner.show(en.flow.roadStartPrompt);
     },
+    onUnits: () => {
+      if (mode.kind === 'unit') {
+        resetToIdle();
+        return;
+      }
+      selectNextUnit();
+    },
     onEndTurn: () => {
       resetToIdle();
       endTurn();
@@ -159,6 +179,7 @@ export async function createGame(
   /** Ends the turn and shows one toast with the news of the turn. */
   function endTurn(): void {
     const readyBefore = readyCities(state);
+    const unitsBefore = new Set(ownUnits().map((u) => u.id));
     if (!commit({ type: 'endTurn' })) return;
     const report = state.lastReport;
     if (!report) return;
@@ -171,7 +192,10 @@ export async function createGame(
       if (check.to && check.canAdvance && !readyBefore.has(c.id)) canAdvance[c.id] = check.to;
       supply[c.id] = { good: check.supply.good, turnsNeeded: check.supply.turns };
     }
-    const lines = turnSummary(report, { canAdvance, supply });
+    const spawnedUnits = ownUnits()
+      .filter((u) => !unitsBefore.has(u.id))
+      .map((u) => u.type);
+    const lines = turnSummary(report, { canAdvance, supply, spawnedUnits });
     if (lines.length === 0) return;
     const isError = lines.some((l) => l.kind === 'error');
     toast.show(
@@ -189,9 +213,11 @@ export async function createGame(
     confirm.hide();
     banner.hide();
     renderer.setHighlights([]);
+    renderer.setAttackTargets([]);
     renderer.setPathPreview(null);
     bottomBar.setMode('idle');
     selected = null;
+    preferBuilding = false;
     renderer.selectTile(null);
     panel.hide();
   }
@@ -213,7 +239,7 @@ export async function createGame(
     for (const report of previewProduction(state, PLAYER).buildings) {
       statuses[report.buildingId] = report.status;
     }
-    renderer.setState(state, statuses);
+    renderer.setState(state, statuses, PLAYER);
     resourceBar.update(
       stockOf(state),
       state.lastReport?.delta ?? null,
@@ -222,7 +248,9 @@ export async function createGame(
       people(),
     );
     bottomBar.setTurn(state.turn);
+    bottomBar.setUnitsEnabled(ownUnits().length > 0);
     if (mode.kind === 'idle') showPanel();
+    else if (mode.kind === 'unit') refreshUnitMode();
   }
 
   /** Applies an action; on success stores the state and refreshes, otherwise shows the error. */
@@ -256,6 +284,15 @@ export async function createGame(
     const terrain = terrainAt(state.map, hex);
     if (!terrain) {
       panel.hide();
+      return;
+    }
+    const unit = unitAt(state, hex);
+    if (unit && unit.owner === PLAYER && !preferBuilding) {
+      showUnitPanel(unit);
+      return;
+    }
+    if (unit && unit.owner !== PLAYER && isVisible(state, PLAYER, hex)) {
+      showUnitPanel(unit);
       return;
     }
     const building = buildingAt(hex);
@@ -316,6 +353,7 @@ export async function createGame(
                 },
               }
             : undefined,
+        train: building.type === 'barracks' ? trainInfo(building) : undefined,
         onDemolish:
           building.type === 'cityCenter'
             ? undefined
@@ -336,6 +374,187 @@ export async function createGame(
     } else {
       showEmptyTile(hex, terrain);
     }
+  }
+
+  function ownUnits(): Unit[] {
+    return state.units.filter((u) => u.owner === PLAYER);
+  }
+
+  function isExplored(h: Hex): boolean {
+    const i = tileIndex(state.map, h);
+    const player = state.players.find((p) => p.id === PLAYER);
+    return i >= 0 && player?.explored[i] === true;
+  }
+
+  /** Training list of a barracks, from its city's level, residents and the player's goods. */
+  function trainInfo(building: GameState['buildings'][number]): {
+    options: ReturnType<typeof trainOptions>;
+    pending: UnitId | null;
+    onTrain(id: UnitId): void;
+  } {
+    const city = state.cities.find((c) => c.id === cityIdOf(state, building));
+    return {
+      options: trainOptions({
+        cityLevel: city?.level ?? 'settlement',
+        residents: city?.residents ?? 0,
+        stock: stockOf(state),
+      }),
+      pending: state.training.find((t) => t.barracksId === building.id)?.unit ?? null,
+      onTrain: (id) => {
+        if (commit({ type: 'train', barracksId: building.id, unit: id })) {
+          toast.show(fill(en.flow.trainOrdered, { unit: en.units[id] }));
+        }
+      },
+    };
+  }
+
+  /** Unit panel; own settlers get the "Found city here" button. */
+  function showUnitPanel(unit: Unit): void {
+    const terrain = terrainAt(state.map, unit.hex);
+    if (!terrain) return;
+    const own = unit.owner === PLAYER;
+    let found: { ok: boolean; reason?: string; onFound(): void } | undefined;
+    if (own && unit.type === 'settler') {
+      const error = checkFoundCity(state, PLAYER, unit.id);
+      found = {
+        ok: error === null,
+        reason: error ? formatError(error) : undefined,
+        onFound: () => foundHere(unit),
+      };
+    }
+    panel.showUnit({ hex: unit.hex, terrain, unit, own, found });
+  }
+
+  function foundHere(unit: Unit): void {
+    const hex = unit.hex;
+    leaveUnitMode();
+    selected = hex;
+    preferBuilding = false;
+    renderer.selectTile(hex);
+    if (commit({ type: 'foundCity', unitId: unit.id })) {
+      toast.show(en.flow.cityFounded);
+    }
+  }
+
+  /** Can the unit still do something this turn (a reachable tile or an attack target)? */
+  function canAct(unit: Unit): boolean {
+    if (!unit.attacked && unit.movesLeft > 0 && reachableTiles(state, unit.id).length > 0) {
+      return true;
+    }
+    return attackTargets(state, unit.id).some((t) => isVisible(state, PLAYER, t.hex));
+  }
+
+  /** Units button: the next own unit (by id, after the current one, wrapping) that can still act. */
+  function selectNextUnit(): void {
+    const current = selected ? unitAt(state, selected) : undefined;
+    const currentId = current?.owner === PLAYER ? current.id : -1;
+    const sorted = ownUnits().sort((a, b) => a.id - b.id);
+    const ordered = [
+      ...sorted.filter((u) => u.id > currentId),
+      ...sorted.filter((u) => u.id <= currentId),
+    ];
+    const next = ordered.find(canAct);
+    resetToIdle();
+    if (!next) {
+      toast.show(en.unitText.allDone);
+      return;
+    }
+    renderer.centerOn(next.hex);
+    enterUnitMode(next);
+  }
+
+  function enterUnitMode(unit: Unit): void {
+    resetToIdle();
+    mode = { kind: 'unit', unitId: unit.id };
+    selected = unit.hex;
+    preferBuilding = false;
+    renderer.selectTile(unit.hex);
+    bottomBar.setMode('units');
+    refreshUnitMode();
+  }
+
+  /** Leaves unit mode but keeps the selection (highlights and targets are cleared). */
+  function leaveUnitMode(): void {
+    mode = { kind: 'idle' };
+    renderer.setHighlights([]);
+    renderer.setAttackTargets([]);
+    bottomBar.setMode('idle');
+  }
+
+  /** Redraws panel, highlights and red targets of the selected unit after any change. */
+  function refreshUnitMode(): void {
+    if (mode.kind !== 'unit') return;
+    const unitId = mode.unitId;
+    const unit = state.units.find((u) => u.id === unitId && u.owner === PLAYER);
+    if (!unit) {
+      resetToIdle();
+      return;
+    }
+    selected = unit.hex;
+    renderer.selectTile(unit.hex);
+    if (!canAct(unit)) {
+      // Nothing left to do: back to idle, the unit stays selected ("Done for this turn").
+      leaveUnitMode();
+      showPanel();
+      return;
+    }
+    renderer.setHighlights(reachableTiles(state, unit.id).map((r) => r.hex));
+    renderer.setAttackTargets(visibleTargets(unit).map((t) => t.hex));
+    showUnitPanel(unit);
+  }
+
+  function visibleTargets(unit: Unit): Unit[] {
+    return attackTargets(state, unit.id).filter((t) => isVisible(state, PLAYER, t.hex));
+  }
+
+  function askAttack(attacker: Unit, defender: Unit): void {
+    const preview = combatPreview(state, attacker.id, defender.id);
+    panel.hide();
+    confirm.show({
+      title: fill(en.attack.confirmTitle, { unit: en.units[defender.type] }),
+      lines: attackPreviewLines(preview, attacker, defender),
+      confirmLabel: en.attack.confirm,
+      onConfirm: () => {
+        if (commit({ type: 'attack', unitId: attacker.id, targetId: defender.id })) {
+          toast.show(formatAttacked(en.units[attacker.type], preview.damage, preview.defenderDies));
+        } else {
+          refreshUnitMode();
+        }
+      },
+      onCancel: () => refreshUnitMode(),
+    });
+  }
+
+  /** A tap while a unit is selected: move, attack, switch unit or fall back to the idle tap. */
+  function tapUnitMode(unitId: number, hex: Hex | null): void {
+    const unit = state.units.find((u) => u.id === unitId);
+    if (!unit || !hex) {
+      leaveUnitMode();
+      tapIdle(hex);
+      return;
+    }
+    const target = visibleTargets(unit).find((t) => hexEquals(t.hex, hex));
+    if (target) {
+      askAttack(unit, target);
+      return;
+    }
+    if (reachableTiles(state, unit.id).some((r) => hexEquals(r.hex, hex))) {
+      commit({ type: 'move', unitId: unit.id, to: hex });
+      return;
+    }
+    const other = unitAt(state, hex);
+    if (other && other.owner === PLAYER) {
+      if (other.id !== unit.id) {
+        enterUnitMode(other);
+      } else if (buildingAt(hex)) {
+        leaveUnitMode();
+        preferBuilding = true;
+        showPanel();
+      }
+      return;
+    }
+    leaveUnitMode();
+    tapIdle(hex);
   }
 
   /** Panel for a tile without building and road: build list in own territory, else a hint. */
@@ -451,12 +670,37 @@ export async function createGame(
       case 'roadEnd':
         if (hex) tapRoadEnd(mode.from, hex);
         break;
+      case 'unit':
+        tapUnitMode(mode.unitId, hex);
+        break;
     }
   }
 
   function tapIdle(hex: Hex | null): void {
-    selected = hex && !(selected && hexEquals(selected, hex)) ? hex : null;
+    const same = hex !== null && selected !== null && hexEquals(selected, hex);
+    if (hex && !same && !isExplored(hex)) {
+      // Fog: nothing is revealed about an unexplored tile.
+      selected = null;
+      preferBuilding = false;
+      renderer.selectTile(null);
+      panel.hide();
+      toast.show(en.unitText.unexplored);
+      return;
+    }
+    const unit = hex ? unitAt(state, hex) : undefined;
+    if (hex && same && unit?.owner === PLAYER && buildingAt(hex) && !preferBuilding) {
+      // Second tap on a unit standing on a building: show the building instead.
+      preferBuilding = true;
+      showPanel();
+      return;
+    }
+    selected = hex && !same ? hex : null;
+    preferBuilding = false;
     renderer.selectTile(selected);
+    if (selected && unit && unit.owner === PLAYER) {
+      enterUnitMode(unit);
+      return;
+    }
     showPanel();
   }
 
