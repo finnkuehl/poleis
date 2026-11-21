@@ -1,15 +1,16 @@
 # Progress
 
-## Current milestone: Balance pass after M3 (in progress, branch `m3-balance`, tag `v0.3.1` after merge)
+## Current milestone: Balance pass after M3 (implemented, pull request open, tag `v0.3.1` after merge)
 
 Why: in playtesting, a radius-2 city (≈11 free building tiles) could not fit the ≈14 buildings needed for Polis.
 
 - [x] Plan approved; rules updated in `docs/GAME_DESIGN.md` (§3 terrain, §5 table and "Resource placement", §11 controls)
-- [ ] Placement: woodcutter on/next to forest, quarry on/next to hills or mountains, mine on mountains only
-- [ ] Border tower (moved forward from M4): claims radius 2 around it; shows "+N tiles" before building
-- [ ] Houses hold 6 residents (was 4)
-- [ ] Tap an empty tile → "Build here" list, one tap builds; "Road from here"
-- [ ] Browser test, code-review, pull request; phone test on GitHub Pages after the merge
+- [x] Placement: woodcutter on/next to forest, quarry on/next to hills or mountains, mine on mountains only
+- [x] Border tower (moved forward from M4): claims radius 2 around it; shows "+N tiles" before building
+- [x] Houses hold 6 residents (was 4)
+- [x] Tap an empty tile → "Build here" list, one tap builds; "Road from here"
+- [x] Browser test (build list, one-tap house, forest, outside territory, border tower +9 tiles)
+- [ ] code-review, merge; phone test on GitHub Pages after the merge
 
 ## Done
 
