@@ -10,7 +10,12 @@ function world(type: 'spearman' | 'settler' = 'spearman') {
   const s = makeTestState(['ppppppp', 'ppppppp', 'ppppppp', 'ppppppp', 'ppppppp'], {
     ownAll: false,
   });
-  s.players.push({ id: 1, isHuman: false, goods: { ...s.players[0].goods } });
+  s.players.push({
+    id: 1,
+    isHuman: false,
+    goods: { ...s.players[0].goods },
+    explored: s.map.tiles.map(() => false),
+  });
   const cityId = addCity(s, at(4, 2), { owner: 1 });
   const farm = addBuilding(s, 'farm', at(5, 2), 1);
   const unit = addUnit(s, type, at(3, 2));

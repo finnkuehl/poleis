@@ -31,6 +31,7 @@ import {
   planRoad,
   reachableTiles,
   scaleGoods,
+  updateAllExplored,
   type RuleError,
 } from './rules';
 import type { GameState } from './state';
@@ -55,6 +56,12 @@ const fail = (error: RuleError): ActionResult => ({ ok: false, error });
 
 /** Applies an action of the current player. Never mutates `state`. */
 export function applyAction(state: GameState, action: Action): ActionResult {
+  const result = applyActionInner(state, action);
+  if (result.ok && action.type !== 'endTurn') updateAllExplored(result.state);
+  return result;
+}
+
+function applyActionInner(state: GameState, action: Action): ActionResult {
   const player = state.currentPlayer;
   if (action.type === 'endTurn') return { ok: true, state: endTurn(state) };
 

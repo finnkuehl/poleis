@@ -4,6 +4,7 @@ import { GOOD_IDS, type Goods } from '../data';
 import type { GameState } from './state';
 import { runPopulation } from './rules/population';
 import { runProduction } from './rules/production';
+import { updateAllExplored } from './rules/vision';
 import { captureCities } from './rules/capture';
 import { healAndResetUnits, runUpkeep, spawnUnits } from './rules/units';
 
@@ -39,5 +40,6 @@ export function endTurn(state: GameState): GameState {
   report.delta = delta;
   report.captured = captured;
   next.lastReport = report;
+  updateAllExplored(next);
   return next;
 }

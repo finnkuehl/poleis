@@ -19,6 +19,7 @@ import { terrainAt, tileIndex } from './map';
 import { generateMap, findLandmasses, findStartPositions } from './mapgen';
 import { createCity } from './rules/found';
 import { claimTerritory } from './rules/territory';
+import { updateAllExplored } from './rules/vision';
 import type { TurnReport } from './rules/production';
 import { createRng, nextInt, seedFromText, type Rng } from './rng';
 
@@ -36,6 +37,8 @@ export interface PlayerState {
   isHuman: boolean;
   /** Shared stock of the civilization. */
   goods: Stock;
+  /** Per tile index: has the player ever seen this tile (fog of war)? */
+  explored: boolean[];
 }
 
 export interface Building {
@@ -135,7 +138,7 @@ export function createGameState(seedText: string, options: { sandbox?: boolean }
     rng: gameRng,
     turn: 1,
     currentPlayer: 0,
-    players: [{ id: 0, isHuman: true, goods }],
+    players: [{ id: 0, isHuman: true, goods, explored: map.tiles.map(() => false) }],
     buildings: [{ id: 1, type: 'cityCenter', owner: 0, hex: start, paused: false }],
     roads: map.tiles.map(() => false),
     territory,
@@ -157,6 +160,7 @@ export function createGameState(seedText: string, options: { sandbox?: boolean }
   };
   claimTerritory(state, start, BUILDINGS.cityCenter.territoryRadius, 0, 1);
   if (options.sandbox) addPassiveEnemy(state, start);
+  updateAllExplored(state);
   return state;
 }
 
@@ -194,7 +198,12 @@ function addPassiveEnemy(state: GameState, humanCenter: Hex): void {
   const center = pool[nextInt(state.rng, 0, pool.length - 1)];
   const goods = {} as Stock;
   for (const id of GOOD_IDS) goods[id] = 0;
-  state.players.push({ id: 1, isHuman: false, goods });
+  state.players.push({
+    id: 1,
+    isHuman: false,
+    goods,
+    explored: state.map.tiles.map(() => false),
+  });
   createCity(state, 1, center, populationConfig.startResidents);
   const spearman = UNITS.spearman;
   const spots = [center, walkableNeighbor(center) as Hex];

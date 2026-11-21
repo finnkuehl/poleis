@@ -7,7 +7,12 @@ import type { GameState } from '../state';
 /** 7x5 plains; forest at (4,2). Human = 0, enemy = 1. */
 function world() {
   const s = makeTestState(['ppppppp', 'ppppppp', 'ppppfpp', 'ppppppp', 'ppppppp']);
-  s.players.push({ id: 1, isHuman: false, goods: { ...s.players[0].goods } });
+  s.players.push({
+    id: 1,
+    isHuman: false,
+    goods: { ...s.players[0].goods },
+    explored: s.map.tiles.map(() => false),
+  });
   return s;
 }
 
