@@ -8,5 +8,6 @@ export * from './territory';
 export * from './placement';
 export * from './connection';
 export * from './workers';
+export * from './population';
 export * from './production';
 export * from './roads';

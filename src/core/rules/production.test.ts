@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { at, addBuilding, makeTestState } from '../testing';
+import { at, addBuilding, addCity, makeTestState } from '../testing';
 import { previewProduction, runProduction } from './production';
 
 const rows = Array.from({ length: 5 }, () => 'ppppp');
@@ -7,7 +7,7 @@ const rows = Array.from({ length: 5 }, () => 'ppppp');
 /** City center (4 residents) at (0,2); buildings are added in a connected row. */
 function setup(goods = {}) {
   const s = makeTestState(rows, { goods });
-  addBuilding(s, 'cityCenter', at(0, 2));
+  addCity(s, at(0, 2), { radius: 6 });
   return s;
 }
 
@@ -51,6 +51,14 @@ describe('production', () => {
       assigned: 0,
       needed: 2,
     });
+  });
+  it('a paused building does nothing and is reported as paused', () => {
+    const s = setup();
+    const id = addBuilding(s, 'woodcutter', at(1, 2));
+    s.buildings.find((b) => b.id === id)!.paused = true;
+    const report = runProduction(s, 0);
+    expect(report.buildings.find((b) => b.buildingId === id)?.status).toEqual({ kind: 'paused' });
+    expect(s.players[0].goods.wood).toBe(0);
   });
   it('reports not connected', () => {
     const s = setup();

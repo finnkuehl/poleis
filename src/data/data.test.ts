@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CITY_LEVEL_DEFS, CITY_LEVELS } from './cityLevels';
 import { BUILDING_IDS, BUILDINGS } from './buildings';
 import { economyConfig } from './economy';
 import { GOOD_IDS, GOODS } from './goods';
@@ -42,5 +43,12 @@ describe('data', () => {
       playerCanBuild: false,
     });
     expect(economyConfig.startGoods).toEqual({ wood: 20, stone: 10 });
+  });
+  it('every city level supplies a good that the next level needs', () => {
+    for (const level of CITY_LEVELS) {
+      const next = CITY_LEVEL_DEFS[level].next;
+      if (!next) continue;
+      expect(CITY_LEVEL_DEFS[next.to].needs.some((n) => n.good === next.supplyGood)).toBe(true);
+    }
   });
 });

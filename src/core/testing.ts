@@ -1,10 +1,20 @@
 // TEST-ONLY helpers. Do not import this file from game code.
 
-import { GOOD_IDS, type BuildingId, type Goods, type Stock, type TerrainId } from '../data';
+import {
+  BUILDINGS,
+  GOOD_IDS,
+  populationConfig,
+  type BuildingId,
+  type CityLevel,
+  type Goods,
+  type Stock,
+  type TerrainId,
+} from '../data';
 import { offsetToAxial, type Hex } from './hex';
 import { tileIndex } from './map';
 import { createRng } from './rng';
-import type { GameState } from './state';
+import { claimTerritory } from './rules/territory';
+import type { GameState, PlayerId } from './state';
 
 const CHARS: Record<string, TerrainId> = {
   p: 'plains',
@@ -49,6 +59,8 @@ export function makeTestState(
     buildings: [],
     roads: tiles.map(() => false),
     territory: tiles.map(() => ((opts.ownAll ?? true) ? 0 : -1)),
+    cities: [],
+    tileCity: tiles.map(() => -1),
     nextId: 1,
     lastReport: null,
   };
@@ -57,11 +69,34 @@ export function makeTestState(
 /** Inserts a building without any checks; returns its id. */
 export function addBuilding(state: GameState, type: BuildingId, h: Hex, owner = 0): number {
   const id = state.nextId++;
-  state.buildings.push({ id, type, owner, hex: h });
+  state.buildings.push({ id, type, owner, hex: h, paused: false });
   return id;
 }
 
 /** Puts a road on the tile without any checks. */
 export function addRoad(state: GameState, h: Hex): void {
   state.roads[tileIndex(state.map, h)] = true;
+}
+
+/**
+ * Founds a city: city-center building + City + territory claim (radius 2 unless `radius`
+ * is given). Returns the city id.
+ */
+export function addCity(
+  state: GameState,
+  h: Hex,
+  opts: { residents?: number; level?: CityLevel; owner?: PlayerId; radius?: number } = {},
+): number {
+  const owner = opts.owner ?? 0;
+  const id = addBuilding(state, 'cityCenter', h, owner);
+  state.cities.push({
+    id,
+    owner,
+    center: h,
+    level: opts.level ?? 'settlement',
+    residents: opts.residents ?? populationConfig.startResidents,
+    supplyStreak: 0,
+  });
+  claimTerritory(state, h, opts.radius ?? BUILDINGS.cityCenter.territoryRadius, owner, id);
+  return id;
 }

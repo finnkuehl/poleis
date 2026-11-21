@@ -23,6 +23,7 @@ export type Action =
   | { type: 'build'; building: BuildingId; hex: Hex }
   | { type: 'buildRoad'; from: Hex; to: Hex }
   | { type: 'demolish'; hex: Hex }
+  | { type: 'togglePause'; hex: Hex }
   | { type: 'endTurn' };
 
 export type ActionResult = { ok: true; state: GameState } | { ok: false; error: RuleError };
@@ -49,8 +50,12 @@ export function applyAction(state: GameState, action: Action): ActionResult {
         type: action.building,
         owner: player,
         hex: action.hex,
+        paused: false,
       });
-      if (def.territoryRadius > 0) claimTerritory(next, action.hex, def.territoryRadius, player);
+      if (def.territoryRadius > 0) {
+        const i = tileIndex(next.map, action.hex);
+        claimTerritory(next, action.hex, def.territoryRadius, player, next.tileCity[i]);
+      }
       return { ok: true, state: next };
     }
     case 'buildRoad': {
@@ -62,6 +67,14 @@ export function applyAction(state: GameState, action: Action): ActionResult {
       }
       pay(stock, plan.cost);
       for (const h of plan.newTiles) next.roads[tileIndex(next.map, h)] = true;
+      return { ok: true, state: next };
+    }
+    case 'togglePause': {
+      const building = next.buildings.find(
+        (b) => b.owner === player && hexEquals(b.hex, action.hex),
+      );
+      if (!building || BUILDINGS[building.type].workers <= 0) return fail({ code: 'cannotPause' });
+      building.paused = !building.paused;
       return { ok: true, state: next };
     }
     case 'demolish': {

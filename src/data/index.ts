@@ -9,3 +9,5 @@ export * from './goods';
 export * from './buildings';
 export * from './economy';
 export * from './startPosition';
+export * from './population';
+export * from './cityLevels';

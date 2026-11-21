@@ -5,11 +5,20 @@ import { range } from './hex';
 import { inBounds, terrainAt, tileIndex } from './map';
 import { findLandmasses } from './mapgen';
 import { createGameState } from './state';
-import { addBuilding, addRoad, at, makeTestState } from './testing';
+import { addBuilding, addCity, addRoad, at, makeTestState } from './testing';
 import { endTurn } from './turn';
 
 describe('createGameState', () => {
   const s = createGameState('start-city');
+  it('creates the starting city with 4 residents and its territory', () => {
+    expect(s.cities).toHaveLength(1);
+    const city = s.cities[0];
+    expect(city).toMatchObject({ id: 1, level: 'settlement', residents: 4, supplyStreak: 0 });
+    expect(s.buildings[0].paused).toBe(false);
+    for (let i = 0; i < s.territory.length; i++) {
+      expect(s.tileCity[i] === city.id).toBe(s.territory[i] === 0);
+    }
+  });
   const center = s.buildings[0];
 
   it('places the city center on plains on the mainland', () => {
@@ -99,7 +108,7 @@ describe('demolish', () => {
 describe('endTurn', () => {
   it('increments the turn, runs production and sets lastReport', () => {
     const s = makeTestState(['ppfpp'], { goods: { wood: 5 } });
-    addBuilding(s, 'cityCenter', at(0, 0));
+    addCity(s, at(0, 0), { radius: 6 });
     addBuilding(s, 'woodcutter', at(1, 0));
     const next = endTurn(s);
     expect(next.turn).toBe(2);
@@ -108,5 +117,28 @@ describe('endTurn', () => {
     expect(s.turn).toBe(1);
     expect(s.lastReport).toBeNull();
     expect(applyAction(s, { type: 'endTurn' })).toEqual({ ok: true, state: next });
+  });
+});
+
+describe('togglePause', () => {
+  it('pauses and resumes an own building with workers', () => {
+    const s = makeTestState(['ppp']);
+    addBuilding(s, 'farm', at(1, 0));
+    const r = applyAction(s, { type: 'togglePause', hex: at(1, 0) });
+    if (!r.ok) throw new Error('expected ok');
+    expect(r.state.buildings[0].paused).toBe(true);
+    expect(s.buildings[0].paused).toBe(false);
+    const r2 = applyAction(r.state, { type: 'togglePause', hex: at(1, 0) });
+    if (!r2.ok) throw new Error('expected ok');
+    expect(r2.state.buildings[0].paused).toBe(false);
+  });
+  it('refuses empty tiles, foreign buildings and buildings without workers', () => {
+    const s = makeTestState(['ppp']);
+    addBuilding(s, 'farm', at(0, 0), 1);
+    addBuilding(s, 'house', at(1, 0));
+    const err = { ok: false, error: { code: 'cannotPause' } };
+    expect(applyAction(s, { type: 'togglePause', hex: at(2, 0) })).toEqual(err);
+    expect(applyAction(s, { type: 'togglePause', hex: at(0, 0) })).toEqual(err);
+    expect(applyAction(s, { type: 'togglePause', hex: at(1, 0) })).toEqual(err);
   });
 });

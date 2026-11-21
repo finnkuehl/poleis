@@ -15,7 +15,8 @@ export type RuleErrorCode =
   | 'noPath'
   | 'roadNotAllowed'
   | 'nothingToDemolish'
-  | 'cannotDemolishCityCenter';
+  | 'cannotDemolishCityCenter'
+  | 'cannotPause';
 
 export interface RuleError {
   code: RuleErrorCode;

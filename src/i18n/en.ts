@@ -118,10 +118,12 @@ export const en = {
     roadNotAllowed: 'Roads can only be built on walkable land in your territory.',
     nothingToDemolish: 'There is nothing to demolish here.',
     cannotDemolishCityCenter: 'The city center cannot be demolished.',
+    cannotPause: 'Only buildings with workers can be paused.',
   },
   status: {
     producing: 'Producing',
     noProduction: 'No production',
+    paused: 'Paused',
     notConnected: 'Not connected to a storehouse or city center',
     missingWorkers: 'Missing workers ({assigned}/{needed})',
     missingInput: 'Missing input: {goods}',
