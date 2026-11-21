@@ -3,12 +3,13 @@ import { Container, Graphics } from 'pixi.js';
 import { allHexes, inBounds } from '../core/map';
 import { hexCorners, hexToPixel, type Hex, type Point } from '../core/hex';
 import type { BuildingStatus } from '../core/rules/production';
-import type { GameState, MapState } from '../core/state';
+import type { GameState, MapState, PlayerId } from '../core/state';
 import { terrainAt } from '../core/map';
 import { mapWorldBounds } from './bounds';
 import type { Rect } from './camera';
 import { hexSize } from './config';
 import { createEconomyLayers } from './economyLayers';
+import { createUnitLayers } from './unitLayers';
 import { theme } from './theme';
 
 export { mapWorldBounds };
@@ -17,7 +18,9 @@ export interface MapView {
   container: Container;
   bounds: Rect;
   /** Redraws the dynamic layers (territory, roads, buildings, badges). */
-  update(state: GameState, statuses: Record<number, BuildingStatus>): void;
+  update(state: GameState, statuses: Record<number, BuildingStatus>, viewer?: PlayerId): void;
+  /** Red outlines on attack targets; [] clears. */
+  setAttackTargets(hexes: readonly Hex[]): void;
   setSelection(h: Hex | null): void;
   /** Highlights valid tiles; [] clears. */
   setHighlights(hexes: readonly Hex[]): void;
@@ -65,6 +68,7 @@ export function createMapView(map: MapState): MapView {
   const symbols = new Graphics();
   const selection = new Graphics();
   const economy = createEconomyLayers();
+  const unitLayers = createUnitLayers();
 
   for (const h of allHexes(map)) {
     const terrain = terrainAt(map, h);
@@ -89,12 +93,28 @@ export function createMapView(map: MapState): MapView {
     }
   }
 
-  container.addChild(fields, symbols, ...economy.layers, selection);
+  // economy layers: [tint, border, roads, plates, icons, badges, highlights, preview]
+  const below = economy.layers.slice(0, 6);
+  const above = economy.layers.slice(6);
+  container.addChild(
+    fields,
+    symbols,
+    ...below,
+    unitLayers.units,
+    unitLayers.fog,
+    ...above,
+    unitLayers.attack,
+    selection,
+  );
 
   return {
     container,
     bounds: mapWorldBounds(map, hexSize),
-    update: economy.update,
+    update(state, statuses, viewer = 0) {
+      economy.update(state, statuses);
+      unitLayers.update(state, viewer);
+    },
+    setAttackTargets: unitLayers.setAttackTargets,
     setHighlights: economy.setHighlights,
     setPathPreview: economy.setPathPreview,
     setSelection(h) {

@@ -3,7 +3,7 @@ import { Application, Container } from 'pixi.js';
 import { hexToPixel, pixelToHex, type Hex } from '../core/hex';
 import { inBounds } from '../core/map';
 import type { BuildingStatus } from '../core/rules/production';
-import type { GameState } from '../core/state';
+import type { GameState, PlayerId } from '../core/state';
 import { CameraController, screenToWorld } from './camera';
 import { hexSize, startHexScreenRadiusPx } from './config';
 import { createMapView } from './map';
@@ -11,8 +11,10 @@ import { theme } from './theme';
 
 export interface Renderer {
   app: Application;
-  /** Redraws territory, roads, buildings and status badges. */
-  setState(state: GameState, statuses: Record<number, BuildingStatus>): void;
+  /** Redraws everything from `viewer`'s perspective (fog of war, visible enemy units). */
+  setState(state: GameState, statuses: Record<number, BuildingStatus>, viewer?: PlayerId): void;
+  /** Red outlines on attack targets; [] clears. */
+  setAttackTargets(hexes: readonly Hex[]): void;
   selectTile(h: Hex | null): void;
   /** Highlights valid tiles; [] clears. */
   setHighlights(hexes: readonly Hex[]): void;
@@ -71,6 +73,7 @@ export async function createRenderer(
     setState: view.update,
     selectTile,
     setHighlights: view.setHighlights,
+    setAttackTargets: view.setAttackTargets,
     setPathPreview: (path, newTiles = []) => view.setPathPreview(path, newTiles),
     centerOn,
   };
