@@ -1,15 +1,16 @@
 # Progress
 
-## Current milestone: M4 – Territory & military (in progress, branch `m4-military`)
+## Current milestone: M4 – Territory & military (implemented, pull request open)
 
 - [x] Plan approved; decisions in `docs/GAME_DESIGN.md` §7 "Detailed rules (decided in M4)"
-- [ ] Units: barracks, training, appearing next turn, movement (costs, roads, 1-tile rule), upkeep, healing
-- [ ] Combat (formula, range, counterattack, walled city centers), capturing, settlers found cities, passive enemy in test mode
-- [ ] Fog of war (explored / visible per civilization)
-- [ ] Map: units with health bars, reachable tiles, attack targets, fog
-- [ ] Controls: Units button, barracks panel, unit panel, attack preview, found city, combat messages
-- [ ] Everything wired together
-- [ ] Browser test, code-review, pull request; phone test on GitHub Pages after the merge
+- [x] Units: barracks, training, appearing next turn, movement (costs, roads, 1-tile rule), upkeep, healing
+- [x] Combat (formula, range, counterattack, walled city centers), capturing, settlers found cities, passive enemy in test mode
+- [x] Fog of war (explored / visible per civilization)
+- [x] Map: units with health bars, reachable tiles, attack targets, fog
+- [x] Controls: Units button, barracks panel, unit panel, attack preview, found city, combat messages
+- [x] Everything wired together; UX fixes after the browser test (Units button cycles, compact unit panel, attack messages)
+- [x] Browser test: barracks, training, scout movement into the fog, attack preview + attack (scout lost). Founding and capturing only covered by automated tests.
+- [ ] code-review, merge; phone test on GitHub Pages after the merge
 
 **Design decisions M4:** always 1 tile of movement, one unit per tile, passive enemy in test mode, city centers count as walled.
 
@@ -24,7 +25,7 @@
 ## Known limitations
 
 - No saving yet (M5) – reloading the page starts a new game.
-- No units yet (M4).
+- The test-mode enemy is passive (no AI until M5); there is no victory or defeat yet (M5).
 - With 4 civilizations, `findStartPositions` can place starts close together on a few seeds (e.g. seed 49). Fix when AI civilizations arrive (M5): relax plains/forest minimums before accepting a short distance.
 - A dev-only UI preview lives at `/ui-preview.html` (not part of the production build).
 
