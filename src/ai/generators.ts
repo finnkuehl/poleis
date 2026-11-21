@@ -1,7 +1,17 @@
-// The list of candidate generators. Step 3b adds the military ones (training, exploring,
-// settlers, attacks) here; each generator only reads the AiContext and returns candidates.
+// The list of candidate generators. Each only reads the AiContext and returns candidates.
 
 import { economyCandidates, roadCandidates } from './economy';
+import { settlerCandidates } from './settle';
+import { trainingCandidates } from './training';
 import type { CandidateGenerator } from './types';
+import { unitCandidates } from './units';
+import { wonderCandidates } from './wonder';
 
-export const GENERATORS: readonly CandidateGenerator[] = [roadCandidates, economyCandidates];
+export const GENERATORS: readonly CandidateGenerator[] = [
+  roadCandidates,
+  economyCandidates,
+  trainingCandidates,
+  settlerCandidates,
+  unitCandidates,
+  wonderCandidates,
+];

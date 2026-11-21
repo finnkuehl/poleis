@@ -34,7 +34,7 @@ export function chooseCandidate(
   const reserved: Goods = {};
   for (const { c } of sorted) {
     if (c.utility <= aiConfig.minUtility) break;
-    if (failed.has(c.key)) continue;
+    if (failed.has(c.key) || (c.group !== undefined && failed.has(c.group))) continue;
     const cost = c.cost ?? {};
     if (c.action === null || !canAfford(stock, cost)) {
       if (c.reserve) {
@@ -67,6 +67,7 @@ export function takeAiTurn(
   const stats: AiTurnStats = { applied: 0, failed: 0 };
   for (let step = 0; step < aiConfig.maxActionsPerTurn; step++) {
     const ctx = buildContext(current, player);
+    ctx.skip = failed;
     const candidates = GENERATORS.flatMap((generate) => generate(ctx));
     const chosen = chooseCandidate(candidates, ctx.stock, failed);
     if (!chosen || !chosen.action) break;
@@ -74,6 +75,10 @@ export function takeAiTurn(
     if (result.ok) {
       current = result.state;
       stats.applied += 1;
+      if (chosen.once) {
+        failed.add(chosen.key);
+        if (chosen.group !== undefined) failed.add(chosen.group);
+      }
       options.onAction?.(chosen);
     } else {
       failed.add(chosen.key);

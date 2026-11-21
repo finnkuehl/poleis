@@ -23,10 +23,13 @@ export type PersonalityWish =
 export const aiConfig = {
   // No AI civilization attacks anyone before this turn (peace time).
   peaceUntilTurn: 15,
+  // An AI civilization places its world wonder only from this turn on (like the peace time, this
+  // is AI-only: the human may build it whenever they can).
+  wonderFromTurn: 70,
 
   // --- Turn driver ---
   // The most actions one AI civilization takes per turn (keeps a turn fast).
-  maxActionsPerTurn: 16,
+  maxActionsPerTurn: 60,
   // The AI stops for the turn when the best remaining action scores this or less.
   minUtility: 10,
 
@@ -121,8 +124,9 @@ export const aiConfig = {
   templeKeepOil: 3,
   // Most temples per personality.
   maxTemples: { merchant: 1, warrior: 1, builder: 3 } as Record<Personality, number>,
-  // Barracks: the turn from which the AI wants one (warriors early, others late and at Polis).
-  barracksStartTurn: { merchant: 40, warrior: 5, builder: 40 } as Record<Personality, number>,
+  // Barracks: the turn from which the AI wants one (warriors early, others a bit later). Every
+  // personality needs one for scouts, settlers and defenders.
+  barracksStartTurn: { merchant: 20, warrior: 5, builder: 15 } as Record<Personality, number>,
 
   // --- Border towers ---
   // Build a tower when fewer free plains than this are left in the territory.
@@ -170,6 +174,139 @@ export const aiConfig = {
   buyRichDrachmas: 200,
   // Drachmas the AI keeps for advancing before it buys goods.
   buyKeepDrachmas: 30,
+
+  // --- Military: training, exploring, defending, attacking, settling (src/ai/units.ts etc.) ---
+  military: {
+    // Utility of the unit commands (no goods are spent, so they are compared with each other
+    // and with the economy only through these numbers).
+    utility: {
+      // Settler: found the city / walk to the chosen site.
+      foundCity: 820,
+      settleWalk: 250,
+      // Attacks (+ damage bonus), capturing an empty enemy city, moving to a spot to attack.
+      attack: 700,
+      capture: 760,
+      moveToAttack: 650,
+      // Retreat of a badly wounded unit.
+      retreat: 500,
+      // Defenders walking to their post / army marching / army going home / scout exploring.
+      defendPost: 280,
+      march: 150,
+      goHome: 140,
+      explore: 120,
+      // Safety: cancel an order that would end on an enemy city center in peace time.
+      peaceGuard: 880,
+      // Training wishes.
+      trainSettler: 70,
+      trainScout: 95,
+      trainDefender: 90,
+      trainDefenderUnderThreat: 400,
+      trainAttacker: 65,
+    },
+
+    // --- Training ---
+    // Scouts: alive + ordered at most this many; a second one only from `scoutSecondTurn` while
+    // less than `scoutSecondBelow` of the map is explored. No scouts once this much is explored.
+    scoutsWanted: 1,
+    scoutSecondTurn: 15,
+    scoutSecondBelow: 0.45,
+    scoutStopExplored: 0.7,
+    // Defenders (combat units) per city, by personality; +1 when enemy units are near the city.
+    defendersPerCity: { merchant: 1, warrior: 2, builder: 1 } as Record<Personality, number>,
+    threatRadius: 4,
+    threatExtraDefenders: 1,
+    // The army (combat units on top of the defenders): from this turn on the AI trains this many,
+    // one more every `armyGrowEvery` turns, up to `armyMaxSize`.
+    armyStartTurn: { merchant: 55, warrior: 10, builder: 35 } as Record<Personality, number>,
+    armySize: { merchant: 3, warrior: 4, builder: 3 } as Record<Personality, number>,
+    armyGrowEvery: 20,
+    armyMaxSize: 8,
+    // Bronze in stock the AI aims for once it has a barracks (units cost bronze).
+    bronzeTarget: { merchant: 4, warrior: 12, builder: 6 } as Record<Personality, number>,
+    // A Polis trains hoplites for defense when the stock holds at least this much bronze.
+    hopliteMinBronze: 4,
+    // Food left per turn after the extra unit has eaten (production - residents - all units).
+    // Warriors accept a small food deficit while the food stock is at least `unitFoodStockMin`.
+    unitFoodMargin: { merchant: 0, warrior: -2, builder: 0 } as Record<Personality, number>,
+    unitFoodStockMin: 20,
+    // The food wishes plan for this many wanted-but-missing units at most (they will eat).
+    unitFoodPlanCap: 4,
+
+    // --- Offense (only after the peace time) ---
+    // The army needs this many units to march out (fewer once its units are at the target).
+    armyMinSize: 3,
+    armyMinSizeEngaged: 1,
+    // Own units this close to the target city count as "engaged".
+    engageRadius: 3,
+    // Strength (attack x HP share) of visible enemy units within this distance of the target.
+    targetStrengthRadius: 4,
+    // Strength assumed for a target city whose center is not in sight.
+    assumedCityDefense: 4,
+    // The army strength must be at least this many times the enemy strength near the target.
+    attackRatio: { merchant: 3, warrior: 0.8, builder: 2 } as Record<Personality, number>,
+    // ... times this factor once units are already fighting at the target.
+    engagedRatioFactor: 0.5,
+    // Units below this share of their HP leave the fight and go home; they only rejoin the
+    // army once healed to `rejoinHp`.
+    retreatHp: 0.4,
+    rejoinHp: 0.75,
+
+    // --- Exploring ---
+    // Frontier tiles tried per scout (nearest first), and the distance two scouts keep apart.
+    frontierTries: 4,
+    scoutSpread: 5,
+
+    // --- Settling ---
+    // A city may send out a settler once it has this many residents and the food surplus of the
+    // residents (units not counted) is at least `expandMinFoodNet`.
+    expandMinResidents: 8,
+    expandMinFoodNet: 0,
+    // While a city waits to advance (enough residents, but oil/goods missing) no settlers go out:
+    // they would take the workers the chain needs. Unless the city is this big.
+    expandWaitResidents: 40,
+    // Most cities per personality.
+    maxCities: { merchant: 2, warrior: 3, builder: 4 } as Record<Personality, number>,
+    // Site: preferred and largest distance from the nearest own city center.
+    settlePreferredDistance: 6,
+    settleMaxDistance: 10,
+    // Site score: value of each tile in radius 2 (not foreign), minus penalties.
+    settleTileValue: {
+      plains: 1,
+      forest: 1.2,
+      hills: 1.5,
+      mountains: 1.2,
+      coast: 1,
+      ocean: 0.1,
+    },
+    settleDistancePenalty: 1,
+    settlePathPenalty: 0.3,
+    // Known enemy city centers closer than this make a site worse (per missing tile).
+    settleEnemyDistance: 7,
+    settleEnemyPenalty: 1,
+    // Sites scoring less than this are not used.
+    settleMinScore: 8,
+    // Alternatives tried when the best site cannot be reached.
+    settleTries: 3,
+
+    // --- Wonder crew ---
+    // Value of keeping a building staffed while the wonder lacks workers (low = paused first).
+    // Food buildings and the wonder itself are never paused; unlisted buildings are never paused.
+    wonderPauseValue: {
+      marketplace: 1,
+      temple: 2,
+      mine: 3,
+      smelter: 3,
+      quarry: 4,
+      sawmill: 5,
+      woodcutter: 6,
+      vineyard: 8,
+      winery: 8,
+      oliveGrove: 9,
+      oilPress: 9,
+    } as Partial<Record<string, number>>,
+    // Most buildings of one city paused for the wonder.
+    wonderMaxPaused: 4,
+  },
 
   // --- Personality weights (multiply the base utility of that wish) ---
   weights: {

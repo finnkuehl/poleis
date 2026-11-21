@@ -22,6 +22,7 @@ import {
   type TerrainId,
 } from '../data';
 import type { AiContext, CityInfo } from './context';
+import { bronzeForUnits } from './training';
 import type { Candidate } from './types';
 
 const U = aiConfig.utility;
@@ -356,13 +357,16 @@ function chainWishes(g: Gen): void {
   }
 
   // Bronze: for the Metropolis advance and the wonder.
-  const bronzeAim = atLeast(2)
+  const levelAim = atLeast(2)
     ? cfg.bronzeStockTarget.metropolis
     : anyLevel(1, cfg.bronzeChainResidents)
       ? cfg.bronzeStockTarget.polis
       : 0;
+  // Units cost bronze, too (the AI with a barracks wants some in stock).
+  const unitAim = bronzeForUnits(ctx);
   const wonderDone = ctx.count.wonder > 0;
-  if (bronzeAim > 0 && !wonderDone && ctx.stock.bronze < bronzeAim) {
+  const bronzeAim = Math.max(wonderDone ? 0 : levelAim, unitAim);
+  if (bronzeAim > 0 && ctx.stock.bronze < bronzeAim) {
     if (ctx.count.mine <= ctx.count.smelter) {
       if (ctx.count.mine < 2 && ctx.pending.mine === 0) {
         wishBuilding(g, 'mine', U.bronzeChain, 'bronze: mine', {
@@ -396,7 +400,11 @@ function optionalWishes(g: Gen): void {
   if (ctx.count.barracks === 0 && ctx.turn >= cfg.barracksStartTurn[ctx.personality]) {
     wishBuilding(g, 'barracks', U.barracks, 'barracks', { wish: 'barracks' });
   }
-  if (ctx.count.wonder === 0 && ctx.cities.some((c) => c.city.level === 'metropolis')) {
+  if (
+    ctx.count.wonder === 0 &&
+    ctx.turn >= cfg.wonderFromTurn &&
+    ctx.cities.some((c) => c.city.level === 'metropolis')
+  ) {
     // (If the Metropolis has no free plains, the wish is stuck and a tower claims more land.)
     wishBuilding(g, 'wonder', U.wonder, 'world wonder', { wish: 'wonder', reserve: true });
   }

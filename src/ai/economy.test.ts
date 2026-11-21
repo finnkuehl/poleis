@@ -58,6 +58,8 @@ describe('AI economy after 50 rounds (3 AIs)', () => {
       const ais = state.players.filter((p) => !p.isHuman);
       expect(ais).toHaveLength(3);
       for (const p of ais) {
+        // (An AI that lost its last city to an attack has no economy left to check.)
+        if (!p.alive) continue;
         const label = `${seed}/${p.civ}`;
         expect(countOf(state, p.id, 'woodcutter'), `${label} woodcutter`).toBeGreaterThanOrEqual(1);
         expect(countOf(state, p.id, 'quarry'), `${label} quarry`).toBeGreaterThanOrEqual(1);
@@ -90,17 +92,16 @@ describe('AI economy after 50 rounds (3 AIs)', () => {
     });
   }
 
-  it('the AIs grow clearly beyond the start (most reach Polis)', () => {
+  it('some AIs grow clearly beyond the start (reach Polis)', () => {
+    // (Units, settlers and war cost growth: with the military AI fewer reach Polis than before.)
     let polis = 0;
-    let total = 0;
     for (const seed of SEEDS) {
-      for (const c of runs.get(seed)!.result.state.cities) {
-        if (c.owner === 0) continue;
-        total += 1;
-        if (c.level !== 'settlement') polis += 1;
+      const { state } = runs.get(seed)!.result;
+      for (const p of state.players.filter((x) => !x.isHuman)) {
+        if (state.cities.some((c) => c.owner === p.id && c.level !== 'settlement')) polis += 1;
       }
     }
-    expect(polis).toBeGreaterThanOrEqual(Math.ceil(total / 2));
+    expect(polis).toBeGreaterThanOrEqual(2);
   });
 
   it('Sparta (warrior) builds its barracks no later than Athens (merchant), usually much earlier', () => {

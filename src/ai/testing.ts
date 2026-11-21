@@ -23,9 +23,15 @@ export interface SimulationResult {
 export function simulate(
   seed: string,
   rounds: number,
-  options: { aiCount?: number; onRound?: (round: number, state: GameState) => void } = {},
+  options: {
+    aiCount?: number;
+    /** Changes the new game before round 1 (e.g. gives the human some defenders). */
+    setup?: (state: GameState) => void;
+    onRound?: (round: number, state: GameState) => void;
+  } = {},
 ): SimulationResult {
   let state = createGameState(seed, { settings: { aiCount: options.aiCount ?? 3 } });
+  options.setup?.(state);
   const first = new Map<string, number>();
   let applied = 0;
   let failed = 0;

@@ -19,6 +19,10 @@ export interface Candidate {
   reserve?: boolean;
   /** Income buildings may use reserved goods (they bring the missing goods in). */
   bypassReserve?: boolean;
+  /** After it was applied once this turn, it (and its `group`) is not offered again. */
+  once?: boolean;
+  /** Candidates of one group exclude each other once one of them was applied (with `once`). */
+  group?: string;
 }
 
 /** Produces candidates from the current situation. Step 3b adds military generators here. */

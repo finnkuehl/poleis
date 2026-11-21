@@ -68,6 +68,10 @@ export interface AiContext {
   roadDist: Int32Array;
   /** Per tile index: the next tile towards the network. */
   roadParent: Int32Array;
+  /** Own units alive plus units ordered in a barracks (all eat 1 food per turn). */
+  unitCount: number;
+  /** Keys of candidates that failed or were applied once this turn (set by the turn driver). */
+  skip: ReadonlySet<string>;
   /** Marketplace trading is possible. */
   canTrade: boolean;
   /** Tiles where `type` may be built (cost ignored), in index order. Cached. */
@@ -172,6 +176,9 @@ export function buildContext(state: GameState, player: PlayerId): AiContext {
     return { city, housing: h, freeHousing: h - city.residents, slack: residents - needed };
   });
 
+  const unitCount =
+    state.units.filter((u) => u.owner === player).length +
+    state.training.filter((t) => t.owner === player).length;
   const ownTiles: number[] = [];
   for (let i = 0; i < state.territory.length; i++)
     if (state.territory[i] === player) ownTiles.push(i);
@@ -218,7 +225,9 @@ export function buildContext(state: GameState, player: PlayerId): AiContext {
     turn: state.turn,
     net,
     foodProd,
-    foodNeed: eatenNow,
+    foodNeed: eatenNow + unitCount,
+    unitCount,
+    skip: new Set<string>(),
     workers,
     cities,
     ownBuildings,
