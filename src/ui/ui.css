@@ -21,7 +21,7 @@
   --safe-left: env(safe-area-inset-left, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
   --bar-h: 52px; /* resource bar height without the safe area */
-  --bottom-h: 100px; /* height of the bottom bar area (disc 76 px + padding) */
+  --bottom-h: calc(var(--disc) + 12px); /* bottom bar area: disc + bottom padding */
   --disc: 76px;
 }
 
@@ -50,6 +50,7 @@
   font-variant-numeric: tabular-nums;
   text-shadow: 0 1px 3px rgba(8, 22, 30, 0.8);
   pointer-events: none;
+  z-index: 1; /* below everything interactive */
 }
 
 /* ---------- Resource bar ---------- */
@@ -61,6 +62,7 @@
   padding: var(--safe-top) var(--safe-right) 0 var(--safe-left);
   background: rgba(22, 53, 69, 0.88);
   pointer-events: auto;
+  z-index: 3;
 }
 .resource-bar__scroll {
   display: flex;
@@ -144,6 +146,7 @@
   background: var(--marble);
   box-shadow: var(--shadow);
   pointer-events: auto;
+  z-index: 4;
 }
 .mode-banner__text {
   flex: 1;
@@ -177,6 +180,7 @@
   padding: 0 calc(12px + var(--safe-right)) calc(12px + var(--safe-bottom))
     calc(12px + var(--safe-left));
   pointer-events: none;
+  z-index: 2;
 }
 .bottom-bar__actions {
   display: flex;
@@ -256,6 +260,7 @@
   font-size: 16px;
   line-height: 1.4;
   pointer-events: auto;
+  z-index: 5;
   animation: sheet-in 150ms ease-out;
 }
 .sheet__header {
@@ -523,6 +528,7 @@
   color: var(--marble);
   font-size: 15px;
   box-shadow: var(--shadow);
+  z-index: 6;
   opacity: 0;
   transition: opacity 200ms ease-out;
   pointer-events: none;
@@ -538,7 +544,6 @@
 /* ---------- Wide screens and landscape: cards at the bottom left ---------- */
 @media (min-width: 700px) {
   :root {
-    --bottom-h: 84px;
     --disc: 64px;
   }
   .sheet {
@@ -557,7 +562,6 @@
 @media (max-height: 500px) {
   :root {
     --bar-h: 48px;
-    --bottom-h: 72px;
     --disc: 56px;
   }
   .build-menu {

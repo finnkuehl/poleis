@@ -69,6 +69,7 @@ export const en = {
     built: '{building} built.',
     roadBuilt: 'Road built.',
     demolishConfirmTitle: 'Demolish {building}?',
+    roadDemolishConfirmTitle: 'Demolish road?',
     demolishNoRefund: 'You get nothing back.',
     demolished: '{building} demolished.',
     roadDemolished: 'Road demolished.',
