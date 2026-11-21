@@ -152,7 +152,19 @@ export function formatCaptured(n: number): string {
   return n === 1 ? en.turnSummary.capturedOne : fill(en.turnSummary.capturedMany, { n });
 }
 
-/** Toast after an attack: "Spearman attacked: 5 damage." or "Spearman defeated the enemy." */
-export function formatAttacked(unit: string, damage: number, defeated: boolean): string {
-  return fill(defeated ? en.flow.attackedDefeated : en.flow.attacked, { unit, n: damage });
+/**
+ * Toast after an attack, from the combat numbers:
+ * "Spearman defeated the enemy." / "Spearman attacked: 5 damage, took 3." /
+ * "Scout attacked: 1 damage. Your scout was lost."
+ */
+export function formatAttacked(
+  unit: string,
+  r: { damage: number; counter: number; defenderDies: boolean; attackerDies: boolean },
+): string {
+  if (r.defenderDies) return fill(en.flow.attackedDefeated, { unit });
+  if (r.attackerDies) {
+    return fill(en.flow.attackedLost, { unit, n: r.damage, lower: unit.toLowerCase() });
+  }
+  if (r.counter > 0) return fill(en.flow.attackedTook, { unit, n: r.damage, c: r.counter });
+  return fill(en.flow.attacked, { unit, n: r.damage });
 }

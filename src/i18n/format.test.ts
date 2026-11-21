@@ -92,8 +92,17 @@ describe('i18n/format', () => {
     expect(formatUnitsLost(2)).toBe('2 units were lost to hunger');
     expect(formatCaptured(1)).toBe('You captured a city!');
     expect(formatCaptured(2)).toBe('You captured 2 cities!');
-    expect(formatAttacked('Spearman', 5, false)).toBe('Spearman attacked: 5 damage.');
-    expect(formatAttacked('Spearman', 10, true)).toBe('Spearman defeated the enemy.');
+    const base = { damage: 5, counter: 0, defenderDies: false, attackerDies: false };
+    expect(formatAttacked('Spearman', base)).toBe('Spearman attacked: 5 damage.');
+    expect(formatAttacked('Spearman', { ...base, damage: 10, defenderDies: true })).toBe(
+      'Spearman defeated the enemy.',
+    );
+    expect(formatAttacked('Spearman', { ...base, counter: 3 })).toBe(
+      'Spearman attacked: 5 damage, took 3.',
+    );
+    expect(formatAttacked('Scout', { ...base, damage: 1, counter: 4, attackerDies: true })).toBe(
+      'Scout attacked: 1 damage. Your scout was lost.',
+    );
   });
   it('fills placeholders', () => {
     expect(fill('Build {building} here?', { building: 'House' })).toBe('Build House here?');

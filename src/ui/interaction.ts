@@ -137,10 +137,6 @@ export async function createGame(
       banner.show(en.flow.roadStartPrompt);
     },
     onUnits: () => {
-      if (mode.kind === 'unit') {
-        resetToIdle();
-        return;
-      }
       selectNextUnit();
     },
     onEndTurn: () => {
@@ -422,7 +418,14 @@ export async function createGame(
         onFound: () => foundHere(unit),
       };
     }
-    panel.showUnit({ hex: unit.hex, terrain, unit, own, found });
+    panel.showUnit({
+      hex: unit.hex,
+      terrain,
+      unit,
+      own,
+      hasTargets: own && visibleTargets(unit).length > 0,
+      found,
+    });
   }
 
   function foundHere(unit: Unit): void {
@@ -446,20 +449,22 @@ export async function createGame(
 
   /** Units button: the next own unit (by id, after the current one, wrapping) that can still act. */
   function selectNextUnit(): void {
+    const inUnitMode = mode.kind === 'unit';
     const current = selected ? unitAt(state, selected) : undefined;
-    const currentId = current?.owner === PLAYER ? current.id : -1;
+    const currentId =
+      mode.kind === 'unit' ? mode.unitId : current?.owner === PLAYER ? current.id : -1;
     const sorted = ownUnits().sort((a, b) => a.id - b.id);
+    // In unit mode the current unit is skipped; otherwise it comes last (it may still be due).
     const ordered = [
       ...sorted.filter((u) => u.id > currentId),
-      ...sorted.filter((u) => u.id <= currentId),
+      ...sorted.filter((u) => u.id < currentId),
+      ...sorted.filter((u) => u.id === currentId && !inUnitMode),
     ];
     const next = ordered.find(canAct);
-    resetToIdle();
     if (!next) {
       toast.show(en.unitText.allDone);
       return;
     }
-    renderer.centerOn(next.hex);
     enterUnitMode(next);
   }
 
@@ -471,6 +476,24 @@ export async function createGame(
     renderer.selectTile(unit.hex);
     bottomBar.setMode('units');
     refreshUnitMode();
+    centerAbovePanel(unit.hex);
+  }
+
+  /** Pans the map so the unit sits in the free map area above (or, on wide screens, beside) the panel. */
+  function centerAbovePanel(hex: Hex): void {
+    const panelEl = document.querySelector<HTMLElement>('.tile-info');
+    const rect = panelEl && !panelEl.hidden ? panelEl.getBoundingClientRect() : null;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    if (!rect) {
+      renderer.centerOn(hex);
+    } else if (w >= 700) {
+      // Card at the bottom left: use the area to its right.
+      renderer.centerOnScreenPoint(hex, (rect.right + w) / 2, h / 2);
+    } else {
+      // Bottom sheet: use the area between the top of the screen and the sheet.
+      renderer.centerOnScreenPoint(hex, w / 2, rect.top / 2 + 24);
+    }
   }
 
   /** Leaves unit mode but keeps the selection (highlights and targets are cleared). */
@@ -516,7 +539,7 @@ export async function createGame(
       confirmLabel: en.attack.confirm,
       onConfirm: () => {
         if (commit({ type: 'attack', unitId: attacker.id, targetId: defender.id })) {
-          toast.show(formatAttacked(en.units[attacker.type], preview.damage, preview.defenderDies));
+          toast.show(formatAttacked(en.units[attacker.type], preview));
         } else {
           refreshUnitMode();
         }

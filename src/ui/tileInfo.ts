@@ -111,6 +111,8 @@ export interface UnitInfo {
   unit: Unit;
   /** false = a foreign unit: tagged "Enemy", no moves or hint. */
   own: boolean;
+  /** Own units: is there an attack target in reach (for the status line)? */
+  hasTargets?: boolean;
   /** Settlers only: the "Found city here" button. */
   found?: { ok: boolean; reason?: string; onFound(): void };
 }
@@ -354,7 +356,9 @@ export function createTileInfoPanel(root: HTMLElement, onClose: () => void): Til
     if (ratio <= 0.34) fillBar.classList.add('is-low');
     track.appendChild(fillBar);
     hp.append(track, el('span', 'hp__text', fill(en.unitText.hp, { hp: o.unit.hp, max: def.hp })));
-    nodes.push(hp, el('p', 'tile-info__line', unitStatLine(o.unit.type)));
+    nodes.push(hp);
+    // Own units: compact panel (name, HP, moves, status), so the map stays visible above it.
+    if (!o.own) nodes.push(el('p', 'tile-info__line', unitStatLine(o.unit.type)));
     if (o.own) {
       nodes.push(
         el(
@@ -366,13 +370,13 @@ export function createTileInfoPanel(root: HTMLElement, onClose: () => void): Til
           }),
         ),
       );
-      const status = unitStatus(o.unit);
+      const status = unitStatus(o.unit, o.hasTargets ?? false);
       const row = el('p', `tile-info__status is-${status === 'done' ? 'neutral' : 'ok'}`);
       row.append(el('span', 'status-dot'), document.createTextNode(unitStatusText(status)));
       nodes.push(row);
-      if (status !== 'done') nodes.push(el('p', 'tile-info__note', en.unitText.hint));
+    } else {
+      nodes.push(terrainLine(o.terrain));
     }
-    nodes.push(terrainLine(o.terrain));
     if (o.own && o.found) {
       const found = o.found;
       const b = button('btn btn--primary unit-found', en.unitText.foundCity);

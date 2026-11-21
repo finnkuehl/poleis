@@ -22,6 +22,8 @@ export interface Renderer {
   setPathPreview(path: readonly Hex[] | null, newTiles?: readonly Hex[]): void;
   /** Centers the view on `h`; a hex gets the given screen radius (clamped to the zoom limits). */
   centerOn(h: Hex, hexScreenRadiusPx?: number): void;
+  /** Pans (zoom unchanged) so that `h` appears at the screen point (sx, sy). */
+  centerOnScreenPoint(h: Hex, sx: number, sy: number): void;
 }
 
 export async function createRenderer(
@@ -61,6 +63,16 @@ export async function createRenderer(
     const p = hexToPixel(h, hexSize);
     controller.centerOn(p.x, p.y, radiusPx / hexSize);
   };
+  const centerOnScreenPoint = (h: Hex, sx: number, sy: number): void => {
+    const p = hexToPixel(h, hexSize);
+    const z = controller.state.zoom;
+    // World point that has to sit in the viewport center so that p lands on (sx, sy).
+    controller.centerOn(
+      p.x + (app.screen.width / 2 - sx) / z,
+      p.y + (app.screen.height / 2 - sy) / z,
+      z,
+    );
+  };
   const city = state.buildings.find((b) => b.type === 'cityCenter' && b.owner === 0);
   if (city) centerOn(city.hex);
   else controller.fit();
@@ -76,5 +88,6 @@ export async function createRenderer(
     setAttackTargets: view.setAttackTargets,
     setPathPreview: (path, newTiles = []) => view.setPathPreview(path, newTiles),
     centerOn,
+    centerOnScreenPoint,
   };
 }

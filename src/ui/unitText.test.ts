@@ -35,13 +35,15 @@ describe('unitStatLine', () => {
 });
 
 describe('unitStatus', () => {
-  it('is ready with moves left', () => expect(unitStatus(unit({}))).toBe('ready'));
-  it('can still attack without moves', () =>
-    expect(unitStatus(unit({ movesLeft: 0, acted: true }))).toBe('canAttack'));
+  it('is ready with moves left', () => expect(unitStatus(unit({}), false)).toBe('ready'));
+  it('can still attack without moves when a target is in reach', () =>
+    expect(unitStatus(unit({ movesLeft: 0, acted: true }), true)).toBe('canAttack'));
+  it('is done without moves and without targets', () =>
+    expect(unitStatus(unit({ movesLeft: 0, acted: true }), false)).toBe('done'));
   it('is done after an attack', () =>
-    expect(unitStatus(unit({ attacked: true, movesLeft: 1 }))).toBe('done'));
+    expect(unitStatus(unit({ attacked: true, movesLeft: 1 }), true)).toBe('done'));
   it('is done without moves when it cannot attack', () =>
-    expect(unitStatus(unit({ type: 'settler', movesLeft: 0 }))).toBe('done'));
+    expect(unitStatus(unit({ type: 'settler', movesLeft: 0 }), true)).toBe('done'));
 });
 
 describe('attackPreviewLines', () => {

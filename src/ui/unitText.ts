@@ -30,13 +30,14 @@ export function unitStatLine(id: UnitId): string {
 export type UnitStatus = 'ready' | 'canAttack' | 'done';
 
 /**
- * What an own unit can still do this turn: move (moves left), attack (range and no attack yet).
+ * What an own unit can still do this turn: move (moves left), attack (range, no attack yet and
+ * at least one target in reach: `hasTargets`).
  * "Ready" = can still move; "Can still attack" = out of moves but may attack; else done.
  */
-export function unitStatus(unit: Unit): UnitStatus {
+export function unitStatus(unit: Unit, hasTargets: boolean): UnitStatus {
   const def = UNITS[unit.type];
   const canMove = !unit.attacked && unit.movesLeft > 0;
-  const canAttack = !unit.attacked && def.range > 0;
+  const canAttack = !unit.attacked && def.range > 0 && hasTargets;
   if (canMove) return 'ready';
   if (canAttack) return 'canAttack';
   return 'done';

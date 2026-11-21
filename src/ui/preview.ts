@@ -486,7 +486,15 @@ addControl('Confirm attack', () => {
       d,
     ),
     confirmLabel: en.attack.confirm,
-    onConfirm: () => toast.show(formatAttacked('Spearman', 5, false)),
+    onConfirm: () =>
+      toast.show(
+        formatAttacked('Spearman', {
+          damage: 5,
+          counter: 5,
+          defenderDies: false,
+          attackerDies: false,
+        }),
+      ),
     onCancel: () => undefined,
   });
 });
@@ -500,7 +508,15 @@ addControl('Confirm attack: kill', () => {
       d,
     ),
     confirmLabel: en.attack.confirm,
-    onConfirm: () => toast.show(formatAttacked('Spearman', 5, true)),
+    onConfirm: () =>
+      toast.show(
+        formatAttacked('Spearman', {
+          damage: 5,
+          counter: 0,
+          defenderDies: true,
+          attackerDies: false,
+        }),
+      ),
     onCancel: () => undefined,
   });
 });
