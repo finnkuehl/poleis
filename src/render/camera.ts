@@ -163,6 +163,11 @@ export class CameraController {
     this.pointers.clear();
   }
 
+  /** Begrenzt den Ziel-Zoom, damit zoomAt am Limit die Ansicht nicht verschiebt. */
+  private clampZoom(zoom: number): number {
+    return Math.min(this.limits.max, Math.max(this.limits.min, zoom));
+  }
+
   private set(cam: CameraState): void {
     this.cam = clampCamera(cam, this.options.world, this.viewport, this.limits);
     this.apply();
@@ -239,7 +244,8 @@ export class CameraController {
       const pinch = this.readPinch();
       let cam = this.cam;
       if (this.pinchDist > 0 && pinch.dist > 0) {
-        cam = zoomAt(cam, this.pinchMidX, this.pinchMidY, cam.zoom * (pinch.dist / this.pinchDist));
+        const zoom = this.clampZoom(cam.zoom * (pinch.dist / this.pinchDist));
+        cam = zoomAt(cam, this.pinchMidX, this.pinchMidY, zoom);
       }
       cam = {
         ...cam,
@@ -261,7 +267,13 @@ export class CameraController {
     } catch {
       // schon freigegeben – unkritisch
     }
-    if (this.pointers.size === 1) {
+    if (this.pointers.size === 2) {
+      // 3 → 2 Finger: Pinch-Ausgangswerte neu setzen, damit nichts springt
+      const pinch = this.readPinch();
+      this.pinchDist = pinch.dist;
+      this.pinchMidX = pinch.midX;
+      this.pinchMidY = pinch.midY;
+    } else if (this.pointers.size === 1) {
       // 2 → 1 Finger: Rest zieht weiter, ohne Sprung
       this.dragging = true;
       this.resetSingle();
@@ -295,7 +307,7 @@ export class CameraController {
     const delta = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
     const p = this.local(e);
     const zoom = this.cam.zoom * Math.exp(-delta * cameraConfig.wheelZoomSpeed);
-    this.set(zoomAt(this.cam, p.x, p.y, zoom));
+    this.set(zoomAt(this.cam, p.x, p.y, this.clampZoom(zoom)));
   };
 
   private readonly onContextMenu = (e: Event): void => {
