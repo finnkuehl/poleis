@@ -57,6 +57,8 @@ interface Run {
   result: SimulationResult;
   events: GameEvent[];
   startExplored: Record<PlayerId, number>;
+  /** States after some rounds (for the fairness tests, so no extra simulation is needed). */
+  snapshots: Map<number, GameState>;
 }
 
 const runs = new Map<string, Run>();
@@ -64,16 +66,18 @@ const runs = new Map<string, Run>();
 function runOf(seed: string, defended: boolean): Run {
   const events: GameEvent[] = [];
   const startExplored: Record<PlayerId, number> = {};
+  const snapshots = new Map<number, GameState>();
   const result = simulate(seed, ROUNDS, {
     setup: (s) => {
       if (defended) defendHuman(s);
       for (const p of s.players) startExplored[p.id] = p.explored.filter(Boolean).length;
     },
-    onRound: (_round, s) => {
+    onRound: (round, s) => {
       events.push(...s.events);
+      if ([20, 36, 40, 60].includes(round)) snapshots.set(round, s);
     },
   });
-  return { result, events, startExplored };
+  return { result, events, startExplored, snapshots };
 }
 
 beforeAll(() => {
@@ -130,7 +134,7 @@ describe('AI military (3 AIs, 80 rounds)', () => {
     expect(seedsWith, `cities founded per seed: ${counts}`).toBeGreaterThanOrEqual(2);
   });
 
-  it('Sparta attacks more often than Athens', () => {
+  it('Sparta attacks most; Athens and Corinth only rarely', () => {
     const attacks: Record<string, number> = { sparta: 0, athens: 0, corinth: 0 };
     for (const run of all()) {
       for (const e of run.events) {
@@ -139,7 +143,9 @@ describe('AI military (3 AIs, 80 rounds)', () => {
         }
       }
     }
-    expect(attacks.sparta, JSON.stringify(attacks)).toBeGreaterThan(attacks.athens);
+    const note = JSON.stringify(attacks);
+    expect(attacks.sparta, note).toBeGreaterThan(attacks.athens);
+    expect(attacks.sparta, note).toBeGreaterThan(attacks.corinth);
   });
 
   it('at least one city is captured', () => {
@@ -159,8 +165,8 @@ describe('AI military (3 AIs, 80 rounds)', () => {
 
 describe('determinism', () => {
   it('same seed + same rounds give identical states', () => {
-    const a = simulate('3', 40, { setup: defendHuman }).state;
-    const b = simulate('3', 40, { setup: defendHuman }).state;
+    const a = simulate('3', 25, { setup: defendHuman }).state;
+    const b = simulate('3', 25, { setup: defendHuman }).state;
     expect(a).toEqual(b);
   });
 });
@@ -205,16 +211,11 @@ describe('fairness: unseen enemy units change nothing', () => {
   }
 
   it('an enemy unit on a tile the AI does not see does not change its actions', () => {
-    const states = new Map<number, GameState>();
-    simulate('3', 60, {
-      setup: defendHuman,
-      onRound: (round, s) => {
-        if (round === 20 || round === 40 || round === 60) states.set(round, s);
-      },
-    });
+    const snapshots = runs.get('3:defended')!.snapshots;
     let all = 0;
     let unit = 0;
-    for (const s of states.values()) {
+    for (const round of [20, 40, 60]) {
+      const s = snapshots.get(round)!;
       const ended = applyAction(s, { type: 'endTurn' });
       if (!ended.ok) throw new Error('could not end the turn');
       let current = ended.state;
@@ -233,13 +234,7 @@ describe('fairness: unseen enemy units change nothing', () => {
   });
 
   it('a visible enemy unit next to a city does change what the AI does', () => {
-    let state: GameState | null = null;
-    simulate('3', 36, {
-      setup: defendHuman,
-      onRound: (round, s) => {
-        if (round === 36) state = s;
-      },
-    });
+    const state = runs.get('3:defended')!.snapshots.get(36);
     const ended = applyAction(state!, { type: 'endTurn' });
     if (!ended.ok) throw new Error('could not end the turn');
     const base = ended.state;

@@ -217,7 +217,7 @@ export const aiConfig = {
     threatExtraDefenders: 1,
     // The army (combat units on top of the defenders): from this turn on the AI trains this many,
     // one more every `armyGrowEvery` turns, up to `armyMaxSize`.
-    armyStartTurn: { merchant: 55, warrior: 10, builder: 35 } as Record<Personality, number>,
+    armyStartTurn: { merchant: 70, warrior: 10, builder: 50 } as Record<Personality, number>,
     armySize: { merchant: 3, warrior: 4, builder: 3 } as Record<Personality, number>,
     armyGrowEvery: 20,
     armyMaxSize: 8,
@@ -243,7 +243,7 @@ export const aiConfig = {
     // Strength assumed for a target city whose center is not in sight.
     assumedCityDefense: 4,
     // The army strength must be at least this many times the enemy strength near the target.
-    attackRatio: { merchant: 3, warrior: 0.8, builder: 2 } as Record<Personality, number>,
+    attackRatio: { merchant: 4, warrior: 0.8, builder: 3 } as Record<Personality, number>,
     // ... times this factor once units are already fighting at the target.
     engagedRatioFactor: 0.5,
     // Units below this share of their HP leave the fight and go home; they only rejoin the
