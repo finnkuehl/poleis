@@ -36,6 +36,7 @@ import {
   setMoveOrder,
   updateAllExplored,
   workersNeeded,
+  canPrioritizeGood,
   type RuleError,
 } from './rules';
 import type { GameState } from './state';
@@ -46,6 +47,7 @@ export type Action =
   | { type: 'buildRoad'; from: Hex; to: Hex }
   | { type: 'demolish'; hex: Hex }
   | { type: 'togglePause'; hex: Hex }
+  | { type: 'setGoodPriority'; good: GoodId; low: boolean }
   | { type: 'advanceCity'; cityId: number }
   | { type: 'trade'; good: GoodId; direction: 'sell' | 'buy'; lots: number }
   | { type: 'move'; unitId: number; to: Hex }
@@ -122,6 +124,14 @@ function applyActionInner(state: GameState, action: Action): ActionResult {
       );
       if (!building || workersNeeded(building) <= 0) return fail({ code: 'cannotPause' });
       building.paused = !building.paused;
+      return { ok: true, state: next };
+    }
+    case 'setGoodPriority': {
+      if (!canPrioritizeGood(action.good)) return fail({ code: 'cannotPrioritizeGood' });
+      const me = next.players.find((p) => p.id === player);
+      if (!me) throw new Error(`Unknown player ${player}`);
+      const rest = me.lowPriorityGoods.filter((g) => g !== action.good);
+      me.lowPriorityGoods = action.low ? [...rest, action.good].sort() : rest;
       return { ok: true, state: next };
     }
     case 'advanceCity': {

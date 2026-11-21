@@ -7,7 +7,7 @@ import { connectedBuildingIds } from './connection';
 import { cityStats, runPopulation } from './population';
 import { runProduction } from './production';
 import { runUpkeep } from './units';
-import { assignWorkers, housing, population, workersNeeded } from './workers';
+import { assignWorkers, canPrioritizeGood, housing, population, workersNeeded } from './workers';
 
 export interface GoodFlow {
   good: GoodId;
@@ -25,6 +25,10 @@ export interface GoodFlow {
   net: number;
   /** When net < 0: full turns the stock lasts (floor(stock / -net)), else null. */
   turnsLeft: number | null;
+  /** The good is marked low priority by the player. */
+  lowPriority: boolean;
+  /** Some building type with workers produces this good, so the toggle makes sense. */
+  canPrioritize: boolean;
 }
 
 export interface WorkerSummary {
@@ -72,8 +76,10 @@ type Consumed = GoodFlow['consumed'][number];
 /** Estimates the next turn's flows per good. The passed state is never changed. */
 export function economyOverview(state: GameState, player: PlayerId): EconomyOverview {
   const workers = workerSummary(state, player);
-  const real = state.players.find((p) => p.id === player)?.goods;
-  if (!real) throw new Error(`Unknown player ${player}`);
+  const me = state.players.find((p) => p.id === player);
+  if (!me) throw new Error(`Unknown player ${player}`);
+  const real = me.goods;
+  const lowPriorityGoods = me.lowPriorityGoods;
 
   const sim = structuredClone(state);
   const stock: Stock = sim.players.find((p) => p.id === player)!.goods;
@@ -151,6 +157,8 @@ export function economyOverview(state: GameState, player: PlayerId): EconomyOver
       consumed: c,
       net,
       turnsLeft: net < 0 ? Math.floor(real[id] / -net) : null,
+      lowPriority: lowPriorityGoods.includes(id),
+      canPrioritize: canPrioritizeGood(id),
     });
   }
   return { goods, workers };

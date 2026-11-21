@@ -88,3 +88,14 @@ describe('workerSummary', () => {
     expect(workerSummary(s, 0).missing).toBe(0);
   });
 });
+
+describe('economyOverview priority flags', () => {
+  it('reports lowPriority and canPrioritize per good', () => {
+    const s = setup({ drachmas: 3 }, 8);
+    addBuilding(s, 'woodcutter', at(1, 2));
+    s.players[0].lowPriorityGoods = ['wood'];
+    const o = economyOverview(s, 0);
+    expect(flow(o, 'wood')).toMatchObject({ lowPriority: true, canPrioritize: true });
+    expect(flow(o, 'drachmas')).toMatchObject({ lowPriority: false, canPrioritize: false });
+  });
+});

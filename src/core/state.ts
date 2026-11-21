@@ -15,6 +15,7 @@ import {
   type CityLevel,
   type CivId,
   type GameSettingsData,
+  type GoodId,
   type Stock,
   type TerrainId,
   type UnitId,
@@ -55,6 +56,8 @@ export interface PlayerState {
   goods: Stock;
   /** Per tile index: has the player ever seen this tile (fog of war)? */
   explored: boolean[];
+  /** Goods marked "low priority": their producers get workers last. Ascending, unique. */
+  lowPriorityGoods: GoodId[];
 }
 
 /** The passive enemy of test mode: not human, no civilization, never takes a turn. */
@@ -262,6 +265,7 @@ export function createGameState(
         alive: true,
         goods,
         explored: map.tiles.map(() => false),
+        lowPriorityGoods: [],
       },
     ],
     buildings: [{ id: 1, type: 'cityCenter', owner: 0, hex: start, paused: false }],
@@ -304,6 +308,7 @@ export function createGameState(
         alive: true,
         goods: { ...emptyStock(), ...economyConfig.startGoods },
         explored: map.tiles.map(() => false),
+        lowPriorityGoods: [],
       });
       createCity(state, id, starts[id], populationConfig.startResidents);
     });
@@ -355,6 +360,7 @@ function addPassiveEnemy(state: GameState, humanCenter: Hex): void {
     alive: true,
     goods: emptyStock(),
     explored: state.map.tiles.map(() => false),
+    lowPriorityGoods: [],
   });
   createCity(state, 1, center, populationConfig.startResidents);
   const spearman = UNITS.spearman;
