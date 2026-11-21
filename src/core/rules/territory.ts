@@ -31,3 +31,10 @@ export function ownerAt(state: GameState, h: Hex): number {
   const i = tileIndex(state.map, h);
   return i < 0 ? -1 : state.territory[i];
 }
+
+/** In-bounds tiles within `radius` of `hex` that nobody owns yet (what a claim would gain). */
+export function territoryGain(state: GameState, hex: Hex, radius: number): Hex[] {
+  return range(hex, radius).filter(
+    (h) => inBounds(state.map, h) && state.territory[tileIndex(state.map, h)] === -1,
+  );
+}

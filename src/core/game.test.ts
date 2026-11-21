@@ -132,7 +132,7 @@ describe('advancing to polis', () => {
     });
     addCity(s, at(3, 1), { radius: 4 });
     for (const h of [at(2, 1), at(4, 1), at(2, 0), at(4, 0)]) addBuilding(s, 'house', h);
-    // 4 houses + city center = 20 housing; the city grows by 1 per turn from 4 to 20.
+    // 4 houses + city center = 28 housing; the city grows by 1 per turn, from 4 to 20 in 16 turns.
     let t = s;
     for (let i = 0; i < 16; i++) t = run(t, { type: 'endTurn' });
     expect(t.cities[0].residents).toBe(20);

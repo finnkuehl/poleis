@@ -70,6 +70,16 @@ export function formatRoadTiles(n: number): string {
   return fill(n === 1 ? en.flow.roadTileOne : en.flow.roadTileMany, { n });
 }
 
+/** "+1 tile" / "+11 tiles" (what a border tower claims, in the build list) */
+export function formatTileGain(n: number): string {
+  return fill(n === 1 ? en.tileInfo.gainOne : en.tileInfo.gainMany, { n });
+}
+
+/** "+1 territory tile" / "+11 territory tiles" (confirm sheet line) */
+export function formatTerritoryGain(n: number): string {
+  return fill(n === 1 ? en.flow.territoryGainOne : en.flow.territoryGainMany, { n });
+}
+
 /** "Turn 3 / 120" */
 export function formatTurnOf(turn: number, limit: number): string {
   return fill(en.ui.turnOf, { turn, limit });

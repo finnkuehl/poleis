@@ -4,6 +4,7 @@ import type { AdvanceCheck } from '../core/rules/advance';
 import type { CityStats } from '../core/rules/population';
 import type { BuildingStatus } from '../core/rules/production';
 import {
+  BUILDING_IDS,
   BUILDINGS,
   GOODS,
   economyConfig,
@@ -14,9 +15,17 @@ import {
 } from '../data';
 import { TERRAIN, type TerrainId } from '../data/terrain';
 import { en } from '../i18n/en';
-import { fill, formatAdvanceTo, formatDrachmas, formatStatus } from '../i18n/format';
+import {
+  fill,
+  formatAdvanceTo,
+  formatDrachmas,
+  formatMissing,
+  formatStatus,
+  formatTileGain,
+} from '../i18n/format';
 import { theme } from '../render/theme';
-import { canPause, perTurnText, statusTone } from './buildingText';
+import type { BuildOption } from './buildOptions';
+import { canPause, costParts, perTurnText, statusTone } from './buildingText';
 import {
   advanceBlockReason,
   advanceRows,
@@ -32,6 +41,19 @@ export interface InfoRow {
   value: string;
 }
 
+/** "no", "yes" or "only mine, quarry": derived from the buildings the player may build. */
+function buildableText(terrain: TerrainId): string {
+  const t = en.tileInfo;
+  if (TERRAIN[terrain].buildable) return t.yes;
+  const names = BUILDING_IDS.filter(
+    (id) =>
+      BUILDINGS[id].playerCanBuild && BUILDINGS[id].placement.some((o) => o.on.includes(terrain)),
+  )
+    .map((id) => en.buildings[id].toLowerCase())
+    .sort();
+  return names.length === 0 ? t.no : fill(t.only, { list: names.join(', ') });
+}
+
 /** Rows of the info panel for a terrain (pure function, no DOM). */
 export function tileInfoRows(terrain: TerrainId): InfoRow[] {
   const def = TERRAIN[terrain];
@@ -43,7 +65,7 @@ export function tileInfoRows(terrain: TerrainId): InfoRow[] {
   return [
     { label: t.movement, value: movement },
     { label: t.defense, value: defense },
-    { label: t.buildable, value: def.buildable ? t.yes : t.no },
+    { label: t.buildable, value: buildableText(terrain) },
   ];
 }
 
@@ -93,13 +115,22 @@ export interface RoadInfo {
   onDemolish(): void;
 }
 
+/** Extras of the terrain panel: build list, road start and a short note. */
+export interface TerrainExtra {
+  /** "Build here" list; one tap on an affordable entry calls `onBuild`. */
+  build?: { options: BuildOption[]; stock: Stock; onBuild(id: BuildingId): void };
+  /** If set, a "Road from here" button is shown. */
+  onRoadFrom?: () => void;
+  note?: string;
+}
+
 export interface TileInfoPanel {
-  showTerrain(h: Hex, terrain: TerrainId): void;
+  showTerrain(h: Hex, terrain: TerrainId, extra?: TerrainExtra): void;
   showBuilding(o: BuildingInfo): void;
   showCity(o: CityInfo): void;
   showRoad(o: RoadInfo): void;
   /** Same as `showTerrain` (kept for existing callers). */
-  show(h: Hex, terrain: TerrainId): void;
+  show(h: Hex, terrain: TerrainId, extra?: TerrainExtra): void;
   hide(): void;
 }
 
@@ -346,7 +377,41 @@ export function createTileInfoPanel(root: HTMLElement, onClose: () => void): Til
     panel.hidden = false;
   }
 
-  function showTerrain(h: Hex, terrain: TerrainId): void {
+  /** One row of the "Build here" list. */
+  function buildRow(o: BuildOption, stock: Stock, onBuild: (id: BuildingId) => void): HTMLElement {
+    const def = BUILDINGS[o.id];
+    const ok = o.state === 'ok';
+    const item = button(`build-item build-item--here${ok ? '' : ' is-muted'}`, '');
+    item.disabled = !ok;
+    const icon = el('span', 'build-item__icon', def.icon);
+    icon.setAttribute('aria-hidden', 'true');
+    const body = el('span', 'build-item__body');
+    body.appendChild(el('span', 'build-item__name', en.buildings[o.id]));
+    const sub = el('span', 'build-item__effect');
+    if (o.state === 'locked' && o.level) {
+      sub.textContent = fill(en.ui.fromLevel, { level: en.levels[o.level] });
+    } else if (o.state === 'unaffordable' && o.missing) {
+      sub.className = 'build-item__missing';
+      sub.textContent = formatMissing(o.missing);
+    } else {
+      costParts(def.cost, stock).forEach((part, i) => {
+        if (i > 0) sub.appendChild(document.createTextNode(', '));
+        sub.appendChild(
+          el('span', 'cost-part', `${GOODS[part.good].icon} ${part.amount} ${en.goods[part.good]}`),
+        );
+      });
+    }
+    if (o.gain !== undefined && o.state !== 'locked') {
+      if (sub.childNodes.length > 0) sub.appendChild(document.createTextNode(' · '));
+      sub.appendChild(el('span', 'build-item__gain', formatTileGain(o.gain)));
+    }
+    body.appendChild(sub);
+    item.append(icon, body);
+    if (ok) item.addEventListener('click', () => onBuild(o.id));
+    return item;
+  }
+
+  function showTerrain(h: Hex, terrain: TerrainId, extra: TerrainExtra = {}): void {
     setHeader(h, en.terrain[terrain], null, terrain);
     const list = el('dl', 'tile-info__rows');
     for (const r of tileInfoRows(terrain)) {
@@ -354,7 +419,22 @@ export function createTileInfoPanel(root: HTMLElement, onClose: () => void): Til
       wrap.append(el('dt', '', r.label), el('dd', '', r.value));
       list.appendChild(wrap);
     }
-    content.replaceChildren(list, el('p', 'tile-info__note', en.terrainNote[terrain]));
+    const nodes: HTMLElement[] = [list, el('p', 'tile-info__note', en.terrainNote[terrain])];
+    if (extra.note) nodes.push(el('p', 'tile-info__hint', extra.note));
+    const build = extra.build;
+    if (build && build.options.length > 0) {
+      const section = el('div', 'build-here');
+      section.appendChild(el('h3', 'build-here__title', en.tileInfo.buildHere));
+      for (const o of build.options) section.appendChild(buildRow(o, build.stock, build.onBuild));
+      nodes.push(section);
+    }
+    if (extra.onRoadFrom) {
+      const road = button('btn btn--secondary tile-info__road', en.tileInfo.roadFromHere);
+      road.addEventListener('click', extra.onRoadFrom);
+      nodes.push(road);
+    }
+    content.replaceChildren(...nodes);
+    content.scrollTop = 0;
     panel.hidden = false;
   }
 

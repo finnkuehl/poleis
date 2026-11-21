@@ -25,10 +25,10 @@ describe('placement', () => {
     expect(checkPlacement(s, 0, 'house', at(1, 0))?.code).toBe('tileOccupied');
     expect(checkPlacement(s, 0, 'house', at(2, 0))).toBeNull();
   });
-  it('woodcutter: next to forest ok, on forest wrong, without forest needs neighbor', () => {
+  it('woodcutter: on forest ok, next to forest ok, without forest needs neighbor', () => {
     const s = makeTestState(['pfp', 'ppp', 'ppp'], { goods: rich });
     expect(checkPlacement(s, 0, 'woodcutter', at(0, 0))).toBeNull();
-    expect(checkPlacement(s, 0, 'woodcutter', at(1, 0))?.code).toBe('wrongTerrain');
+    expect(checkPlacement(s, 0, 'woodcutter', at(1, 0))).toBeNull();
     const far = checkPlacement(s, 0, 'woodcutter', at(2, 2));
     expect(far).toEqual({ code: 'needsNeighbor', terrains: ['forest'] });
   });
@@ -39,15 +39,23 @@ describe('placement', () => {
       terrains: ['plains'],
     });
   });
-  it('quarry on hills and on plains next to mountains', () => {
+  it('quarry on hills, on mountains and on plains next to hills/mountains', () => {
     const s = makeTestState(['hpm', 'ppp', 'ppp'], { goods: rich });
     expect(checkPlacement(s, 0, 'quarry', at(0, 0))).toBeNull();
     expect(checkPlacement(s, 0, 'quarry', at(1, 0))).toBeNull();
+    expect(checkPlacement(s, 0, 'quarry', at(2, 0))).toBeNull();
     expect(checkPlacement(s, 0, 'quarry', at(1, 2))).toEqual({
       code: 'needsNeighbor',
+      terrains: ['hills', 'mountains'],
+    });
+  });
+  it('mine only on mountains', () => {
+    const s = makeTestState(['hpm'], { goods: rich });
+    expect(checkPlacement(s, 0, 'mine', at(2, 0))).toBeNull();
+    expect(checkPlacement(s, 0, 'mine', at(0, 0))).toEqual({
+      code: 'wrongTerrain',
       terrains: ['mountains'],
     });
-    expect(checkPlacement(s, 0, 'quarry', at(2, 0))?.code).toBe('wrongTerrain');
   });
   it('fishery next to coast', () => {
     const s = makeTestState(['pcp', 'ppp', 'ppp'], { goods: rich });

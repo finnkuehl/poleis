@@ -2,6 +2,7 @@
 import { applyAction, type Action } from '../core/actions';
 import { hexEquals, type Hex } from '../core/hex';
 import { terrainAt, tileIndex } from '../core/map';
+import { TERRAIN, type TerrainId } from '../data/terrain';
 import {
   advanceCheck,
   assignWorkers,
@@ -13,9 +14,11 @@ import {
   checkPlacement,
   connectedBuildingIds,
   missingGoods,
+  ownerAt,
   planRoad,
   previewProduction,
   runProduction,
+  territoryGain,
   validPlacements,
   type BuildingStatus,
 } from '../core/rules';
@@ -41,8 +44,10 @@ import {
   formatMissing,
   formatRoadTiles,
   formatSold,
+  formatTerritoryGain,
 } from '../i18n/format';
 import { createRenderer } from '../render/app';
+import { buildOptionsFor } from './buildOptions';
 import {
   createBottomBar,
   createBuildMenu,
@@ -329,8 +334,42 @@ export async function createGame(
           askDemolish(en.flow.roadDemolishConfirmTitle, en.flow.roadDemolished, hex),
       });
     } else {
-      panel.showTerrain(hex, terrain);
+      showEmptyTile(hex, terrain);
     }
+  }
+
+  /** Panel for a tile without building and road: build list in own territory, else a hint. */
+  function showEmptyTile(hex: Hex, terrain: TerrainId): void {
+    if (ownerAt(state, hex) !== PLAYER) {
+      panel.showTerrain(hex, terrain, {
+        note: TERRAIN[terrain].isWater ? undefined : en.tileInfo.outsideNote,
+      });
+      return;
+    }
+    const options = buildOptionsFor(state, PLAYER, hex);
+    const roadOk = planRoad(state, PLAYER, hex, hex).ok;
+    panel.showTerrain(hex, terrain, {
+      build: {
+        options,
+        stock: stockOf(state),
+        onBuild: (id) => {
+          if (commit({ type: 'build', building: id, hex })) {
+            toast.show(fill(en.flow.built, { building: en.buildings[id] }));
+          }
+        },
+      },
+      onRoadFrom: roadOk ? () => startRoadFrom(hex) : undefined,
+      note: options.length === 0 ? en.tileInfo.nothingToBuild : undefined,
+    });
+  }
+
+  /** "Road from here": skips the start tap and waits for the road's end tile. */
+  function startRoadFrom(hex: Hex): void {
+    resetToIdle();
+    mode = { kind: 'roadEnd', from: hex };
+    bottomBar.setMode('road');
+    renderer.setHighlights([hex]);
+    banner.show(en.flow.roadEndPrompt);
   }
 
   function askDemolish(title: string, doneText: string, hex: Hex): void {
@@ -435,6 +474,14 @@ export async function createGame(
     const lines = [`${en.ui.cost}: ${formatGoods(def.cost) || '–'}`];
     const perTurn = perTurnText(id);
     if (perTurn) lines.push(perTurn);
+    // Border tower and co.: show the land that would be claimed.
+    const restoreHighlights = (): void =>
+      renderer.setHighlights(validPlacements(state, PLAYER, id));
+    if (def.territoryRadius > 0) {
+      const gain = territoryGain(state, hex, def.territoryRadius);
+      renderer.setHighlights(gain);
+      lines.push(formatTerritoryGain(gain.length));
+    }
     confirm.show({
       title: fill(en.flow.buildConfirmTitle, { building: en.buildings[id] }),
       lines,
@@ -446,11 +493,13 @@ export async function createGame(
         } else {
           selected = null;
           renderer.selectTile(null);
+          restoreHighlights();
         }
       },
       onCancel: () => {
         selected = null;
         renderer.selectTile(null);
+        restoreHighlights();
       },
     });
   }

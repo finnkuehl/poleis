@@ -18,10 +18,14 @@ export interface RoadPlan {
 
 export type RoadPlanResult = { ok: true; plan: RoadPlan } | { ok: false; error: RuleError };
 
-/** Own territory, walkable land, and no building of another player. */
+/**
+ * Own territory and no building of another player. Walkable land is required,
+ * except on a tile with one of the player's own buildings (e.g. a mine on a mountain).
+ */
 function usable(state: GameState, player: PlayerId, h: Hex): boolean {
   if (!inBounds(state.map, h)) return false;
   if (ownerAt(state, h) !== player) return false;
+  if (state.buildings.some((b) => b.owner === player && hexEquals(b.hex, h))) return true;
   const terrain = terrainAt(state.map, h);
   if (!terrain || TERRAIN[terrain].moveCost === null) return false;
   return state.buildings.every((b) => b.owner === player || !hexEquals(b.hex, h));

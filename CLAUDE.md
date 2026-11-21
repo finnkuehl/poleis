@@ -138,7 +138,7 @@ City center at the start, territory, build menu, buildings of the goods chains f
 Houses, residents as workers (automatic assignment, adjustable priority is optional), food consumption, growth/shrinking, needs for oil/wine, taxes in drachmas, level-up Settlement → Polis → Metropolis with unlocks.
 
 ### M4 – Territory & military
-Border towers, fog of war, barracks, land units, movement with pathfinding and movement costs, road bonus, combat per the formula in the design document, unit upkeep, capturing cities, settlers found new cities.
+Fog of war (border towers came earlier, in the balance pass after M3), barracks, land units, movement with pathfinding and movement costs, road bonus, combat per the formula in the design document, unit upkeep, capturing cities, settlers found new cities.
 
 ### M5 – First complete game
 AI civilizations (1–3, personalities from the design document), victory conditions and score display, start menu (map size, number of AIs, seed), saving/loading, autosave every turn, victory/defeat screen.
