@@ -30,6 +30,7 @@ import {
   runProduction,
   territoryGain,
   validPlacements,
+  workersNeeded,
   type BuildingStatus,
   type OrderPlan,
 } from '../core/rules';
@@ -220,6 +221,7 @@ export async function createGame(
       banner.show(en.flow.roadStartPrompt);
     },
     onUnits: () => {
+      if (state.result) return;
       economySheet.close();
       selectNextUnit();
     },
@@ -469,14 +471,13 @@ export async function createGame(
       }
     }
     if (building) {
-      const def = BUILDINGS[building.type];
       const assigned = assignWorkers(state, PLAYER, connectedBuildingIds(state, PLAYER));
       panel.showBuilding({
         hex,
         terrain,
         type: building.type,
         status: statuses[building.id] ?? { kind: 'noProduction' },
-        workers: { assigned: assigned[building.id] ?? 0, needed: def.workers },
+        workers: { assigned: assigned[building.id] ?? 0, needed: workersNeeded(building) },
         paused: building.paused,
         onTogglePause: () => {
           const name = en.buildings[building.type];
@@ -506,7 +507,7 @@ export async function createGame(
             : undefined,
         train: building.type === 'barracks' ? trainInfo(building) : undefined,
         onDemolish:
-          building.type === 'cityCenter'
+          building.type === 'cityCenter' || building.type === 'wonder'
             ? undefined
             : () =>
                 askDemolish(
@@ -686,6 +687,7 @@ export async function createGame(
 
   /** Units button: the next own unit (by id, after the current one, wrapping) that can still act. */
   function selectNextUnit(): void {
+    if (state.result) return;
     const inUnitMode = mode.kind === 'unit';
     const current = selected ? unitAt(state, selected) : undefined;
     const currentId =
@@ -709,7 +711,7 @@ export async function createGame(
 
   /** A press on an own unit that can still act turns into a drag instead of a map pan. */
   function startUnitDrag(hex: Hex | null, sx: number, sy: number): boolean {
-    if (!hex || (mode.kind !== 'idle' && mode.kind !== 'unit')) return false;
+    if (state.result || !hex || (mode.kind !== 'idle' && mode.kind !== 'unit')) return false;
     const unit = unitAt(state, hex);
     if (!unit || unit.owner !== PLAYER || !(canAct(unit) || unit.order)) return false;
     // No re-centering: the map must stay under the finger.

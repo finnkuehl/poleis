@@ -7,7 +7,14 @@ import { mapgenConfig } from './data/mapgen';
 import { en } from './i18n/en';
 import { ALL_SLOTS, browserStorage, listSaves, loadGame, type SaveSlot } from './save';
 import { BOOT_INTENT_KEY, createGame, type GameOptions } from './ui/interaction';
-import { createStartMenu, createToast, formatSaveError, randomSeed, type StartMenu } from './ui';
+import {
+  createStartMenu,
+  createToast,
+  formatSaveError,
+  normalizeSeed,
+  randomSeed,
+  type StartMenu,
+} from './ui';
 
 // iOS Safari: prevent pinch-zoom of the whole page
 document.addEventListener('gesturestart', (event) => event.preventDefault());
@@ -122,8 +129,7 @@ function start(appContainer: HTMLElement, uiContainer: HTMLElement): void {
     seed: seedParam || randomSeed(),
     saves: listSaves(storage),
     onNewGame: (settings, seedText) => {
-      const seed = seedText.trim().slice(0, mapgenConfig.seedMaxLength) || randomSeed();
-      begin(createGameState(seed, { settings }));
+      begin(createGameState(normalizeSeed(seedText) || randomSeed(), { settings }));
     },
     onContinue: () => {
       loadInto('auto');

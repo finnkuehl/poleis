@@ -1,5 +1,5 @@
 // Start menu: continue, load, and the new game form with a preview of the map for the seed.
-import { gameConfig, MAP_SIZES, type MapSize } from '../data';
+import { gameConfig, MAP_SIZES, mapgenConfig, type MapSize } from '../data';
 import { en } from '../i18n/en';
 import { fill, formatTurns } from '../i18n/format';
 import { SAVE_SLOT_COUNT, type SaveListEntry, type SaveSlot } from '../save';
@@ -35,6 +35,11 @@ const SIZE_LABEL: Record<MapSize, string> = {
 };
 
 let uid = 0;
+
+/** Seed text as the game uses it: trimmed and shortened to the maximum length. */
+export function normalizeSeed(text: string): string {
+  return text.trim().slice(0, mapgenConfig.seedMaxLength);
+}
 
 /** A random seed for the "New seed" button (the UI may use Math.random, core may not). */
 export function randomSeed(): string {
@@ -176,6 +181,9 @@ export function createStartMenu(root: HTMLElement, opts: StartMenuOptions): Star
     () => undefined,
   );
 
+  /** The seed the preview shows and the game gets; an empty field uses the seed the menu opened with. */
+  const currentSeed = (): string => normalizeSeed(seedInput.value) || normalizeSeed(opts.seed);
+
   // Map size and seed (both redraw the preview)
   let previewTimer: number | undefined;
   const seedInput = el('input', 'text-input');
@@ -201,7 +209,7 @@ export function createStartMenu(root: HTMLElement, opts: StartMenuOptions): Star
     canvas.style.aspectRatio = String(previewAspect(currentSize()));
   };
   function redraw(): void {
-    drawSeedPreview(canvas, seedInput.value.trim() || opts.seed, currentSize());
+    drawSeedPreview(canvas, currentSeed(), currentSize());
   }
 
   const seedField = el('div', 'field');
@@ -211,6 +219,7 @@ export function createStartMenu(root: HTMLElement, opts: StartMenuOptions): Star
   seedInput.id = seedId;
   seedInput.type = 'text';
   seedInput.value = opts.seed;
+  seedInput.maxLength = mapgenConfig.seedMaxLength;
   seedInput.autocomplete = 'off';
   seedInput.spellcheck = false;
   seedInput.addEventListener('input', redrawSoon);
@@ -293,7 +302,7 @@ export function createStartMenu(root: HTMLElement, opts: StartMenuOptions): Star
       playerName: nameInput.value.trim().slice(0, NAME_MAX_LENGTH),
       playerColor: color,
     };
-    opts.onNewGame(settings, seedInput.value.trim() || randomSeed());
+    opts.onNewGame(settings, currentSeed());
   });
 
   main.append(saveBlock, form);
