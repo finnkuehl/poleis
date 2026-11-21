@@ -339,6 +339,7 @@ function turnReport(...cities: CityReport[]): TurnReport {
     cities,
     units: { spawned: 0, upkeepEaten: {}, starving: false, lost: 0 },
     captured: [],
+    orders: [],
   };
 }
 addControl('Turn summary toasts', () => {
@@ -437,6 +438,7 @@ function sampleUnit(type: UnitId, over: Partial<Unit> = {}): Unit {
     acted: false,
     attacked: false,
     capturing: null,
+    order: null,
     ...over,
   };
 }

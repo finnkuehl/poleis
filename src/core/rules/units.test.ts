@@ -185,6 +185,7 @@ describe('determinism and JSON', () => {
         acted: false,
         attacked: false,
         capturing: null,
+        order: null,
       });
       s = endTurn(s);
       return s;

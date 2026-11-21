@@ -16,6 +16,7 @@ function unit(over: Partial<Unit>): Unit {
     acted: false,
     attacked: false,
     capturing: null,
+    order: null,
     ...over,
   };
 }

@@ -272,6 +272,7 @@ export const en = {
     cannotTradeGood: "Drachmas can't be traded.",
     invalidAmount: 'Choose an amount of at least 1.',
     noPath: 'There is no path to this tile.',
+    destinationOccupied: 'Another unit stands on that tile.',
     roadNotAllowed: 'Roads can only be built on walkable land in your territory.',
     nothingToDemolish: 'There is nothing to demolish here.',
     cannotDemolishCityCenter: 'The city center cannot be demolished.',

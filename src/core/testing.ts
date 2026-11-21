@@ -132,6 +132,7 @@ export function addUnit(
     acted: opts.acted ?? false,
     attacked: opts.attacked ?? false,
     capturing: null,
+    order: null,
   });
   return id;
 }
