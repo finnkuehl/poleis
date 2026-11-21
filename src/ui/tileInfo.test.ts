@@ -10,11 +10,12 @@ describe('tileInfoRows', () => {
     for (const id of TERRAIN_IDS) expect(tileInfoRows(id)).toHaveLength(3);
   });
   it('plains', () => expect(values('plains')).toEqual(['1', '×1', 'yes']));
-  it('forest', () => expect(values('forest')).toEqual(['2', '×1.5', 'no']));
+  it('forest', () => expect(values('forest')).toEqual(['2', '×1.5', 'only woodcutter']));
   it('hills', () => expect(values('hills')).toEqual(['2', '×1.5', 'yes']));
   it('ocean and coast', () => {
     expect(values('ocean')).toEqual(['ships only', '–', 'no']);
     expect(values('coast')).toEqual(['ships only', '–', 'no']);
   });
-  it('mountains', () => expect(values('mountains')).toEqual(['impassable', '–', 'no']));
+  it('mountains', () =>
+    expect(values('mountains')).toEqual(['impassable', '–', 'only mine, quarry']));
 });

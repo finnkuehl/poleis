@@ -19,6 +19,7 @@ import type { BuildingStatus, TurnReport } from '../core/rules/production';
 import type { BuildingId, CityLevel, Stock } from '../data';
 import { formatAdvanced, formatBought, formatSold } from '../i18n/format';
 import { turnSummary } from './turnSummary';
+import type { BuildOption } from './buildOptions';
 
 const ui = document.getElementById('ui');
 const controls = document.getElementById('preview-controls');
@@ -307,6 +308,41 @@ addControl('Road panel', () =>
   panel.showRoad({ hex, terrain: 'forest', onDemolish: () => toast.show(en.flow.roadDemolished) }),
 );
 addControl('Terrain panel', () => panel.showTerrain(hex, 'hills'));
+const mixedOptions: BuildOption[] = [
+  { id: 'borderTower', state: 'ok', gain: 11 },
+  { id: 'house', state: 'ok' },
+  { id: 'farm', state: 'ok' },
+  { id: 'sawmill', state: 'unaffordable', missing: { wood: 2 } },
+  { id: 'vineyard', state: 'locked', level: 'polis' },
+  { id: 'marketplace', state: 'locked', level: 'polis' },
+];
+const buildHandlers = {
+  onBuild: (id: BuildingId) => toast.show(en.flow.built.replace('{building}', en.buildings[id])),
+};
+addControl('Empty plains: build list', () =>
+  panel.showTerrain(hex, 'plains', {
+    build: { options: mixedOptions, stock, ...buildHandlers },
+    onRoadFrom: () => toast.show(en.flow.roadEndPrompt),
+  }),
+);
+addControl('Empty forest: only woodcutter', () =>
+  panel.showTerrain(hex, 'forest', {
+    build: { options: [{ id: 'woodcutter', state: 'ok' }], stock, ...buildHandlers },
+    onRoadFrom: () => toast.show(en.flow.roadEndPrompt),
+  }),
+);
+addControl('Outside territory', () =>
+  panel.showTerrain(hex, 'plains', { note: en.tileInfo.outsideNote }),
+);
+addControl('Confirm border tower', () =>
+  confirm.show({
+    title: en.flow.buildConfirmTitle.replace('{building}', en.buildings.borderTower),
+    lines: ['Cost: 2 Wood, 4 Stone', '+11 territory tiles'],
+    confirmLabel: en.ui.build,
+    onConfirm: () => undefined,
+    onCancel: () => undefined,
+  }),
+);
 addControl('Confirm build', () =>
   confirm.show({
     title: en.flow.buildConfirmTitle.replace('{building}', en.buildings.farm),
