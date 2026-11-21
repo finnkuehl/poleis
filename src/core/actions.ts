@@ -31,6 +31,7 @@ import {
   planRoad,
   reachableTiles,
   scaleGoods,
+  setMoveOrder,
   updateAllExplored,
   type RuleError,
 } from './rules';
@@ -45,6 +46,8 @@ export type Action =
   | { type: 'advanceCity'; cityId: number }
   | { type: 'trade'; good: GoodId; direction: 'sell' | 'buy'; lots: number }
   | { type: 'move'; unitId: number; to: Hex }
+  | { type: 'setOrder'; unitId: number; to: Hex }
+  | { type: 'cancelOrder'; unitId: number }
   | { type: 'attack'; unitId: number; targetId: number }
   | { type: 'foundCity'; unitId: number }
   | { type: 'train'; barracksId: number; unit: UnitId }
@@ -157,7 +160,18 @@ function applyActionInner(state: GameState, action: Action): ActionResult {
       unit.movesLeft = Math.max(0, unit.movesLeft - target.cost);
       unit.hasMoved = true;
       unit.acted = true;
+      unit.order = null;
       updateCapturing(next, unit);
+      return { ok: true, state: next };
+    }
+    case 'setOrder': {
+      const error = setMoveOrder(next, player, action.unitId, action.to);
+      return error ? fail(error) : { ok: true, state: next };
+    }
+    case 'cancelOrder': {
+      const unit = next.units.find((u) => u.id === action.unitId);
+      if (!unit || unit.owner !== player) return fail({ code: 'notOwnUnit' });
+      unit.order = null;
       return { ok: true, state: next };
     }
     case 'attack': {
@@ -174,6 +188,9 @@ function applyActionInner(state: GameState, action: Action): ActionResult {
       if (result.damage > 0) target.capturing = null;
       unit.hp -= result.counter;
       unit.attacked = true;
+      // An attack ends the orders of both sides (damage or not).
+      unit.order = null;
+      target.order = null;
       unit.hasMoved = true;
       unit.acted = true;
       unit.movesLeft = 0;

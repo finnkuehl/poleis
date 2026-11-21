@@ -10,7 +10,7 @@ Read it together with `CLAUDE.md` (rules), `docs/GAME_DESIGN.md` (game design in
 - **Test mode:** add `&sandbox` → big start stock + a passive red enemy city ~6–9 tiles away (for seed 1: 7 tiles **south** of the player's city). Example: `https://finnkuehl.github.io/poleis/?seed=1&sandbox`.
 - **Done and tagged:** M0 `v0.0.0`, M1 `v0.1.0`, M2 `v0.2.0`, M3 `v0.3.0`, balance pass `v0.3.1`.
 - **M4 – Territory & military is merged as `v0.4.0`** (PR #6): units, combat, capturing, settlers, fog of war, plus the user's overview requests (workers working/free, "📊 Overview" economy sheet, drag & drop for units). The user tested it on desktop: "looks good".
-- **First task in the new session: multi-turn move orders** (see §5a), then M5 – First complete game (see §6).
+- **Multi-turn move orders are done as `v0.4.1`** (§5a, rules in GAME_DESIGN §7 "decided after M4: move orders"). Next: M5 – First complete game (see §6).
 
 ## 2. How we work (important – the user relies on it)
 
@@ -29,10 +29,10 @@ Read it together with `CLAUDE.md` (rules), `docs/GAME_DESIGN.md` (game design in
 ## 3. Code map
 
 - `src/core/` – pure logic, JSON state, deterministic (seeded RNG in state). ESLint forbids render/ui/save imports, `Math.random`, `window`/`document` there.
-  - `state.ts` – `GameState` (map, rng, turn, players [goods, explored], buildings [paused], roads[], territory[], cities [level, residents, supplyStreak], tileCity[], units [hp, movesLeft, hasMoved, acted, attacked, capturing], training[], nextId, lastReport); `createGameState(seed, { sandbox })` (+ passive enemy).
+  - `state.ts` – `GameState` (map, rng, turn, players [goods, explored], buildings [paused], roads[], territory[], cities [level, residents, supplyStreak], tileCity[], units [hp, movesLeft, hasMoved, acted, attacked, capturing, order], training[], nextId, lastReport); `createGameState(seed, { sandbox })` (+ passive enemy).
   - `actions.ts` – `applyAction` (structuredClone, never mutates): build, buildRoad, demolish, togglePause, advanceCity, trade, train, move, attack, foundCity, endTurn; updates fog (`updateAllExplored`) after every action.
-  - `turn.ts` – start of the player's turn: capture → heal/reset units → spawn trained units → production → population (eat, needs, supply, growth, taxes) → unit upkeep; `lastReport` with deltas, cities, units, captured.
-  - `rules/` – placement, territory (+`territoryGain`), connection (BFS), workers (full crews, per city, paused), production (status kinds), population, advance, trade, roads (A*), movement (explored-only, 1-tile rule, `ignoreHiddenUnits`), units (training/spawn/upkeep/heal), combat (formula + preview), capture, found, vision (fog), economy (overview/estimate), errors.
+  - `turn.ts` – start of the player's turn: capture → heal/reset units → spawn trained units → move orders walk on → production → population (eat, needs, supply, growth, taxes) → unit upkeep; `lastReport` with deltas, cities, units, captured.
+  - `rules/` – placement, territory (+`territoryGain`), connection (BFS), workers (full crews, per city, paused), production (status kinds), population, advance, trade, roads (A*), movement (explored-only, 1-tile rule, `ignoreHiddenUnits`), units (training/spawn/upkeep/heal), combat (formula + preview), capture, found, vision (fog), economy (overview/estimate), orders (multi-turn move orders: plan, walk, stop reasons), errors.
   - `hex/` (axial pointy-top, A*, `reachable`), `mapgen/` (map + start positions).
 - `src/data/` – ALL numbers: terrain, goods, buildings, economy (start goods, market, sandbox goods), population, cityLevels, units, military, mapgen, startPosition.
 - `src/render/` – PixiJS: terrain once, dynamic layers (territory, roads, buildings, badges, units, fog, highlights, preview, attack targets, selection), camera (pan/pinch/wheel, `centerOn`, `centerOnScreenPoint`).
@@ -50,7 +50,7 @@ Start 20 wood + 10 stone, city placed automatically; housing/workers full crews 
 - Capturing and founding were verified by automated tests only, not yet in a real browser play-through.
 - Harbor, ships, sea routes (M6); world wonder + temple points (M5); graphics/sound/PWA (M7).
 
-## 5a. First task: multi-turn move orders (user request after M4)
+## 5a. Done: multi-turn move orders (user request after M4, `v0.4.1`)
 
 User's words: "would be nice if I could move units further than they can walk and they move the shortest way according to their movement in the next turns."
 Suggested rules – **confirm them with the user first** (AskUserQuestion, recommendation first), then record them in GAME_DESIGN §7:

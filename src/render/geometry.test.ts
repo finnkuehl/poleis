@@ -3,7 +3,13 @@ import { HEX_DIRECTIONS, hexAdd, hexToPixel } from '../core/hex';
 import { tileIndex } from '../core/map';
 import type { GameState } from '../core/state';
 import { at, makeTestState } from '../core/testing';
-import { EDGE_DIRECTION, edgeMidpoint, roadGeometry, territoryEdges } from './geometry';
+import {
+  EDGE_DIRECTION,
+  edgeMidpoint,
+  sharedEdgeMidpoint,
+  roadGeometry,
+  territoryEdges,
+} from './geometry';
 
 describe('EDGE_DIRECTION', () => {
   it('each edge faces the neighbor it is mapped to', () => {
@@ -85,5 +91,21 @@ describe('roadGeometry', () => {
     const g = roadGeometry(s);
     expect(g.segments).toEqual([[ia, tileIndex(s.map, bHex)]]);
     expect(g.stubs).toEqual([]);
+  });
+});
+
+describe('sharedEdgeMidpoint', () => {
+  it('lies halfway to the neighbor, at distance size*sqrt(3)/2 from the start center', () => {
+    const size = 40;
+    const a = { q: 3, r: 2 };
+    for (const d of HEX_DIRECTIONS) {
+      const b = { q: a.q + d.q, r: a.r + d.r };
+      const m = sharedEdgeMidpoint(a, b, size);
+      const ca = hexToPixel(a, size);
+      const cb = hexToPixel(b, size);
+      expect(Math.hypot(m.x - ca.x, m.y - ca.y)).toBeCloseTo((size * Math.sqrt(3)) / 2, 6);
+      expect(m.x).toBeCloseTo((ca.x + cb.x) / 2, 6);
+      expect(m.y).toBeCloseTo((ca.y + cb.y) / 2, 6);
+    }
   });
 });

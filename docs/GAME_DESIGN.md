@@ -191,6 +191,14 @@ An enemy land unit that stands on a city center undisturbed for one turn takes o
 - **Capturing:** a land unit (not a settler) that stands on an enemy city center and is still there, unattacked, at the start of its owner's next turn takes the city with the buildings and territory of that city.
 - **Test mode** (`&sandbox`): a passive enemy civilization (one city, two spearmen) is placed nearby so combat and capturing can be tried before the AI arrives (M5). It takes no actions.
 
+### Detailed rules (decided after M4: move orders)
+- **Move orders:** a selected unit can be sent to any explored land tile it cannot reach this turn, as long as a land path over explored tiles leads there. **Dragging** the unit onto that tile gives the order right away; **tapping** the tile shows the path with turn numbers and a "Go here (N turns)" button (cancel = nothing happens).
+- **Walking:** the unit walks right away as far as its movement allows this turn. At the start of each of its owner's turns (after healing and new units, before production) it walks on along the cheapest path with its full movement – same rules as a normal move (explored tiles only, terrain costs, roads, the 1-tile rule, one unit per tile). The path is planned again every turn; units the owner can see block it, unseen ones do not (the fog reveals nothing).
+- **The order ends** when the unit arrives, when no path is left (the way is blocked), when an enemy unit it had not seen during this order comes into its sight (enemies already visible when the order was given do not stop it), when it is attacked, or when the player moves, attacks or founds a city with it by hand, gives it a new order or taps "Stop".
+- A unit on its way moves every turn, so it does not heal.
+- **Display:** every own unit with an order shows a faint line to a small flag at its destination; the selected unit's path shows a turn number (1, 2, 3 …) where it will stop at the end of each coming turn. The turn summary says when a unit arrived or stopped (and why).
+- The **"Units" button** skips units with an order (they are busy); tapping such a unit still selects it.
+
 ## 8. Territory & vision
 
 - City center: territory radius 2. Border tower: radius 2 around the tower (must border your own territory).

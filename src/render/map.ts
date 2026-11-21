@@ -9,6 +9,7 @@ import { mapWorldBounds } from './bounds';
 import type { Rect } from './camera';
 import { hexSize } from './config';
 import { createEconomyLayers } from './economyLayers';
+import { createOrderLayers, type OrderPath } from './orderLayers';
 import { createUnitLayers } from './unitLayers';
 import { theme } from './theme';
 
@@ -28,6 +29,8 @@ export interface MapView {
   setHighlights(hexes: readonly Hex[]): void;
   /** Road preview along `path`, dots on `newTiles`; null clears. */
   setPathPreview(path: readonly Hex[] | null, newTiles: readonly Hex[]): void;
+  /** Draws move-order paths; [] clears. */
+  setOrderPaths(paths: readonly OrderPath[]): void;
 }
 
 function drawTree(g: Graphics, cx: number, cy: number, s: number): void {
@@ -71,6 +74,7 @@ export function createMapView(map: MapState): MapView {
   const selection = new Graphics();
   const economy = createEconomyLayers();
   const unitLayers = createUnitLayers();
+  const orders = createOrderLayers();
 
   for (const h of allHexes(map)) {
     const terrain = terrainAt(map, h);
@@ -104,6 +108,7 @@ export function createMapView(map: MapState): MapView {
     ...below,
     unitLayers.units,
     unitLayers.fog,
+    orders.layer,
     ...above,
     unitLayers.attack,
     selection,
@@ -121,6 +126,7 @@ export function createMapView(map: MapState): MapView {
     setGhost: unitLayers.setGhost,
     setHighlights: economy.setHighlights,
     setPathPreview: economy.setPathPreview,
+    setOrderPaths: orders.setOrderPaths,
     setSelection(h) {
       selection.clear();
       if (!h || !inBounds(map, h)) return;

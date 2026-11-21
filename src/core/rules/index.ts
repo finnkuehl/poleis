@@ -14,6 +14,7 @@ export * from './roads';
 export * from './advance';
 export * from './trade';
 export * from './movement';
+export * from './orders';
 export * from './units';
 export * from './combat';
 export * from './capture';

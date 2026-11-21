@@ -61,6 +61,14 @@ export interface City {
   supplyStreak: number;
 }
 
+/** A multi-turn move order (docs/GAME_DESIGN.md §7, move orders). */
+export interface MoveOrder {
+  /** Destination tile. */
+  to: Hex;
+  /** Ids of enemy units already seen during this order; they do not stop it. */
+  seenEnemies: number[];
+}
+
 export interface Unit {
   /** From the shared `nextId` counter. */
   id: number;
@@ -78,6 +86,8 @@ export interface Unit {
   attacked: boolean;
   /** Id of the enemy city whose center the unit stands on to capture it, else null. */
   capturing: number | null;
+  /** Active multi-turn move order, or null. */
+  order: MoveOrder | null;
 }
 
 /** A unit ordered in a barracks; it appears at the start of the owner's next turn. */
@@ -219,6 +229,7 @@ function addPassiveEnemy(state: GameState, humanCenter: Hex): void {
       acted: false,
       attacked: false,
       capturing: null,
+      order: null,
     });
   }
 }

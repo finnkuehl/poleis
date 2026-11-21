@@ -26,7 +26,7 @@ export interface ReachOptions {
 }
 
 /** Ids of enemy units the owner cannot currently see (they must not leak through the highlights). */
-function hiddenEnemyIds(state: GameState, unit: Unit): Set<number> {
+export function hiddenEnemyIds(state: GameState, unit: Unit): Set<number> {
   const visible = visibleTiles(state, unit.owner);
   const ids = new Set<number>();
   for (const u of state.units) {

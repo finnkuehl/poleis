@@ -29,6 +29,7 @@ function report(...cities: CityReport[]): TurnReport {
     cities,
     units: { spawned: 0, upkeepEaten: {}, starving: false, lost: 0 },
     captured: [],
+    orders: [],
   };
 }
 
@@ -97,6 +98,25 @@ describe('turnSummary', () => {
     expect(turnSummary(r)).toEqual([
       { text: 'Your units are hungry: each lost 2 HP', kind: 'error' },
       { text: '1 unit was lost to hunger', kind: 'error' },
+    ]);
+  });
+  it('reports move orders after the unit lines and before captured cities', () => {
+    const r = {
+      ...report(),
+      units: { spawned: 1, upkeepEaten: {}, starving: false, lost: 0 },
+      captured: [3],
+      orders: [
+        { unitId: 1, unitType: 'scout' as const, outcome: 'arrived' as const },
+        { unitId: 2, unitType: 'spearman' as const, outcome: 'enemySpotted' as const },
+        { unitId: 3, unitType: 'settler' as const, outcome: 'blocked' as const },
+      ],
+    };
+    expect(turnSummary(r)).toEqual([
+      { text: '1 unit is ready', kind: 'info' },
+      { text: 'Scout arrived', kind: 'info' },
+      { text: 'Spearman stopped: enemy in sight', kind: 'error' },
+      { text: 'Settler stopped: the way is blocked', kind: 'error' },
+      { text: 'You captured a city!', kind: 'info' },
     ]);
   });
   it('reports captured cities', () => {

@@ -1,5 +1,6 @@
 // Pure helpers for unit texts: stats, status, attack preview and the training list (no DOM).
 import type { CombatPreview } from '../core/rules/combat';
+import type { OrderReport } from '../core/rules/orders';
 import { missingGoods } from '../core/rules/goods';
 import type { Unit } from '../core/state';
 import {
@@ -13,7 +14,7 @@ import {
   type UnitId,
 } from '../data';
 import { en } from '../i18n/en';
-import { fill } from '../i18n/format';
+import { fill, formatTurns } from '../i18n/format';
 
 /** Compact stats of a unit type, e.g. "Attack 2 · Defense 2 · Range 1 · Moves 1". */
 export function unitStatLine(id: UnitId): string {
@@ -139,4 +140,42 @@ export function trainOptions(facts: {
     options.push({ id, state: 'ok' });
   }
   return options.sort((a, b) => ORDER[a.state] - ORDER[b.state]);
+}
+
+/** Status line of a unit that is walking on a move order ("On the way – arrives in 3 turns"). */
+export function onTheWayText(turns: number | null): string {
+  return turns === null
+    ? en.orders.onTheWayUnknown
+    : fill(en.orders.onTheWay, { turns: formatTurns(turns) });
+}
+
+/** Texts of the confirm sheet shown before a unit is sent on a multi-turn move. */
+export function orderConfirm(
+  unit: UnitId,
+  turns: number,
+): { title: string; lines: string[]; confirmLabel: string } {
+  const o = en.orders;
+  const t = formatTurns(turns);
+  return {
+    title: fill(o.confirmTitle, { unit: en.units[unit] }),
+    lines: [fill(o.arrivesIn, { turns: t }), o.continues],
+    confirmLabel: fill(o.goHere, { turns: t }),
+  };
+}
+
+/** Toast text for an order that ended at the start of the turn (arrived = info, stopped = error). */
+export function orderOutcomeText(
+  outcome: OrderReport['outcome'],
+  unit: UnitId,
+): { text: string; kind: 'info' | 'error' } {
+  const o = en.orders;
+  const name = en.units[unit];
+  switch (outcome) {
+    case 'arrived':
+      return { text: fill(o.arrived, { unit: name }), kind: 'info' };
+    case 'enemySpotted':
+      return { text: fill(o.stoppedEnemy, { unit: name }), kind: 'error' };
+    case 'blocked':
+      return { text: fill(o.stoppedBlocked, { unit: name }), kind: 'error' };
+  }
 }

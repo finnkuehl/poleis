@@ -5,6 +5,7 @@ import type { GameState, PlayerId } from '../state';
 import { connectedBuildingIds } from './connection';
 import type { CityReport } from './population';
 import { addGoods, canAfford, missingGoods, pay } from './goods';
+import type { OrderReport } from './orders';
 import { assignWorkers } from './workers';
 
 export type BuildingStatus =
@@ -48,6 +49,8 @@ export interface TurnReport {
   units: UnitsReport;
   /** Ids of the cities captured at the start of this turn. */
   captured: number[];
+  /** Outcomes of move orders that ended at the start of this turn (filled by endTurn). */
+  orders: OrderReport[];
 }
 
 function hasGoods(goods: Goods): boolean {
@@ -111,6 +114,7 @@ function simulate(state: GameState, player: PlayerId, stock: Stock): TurnReport 
     cities: [],
     units: { spawned: 0, upkeepEaten: {}, starving: false, lost: 0 },
     captured: [],
+    orders: [],
   };
 }
 

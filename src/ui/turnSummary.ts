@@ -11,6 +11,7 @@ import {
   formatUnitsLost,
   formatUnitsReady,
 } from '../i18n/format';
+import { orderOutcomeText } from './unitText';
 
 export interface SummaryLine {
   text: string;
@@ -29,7 +30,7 @@ export interface SummaryContext {
 
 /**
  * Messages for the toast after a turn, per city: growth and taxes, hunger, supply progress and
- * "Ready to advance", then units (new, hunger, lost) and captured cities. Lines without news are
+ * "Ready to advance", then units (new, hunger, lost), move order results and captured cities. Lines without news are
  * left out.
  */
 export function turnSummary(report: TurnReport, ctx: SummaryContext = {}): SummaryLine[] {
@@ -90,6 +91,9 @@ export function turnSummary(report: TurnReport, ctx: SummaryContext = {}): Summa
   }
   if (report.units.lost > 0) {
     lines.push({ text: formatUnitsLost(report.units.lost), kind: 'error' });
+  }
+  for (const entry of report.orders) {
+    lines.push(orderOutcomeText(entry.outcome, entry.unitType));
   }
   if (report.captured.length > 0) {
     lines.push({ text: formatCaptured(report.captured.length), kind: 'info' });

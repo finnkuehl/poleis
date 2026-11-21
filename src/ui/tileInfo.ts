@@ -41,7 +41,13 @@ import {
   tradeRows,
 } from './cityText';
 import { button, el } from './dom';
-import { unitStatLine, unitStatus, unitStatusText, type TrainOption } from './unitText';
+import {
+  onTheWayText,
+  unitStatLine,
+  unitStatus,
+  unitStatusText,
+  type TrainOption,
+} from './unitText';
 
 export interface InfoRow {
   label: string;
@@ -113,6 +119,11 @@ export interface UnitInfo {
   own: boolean;
   /** Own units: is there an attack target in reach (for the status line)? */
   hasTargets?: boolean;
+  /**
+   * Own units walking on a move order: `turns` = estimated turns until arrival (null = unknown),
+   * `onStop` cancels the order. Shown instead of the usual status, plus a "Stop" button.
+   */
+  order?: { turns: number | null; onStop(): void } | null;
   /** Settlers only: the "Found city here" button. */
   found?: { ok: boolean; reason?: string; onFound(): void };
 }
@@ -373,9 +384,16 @@ export function createTileInfoPanel(root: HTMLElement, onClose: () => void): Til
         ),
       );
       const status = unitStatus(o.unit, o.hasTargets ?? false);
-      const row = el('p', `tile-info__status is-${status === 'done' ? 'neutral' : 'ok'}`);
-      row.append(el('span', 'status-dot'), document.createTextNode(unitStatusText(status)));
+      const statusText = o.order ? onTheWayText(o.order.turns) : unitStatusText(status);
+      const tone = o.order || status !== 'done' ? 'ok' : 'neutral';
+      const row = el('p', `tile-info__status is-${tone}`);
+      row.append(el('span', 'status-dot'), document.createTextNode(statusText));
       nodes.push(row);
+      if (o.order) {
+        const stop = button('btn btn--secondary unit-stop', en.orders.stop);
+        stop.addEventListener('click', o.order.onStop);
+        nodes.push(stop);
+      }
     } else {
       nodes.push(terrainLine(o.terrain));
     }

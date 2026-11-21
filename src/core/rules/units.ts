@@ -99,6 +99,7 @@ export function spawnUnits(state: GameState, player: PlayerId): number {
       acted: false,
       attacked: false,
       capturing: null,
+      order: null,
     });
     spawned++;
   }

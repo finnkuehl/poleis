@@ -20,6 +20,7 @@ export type RuleErrorCode =
   | 'invalidAmount'
   // The following codes are used by later steps (roads, demolishing).
   | 'noPath'
+  | 'destinationOccupied'
   | 'roadNotAllowed'
   | 'nothingToDemolish'
   | 'cannotDemolishCityCenter'

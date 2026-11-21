@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest';
 import type { CombatPreview } from '../core/rules/combat';
 import { emptyStock } from '../core/rules/goods';
 import type { Unit } from '../core/state';
-import { attackPreviewLines, trainOptions, unitStatLine, unitStatus } from './unitText';
+import {
+  attackPreviewLines,
+  onTheWayText,
+  orderConfirm,
+  orderOutcomeText,
+  trainOptions,
+  unitStatLine,
+  unitStatus,
+} from './unitText';
 
 function unit(over: Partial<Unit>): Unit {
   return {
@@ -16,6 +24,7 @@ function unit(over: Partial<Unit>): Unit {
     acted: false,
     attacked: false,
     capturing: null,
+    order: null,
     ...over,
   };
 }
@@ -99,5 +108,43 @@ describe('trainOptions', () => {
     const o = trainOptions({ cityLevel: 'settlement', residents: 6, stock: rich });
     expect(o[0]?.state).toBe('ok');
     expect(o[o.length - 1]?.state).toBe('locked');
+  });
+});
+
+describe('onTheWayText', () => {
+  it('shows the arrival estimate with plurals', () => {
+    expect(onTheWayText(3)).toBe('On the way – arrives in 3 turns');
+    expect(onTheWayText(1)).toBe('On the way – arrives in 1 turn');
+  });
+  it('falls back without an estimate', () => expect(onTheWayText(null)).toBe('On the way'));
+});
+
+describe('orderConfirm', () => {
+  it('builds title, lines and button label', () => {
+    expect(orderConfirm('scout', 3)).toEqual({
+      title: 'Send Scout here?',
+      lines: ['Arrives in 3 turns', 'It walks on by itself at the start of each turn.'],
+      confirmLabel: 'Go here (3 turns)',
+    });
+  });
+  it('uses the singular for one turn', () => {
+    const c = orderConfirm('scout', 1);
+    expect(c.lines[0]).toBe('Arrives in 1 turn');
+    expect(c.confirmLabel).toBe('Go here (1 turn)');
+  });
+});
+
+describe('orderOutcomeText', () => {
+  it('reports arrival as info', () =>
+    expect(orderOutcomeText('arrived', 'scout')).toEqual({ text: 'Scout arrived', kind: 'info' }));
+  it('reports stops as errors', () => {
+    expect(orderOutcomeText('enemySpotted', 'scout')).toEqual({
+      text: 'Scout stopped: enemy in sight',
+      kind: 'error',
+    });
+    expect(orderOutcomeText('blocked', 'spearman')).toEqual({
+      text: 'Spearman stopped: the way is blocked',
+      kind: 'error',
+    });
   });
 });

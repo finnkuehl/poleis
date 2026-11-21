@@ -90,4 +90,28 @@ export const theme = {
   attackColor: 0xd6453a,
   attackWidth: 3,
   attackFillAlpha: 0.2,
+  /** Move-order paths: marble line, dark under-stroke, number badge (sizes are fractions of the hex size) */
+  orderMarbleColor: 0xf4e9d8,
+  orderDarkColor: 0x1d2b36,
+  /** Faint path of a unit that is not selected */
+  orderFaintWidthFactor: 0.1,
+  orderFaintAlpha: 0.45,
+  orderFaintFlagAlpha: 0.7,
+  /** Active path (selected unit / destination preview) */
+  orderActiveWidthFactor: 0.16,
+  orderActiveAlpha: 0.9,
+  orderUnderStrokeExtraFactor: 0.08,
+  orderUnderStrokeAlpha: 0.35,
+  /** Flag: pole height and pennant width/height */
+  orderFlagHeightFactor: 0.5,
+  orderFlagPennantWidthFactor: 0.28,
+  orderFlagPennantHeightFactor: 0.22,
+  /** Turn-number badge and the dot for a stop reached this turn */
+  orderBadgeRadiusFactor: 0.3,
+  orderBadgeRimWidth: 1.5,
+  orderBadgeTextColor: 0xffffff,
+  /** Dot where the unit gets to right now (turn 0): dark with a marble rim */
+  orderDotRadiusFactor: 0.12,
+  /** Sideways shift of flag and badge on the destination tile so both stay visible */
+  orderDestOffsetFactor: 0.3,
 } as const;

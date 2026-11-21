@@ -13,6 +13,8 @@ import {
   unitAt,
   assignWorkers,
   economyOverview,
+  enemiesInSight,
+  planMoveOrder,
   canAfford,
   canTrade,
   cityIdOf,
@@ -28,6 +30,7 @@ import {
   territoryGain,
   validPlacements,
   type BuildingStatus,
+  type OrderPlan,
 } from '../core/rules';
 import type { GameState, Unit } from '../core/state';
 import {
@@ -55,7 +58,7 @@ import {
   formatSold,
   formatTerritoryGain,
 } from '../i18n/format';
-import { createRenderer } from '../render/app';
+import { createRenderer, type OrderPath } from '../render/app';
 import { buildOptionsFor } from './buildOptions';
 import {
   createBottomBar,
@@ -68,6 +71,7 @@ import {
   createTileInfoPanel,
   createToast,
   attackPreviewLines,
+  orderConfirm,
   perTurnText,
   trainOptions,
   turnSummary,
@@ -102,6 +106,9 @@ export async function createGame(
 
   // Unit drag & drop: the unit being dragged (null = no drag)
   let dragUnitId: number | null = null;
+  // Hex last planned for during the drag (re-plan only when it changes) and its order preview.
+  let dragHoverHex: Hex | null = null;
+  let dragPreview: { unitId: number; plan: OrderPlan } | null = null;
   const renderer = await createRenderer(appContainer, state, (h) => onTileTap(h), {
     onStart: (h, sx, sy) => startUnitDrag(h, sx, sy),
     onMove: (h, sx, sy) => moveUnitDrag(h, sx, sy),
@@ -238,6 +245,8 @@ export async function createGame(
     preferBuilding = false;
     renderer.selectTile(null);
     panel.hide();
+    clearDragPreview();
+    showOrderPaths();
   }
 
   /** Working and free residents of one city. */
@@ -283,6 +292,7 @@ export async function createGame(
     bottomBar.setUnitsEnabled(ownUnits().length > 0);
     if (mode.kind === 'idle') showPanel();
     else if (mode.kind === 'unit') refreshUnitMode();
+    showOrderPaths();
   }
 
   /** Applies an action; on success stores the state and refreshes, otherwise shows the error. */
@@ -462,6 +472,84 @@ export async function createGame(
       own,
       hasTargets: own && visibleTargets(unit).length > 0,
       found,
+      order: own && unit.order ? orderInfo(unit) : null,
+    });
+  }
+
+  /** Panel data of a unit on a move order: turns until arrival and the "Stop" action. */
+  function orderInfo(unit: Unit): { turns: number | null; onStop(): void } {
+    const planned = unit.order ? planMoveOrder(state, unit.id, unit.order.to) : null;
+    return {
+      turns: planned?.ok ? planned.plan.turns : null,
+      onStop: () => {
+        if (commit({ type: 'cancelOrder', unitId: unit.id })) {
+          toast.show(en.orders.stopped);
+          refreshUnitMode();
+        }
+      },
+    };
+  }
+
+  function clearDragPreview(): void {
+    dragHoverHex = null;
+    dragPreview = null;
+  }
+
+  /**
+   * Draws the move-order paths: faint for every own unit on its way, active for the selected one
+   * (unit mode). A preview replaces the entry of its unit. Called whenever state or mode change.
+   */
+  function showOrderPaths(preview: { unitId: number; plan: OrderPlan } | null = dragPreview): void {
+    const selectedId = mode.kind === 'unit' ? mode.unitId : null;
+    const paths: OrderPath[] = [];
+    for (const u of ownUnits()) {
+      if (preview && preview.unitId === u.id) continue;
+      if (!u.order) continue;
+      const planned = planMoveOrder(state, u.id, u.order.to);
+      if (!planned.ok) continue;
+      paths.push({
+        path: planned.plan.path,
+        stops: planned.plan.stops,
+        style: u.id === selectedId ? 'active' : 'faint',
+      });
+    }
+    if (preview) {
+      paths.push({ path: preview.plan.path, stops: preview.plan.stops, style: 'active' });
+    }
+    renderer.setOrderPaths(paths);
+  }
+
+  /** Plan for a far tile if it is worth an order (at least one more turn), else null. */
+  function farPlan(unit: Unit, hex: Hex): OrderPlan | null {
+    const planned = planMoveOrder(state, unit.id, hex);
+    return planned.ok && planned.plan.turns >= 1 ? planned.plan : null;
+  }
+
+  /** Sets the move order; reports it if the walk of this turn stopped right away. */
+  function commitOrder(unit: Unit, hex: Hex): void {
+    if (!commit({ type: 'setOrder', unitId: unit.id, to: hex })) {
+      refreshUnitMode();
+      return;
+    }
+    const after = state.units.find((u) => u.id === unit.id);
+    if (after && !after.order && !hexEquals(after.hex, hex)) {
+      const text =
+        enemiesInSight(state, after).length > 0 ? en.orders.stoppedEnemy : en.orders.stoppedBlocked;
+      toast.show(fill(text, { unit: en.units[after.type] }), 'error');
+    }
+    refreshUnitMode();
+  }
+
+  function askOrder(unit: Unit, hex: Hex, plan: OrderPlan): void {
+    panel.hide();
+    showOrderPaths({ unitId: unit.id, plan });
+    confirm.show({
+      ...orderConfirm(unit.type, plan.turns),
+      onConfirm: () => commitOrder(unit, hex),
+      onCancel: () => {
+        refreshUnitMode();
+        showOrderPaths();
+      },
     });
   }
 
@@ -502,7 +590,8 @@ export async function createGame(
       ...sorted.filter((u) => u.id === currentId && !inUnitMode),
     ];
     // If the selected unit is the only one that can still act, keep it (and re-center on it).
-    const next = ordered.find(canAct) ?? sorted.find((u) => u.id === currentId && canAct(u));
+    const waiting = (u: Unit): boolean => !u.order && canAct(u);
+    const next = ordered.find(waiting) ?? sorted.find((u) => u.id === currentId && waiting(u));
     if (!next) {
       toast.show(en.unitText.allDone);
       return;
@@ -514,7 +603,7 @@ export async function createGame(
   function startUnitDrag(hex: Hex | null, sx: number, sy: number): boolean {
     if (!hex || (mode.kind !== 'idle' && mode.kind !== 'unit')) return false;
     const unit = unitAt(state, hex);
-    if (!unit || unit.owner !== PLAYER || !canAct(unit)) return false;
+    if (!unit || unit.owner !== PLAYER || !(canAct(unit) || unit.order)) return false;
     // No re-centering: the map must stay under the finger.
     enterUnitMode(unit, false);
     if (mode.kind !== 'unit') return false;
@@ -528,6 +617,23 @@ export async function createGame(
     renderer.setDragGhost(dragUnitId, sx, sy);
     const unit = state.units.find((u) => u.id === dragUnitId);
     renderer.selectTile(hex ?? unit?.hex ?? null);
+    if (!unit) return;
+    const same = hex === dragHoverHex || (hex && dragHoverHex && hexEquals(hex, dragHoverHex));
+    if (same) return;
+    dragHoverHex = hex;
+    dragPreview = null;
+    if (
+      hex &&
+      !hexEquals(hex, unit.hex) &&
+      !visibleTargets(unit).some((t) => hexEquals(t.hex, hex)) &&
+      !reachableTiles(state, unit.id, { ignoreHiddenUnits: true }).some((r) =>
+        hexEquals(r.hex, hex),
+      )
+    ) {
+      const plan = farPlan(unit, hex);
+      if (plan) dragPreview = { unitId: unit.id, plan };
+    }
+    showOrderPaths();
   }
 
   function endUnitDrag(hex: Hex | null): void {
@@ -535,6 +641,8 @@ export async function createGame(
     if (id === null) return;
     dragUnitId = null;
     renderer.setDragGhost(null);
+    clearDragPreview();
+    showOrderPaths();
     const unit = state.units.find((u) => u.id === id);
     if (mode.kind !== 'unit' || mode.unitId !== id || !unit) {
       renderer.selectTile(selected);
@@ -554,6 +662,10 @@ export async function createGame(
         commit({ type: 'move', unitId: unit.id, to: hex });
         return;
       }
+      if (farPlan(unit, hex)) {
+        commitOrder(unit, hex);
+        return;
+      }
     }
     // Dropped elsewhere: nothing happens, the unit stays selected.
     refreshUnitMode();
@@ -563,7 +675,9 @@ export async function createGame(
     if (dragUnitId === null) return;
     dragUnitId = null;
     renderer.setDragGhost(null);
+    clearDragPreview();
     refreshUnitMode();
+    showOrderPaths();
   }
 
   function enterUnitMode(unit: Unit, center = true): void {
@@ -600,6 +714,7 @@ export async function createGame(
     renderer.setHighlights([]);
     renderer.setAttackTargets([]);
     bottomBar.setMode('idle');
+    showOrderPaths();
   }
 
   /** Redraws panel, highlights and red targets of the selected unit after any change. */
@@ -613,7 +728,7 @@ export async function createGame(
     }
     selected = unit.hex;
     renderer.selectTile(unit.hex);
-    if (!canAct(unit)) {
+    if (!canAct(unit) && !unit.order) {
       // Nothing left to do: back to idle, the unit stays selected ("Done for this turn").
       leaveUnitMode();
       showPanel();
@@ -624,6 +739,7 @@ export async function createGame(
     );
     renderer.setAttackTargets(visibleTargets(unit).map((t) => t.hex));
     showUnitPanel(unit);
+    showOrderPaths();
   }
 
   function visibleTargets(unit: Unit): Unit[] {
@@ -676,6 +792,11 @@ export async function createGame(
         preferBuilding = true;
         showPanel();
       }
+      return;
+    }
+    const plan = farPlan(unit, hex);
+    if (plan) {
+      askOrder(unit, hex, plan);
       return;
     }
     leaveUnitMode();

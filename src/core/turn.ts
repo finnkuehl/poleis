@@ -6,6 +6,7 @@ import { runPopulation } from './rules/population';
 import { runProduction } from './rules/production';
 import { updateAllExplored } from './rules/vision';
 import { captureCities } from './rules/capture';
+import { runMoveOrders } from './rules/orders';
 import { healAndResetUnits, runUpkeep, spawnUnits } from './rules/units';
 
 /**
@@ -27,6 +28,8 @@ export function endTurn(state: GameState): GameState {
   // Units first: heal, reset, new units appear.
   healAndResetUnits(next, player);
   const spawned = spawnUnits(next, player);
+  // Units with a move order continue walking.
+  const orders = runMoveOrders(next, player);
   // Then production, consumption, growth and taxes; the units eat last (after the residents).
   const report = runProduction(next, player);
   report.cities = runPopulation(next, player);
@@ -39,6 +42,7 @@ export function endTurn(state: GameState): GameState {
   }
   report.delta = delta;
   report.captured = captured;
+  report.orders = orders;
   next.lastReport = report;
   updateAllExplored(next);
   return next;
