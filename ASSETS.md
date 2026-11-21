@@ -1,0 +1,11 @@
+# Assets
+
+Origin and license of every graphic, sound or font in the game. Only freely licensed assets
+(e.g. CC0) or original work made for Poleis are allowed (see `CLAUDE.md`).
+
+| Path | What | Origin | License |
+|---|---|---|---|
+| `public/assets/goods/*.svg` | Goods icons | Original work, drawn for Poleis (M7) | CC0 1.0 |
+| `public/assets/buildings/*.svg` | Building miniatures | Original work, drawn for Poleis (M7) | CC0 1.0 |
+| `public/assets/units/*.svg` | Unit figures | Original work, drawn for Poleis (M7) | CC0 1.0 |
+| Terrain, roads, fog | Drawn in code (`src/render/`) | Original work | same as the code |
