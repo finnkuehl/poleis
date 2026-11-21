@@ -24,7 +24,7 @@ function tileValue(t: TerrainId | undefined): number {
 function siteScore(view: View, h: Hex, pathSteps: number): number {
   const { state } = view;
   let score = 0;
-  for (const t of range(h, 2)) {
+  for (const t of range(h, M.settleSiteRadius)) {
     if (!inBounds(state.map, t)) continue;
     const owner = state.territory[tileIndex(state.map, t)];
     if (owner !== -1 && owner !== view.me) continue;
@@ -104,7 +104,8 @@ export function settlerCandidates(ctx: AiContext): Candidate[] {
     }
     if (sites.length === 0) {
       // No good site: do not waste the settler on a bad one, but do not carry it around forever.
-      if (foundOk(view, u)) out.push(found(u, 'found the city (no better site)', 200));
+      if (foundOk(view, u))
+        out.push(found(u, 'found the city (no better site)', M.foundAnywhereUtility));
       continue;
     }
     sites.forEach((site, k) => {

@@ -242,7 +242,11 @@ function attackCandidates(view: View): Candidate[] {
       if (!favorable(p)) continue;
       out.push({
         action: { type: 'attack', unitId: u.id, targetId: t.id },
-        utility: M.utility.attack + p.damage * 10 - p.counter * 5 + (p.defenderDies ? 100 : 0),
+        utility:
+          M.utility.attack +
+          p.damage * M.attackDamageWeight -
+          p.counter * M.attackCounterWeight +
+          (p.defenderDies ? M.attackKillBonus : 0),
         reason: `attack ${t.type}`,
         key: `atk:${u.id}:${t.id}`,
         group: `atk:${u.id}`,
@@ -364,7 +368,7 @@ function armyCandidates(view: View, roles: Roles): Candidate[] {
     let best: { hex: Hex; value: number; target: Unit } | null = null;
     const range = UNITS[u.type].range;
     for (const e of view.enemies) {
-      if (distance(u.hex, e.hex) > 8) continue;
+      if (distance(u.hex, e.hex) > M.attackSearchRange) continue;
       for (const r of reach) {
         const d = distance(r.hex, e.hex);
         if (d < 1 || d > range) continue;
@@ -372,7 +376,12 @@ function armyCandidates(view: View, roles: Roles): Candidate[] {
         if (!favorable(p)) continue;
         const terrain = terrainAt(state.map, r.hex);
         const cover = (terrain && TERRAIN[terrain].defenseBonus) || 1;
-        const value = p.damage - p.counter + cover + (p.defenderDies ? 3 : 0) - r.cost * 0.1;
+        const value =
+          p.damage -
+          p.counter +
+          cover +
+          (p.defenderDies ? M.positionKillBonus : 0) -
+          r.cost * M.positionCostPenalty;
         if (!best || value > best.value) best = { hex: r.hex, value, target: e };
       }
     }
@@ -389,8 +398,8 @@ function armyCandidates(view: View, roles: Roles): Candidate[] {
     }
     // March towards the target (units already close fight instead).
     const first = offense.targets[0];
-    if (distance(u.hex, first.center) > 2) {
-      offense.targets.slice(0, 2).forEach((target, t) => {
+    if (distance(u.hex, first.center) > M.marchStopDistance) {
+      offense.targets.slice(0, M.marchTargets).forEach((target, t) => {
         const stage = stagingTiles(view, target);
         if (stage.length === 0) return;
         const to = stage[k % stage.length];

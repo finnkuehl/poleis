@@ -19,7 +19,7 @@ export function wonderCandidates(ctx: AiContext): Candidate[] {
       if (b.paused && b.type !== 'wonder') {
         out.push({
           action: { type: 'togglePause', hex: b.hex },
-          utility: 200,
+          utility: M.unpauseUtility,
           reason: `unpause ${b.type} (wonder is done)`,
           key: `unpause:${b.id}`,
           once: true,
@@ -53,7 +53,7 @@ export function wonderCandidates(ctx: AiContext): Candidate[] {
   if (first) {
     out.push({
       action: { type: 'togglePause', hex: first.b.hex },
-      utility: 300,
+      utility: M.pauseUtility,
       reason: `pause ${first.b.type} to staff the wonder`,
       key: `pause:${first.b.id}`,
       once: true,

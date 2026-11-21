@@ -127,7 +127,8 @@ function workerFactor(ctx: AiContext, ci: CityInfo, type: BuildingId): number {
   if (need === 0 || ci.slack >= need) return 1;
   const growing = ci.freeHousing > 0 && ctx.foodProd - ctx.foodNeed >= 1;
   if (BUILDINGS[type].category === 'food') return aiConfig.foodNoWorkersFactor;
-  if (growing && ci.slack + Math.min(ci.freeHousing, 3) >= need) return aiConfig.growingFactor;
+  if (growing && ci.slack + Math.min(ci.freeHousing, aiConfig.futureWorkerHousing) >= need)
+    return aiConfig.growingFactor;
   return aiConfig.noFreeWorkersFactor;
 }
 
@@ -218,8 +219,9 @@ function foodWishes(g: Gen): void {
   const food = foodSituation(ctx);
   const deficit = aiConfig.foodNetTarget - food.projNet;
   const stockFood = ctx.stock.fish + ctx.stock.bread;
-  let urgency = deficit > 0 ? 1 + Math.min(2, deficit / 2) : 0;
-  if (stockFood >= 20) urgency /= 2;
+  let urgency =
+    deficit > 0 ? 1 + Math.min(aiConfig.foodUrgencyMax, deficit / aiConfig.foodUrgencyDivisor) : 0;
+  if (stockFood >= aiConfig.foodStockHalvesUrgency) urgency /= 2;
 
   const fisheryTiles = sitesFor(g, 'fishery').size > 0;
   const maxFish = aiConfig.maxPerCity.fishery * nCities;
@@ -239,7 +241,9 @@ function foodWishes(g: Gen): void {
     // can be paid (and keep the goods for it until then).
     const bakeryCost = BUILDINGS.bakery.cost;
     if (ctx.count.bakery > ctx.count.farm || canAfford(ctx.stock, bakeryCost)) {
-      wishBuilding(g, 'farm', U.food * 0.9 * urgency, 'food: farm', { essential: true });
+      wishBuilding(g, 'farm', U.food * aiConfig.farmFactor * urgency, 'food: farm', {
+        essential: true,
+      });
     } else {
       g.demand.push({
         action: null,
@@ -253,10 +257,16 @@ function foodWishes(g: Gen): void {
   }
   // A farm without a bakery feeds nobody: finish the chain.
   if (ctx.count.farm > ctx.count.bakery && ctx.pending.bakery === 0) {
-    wishBuilding(g, 'bakery', U.food * 1.1 * Math.max(urgency, 1), 'food: bakery', {
-      reserve: true,
-      essential: true,
-    });
+    wishBuilding(
+      g,
+      'bakery',
+      U.food * aiConfig.bakeryFactor * Math.max(urgency, 1),
+      'food: bakery',
+      {
+        reserve: true,
+        essential: true,
+      },
+    );
   }
 }
 
@@ -277,14 +287,17 @@ function houseWishes(g: Gen): void {
   for (const ci of ctx.cities) {
     let buffer = aiConfig.houseBuffer[ctx.personality];
     // A Metropolis needs room for the wonder's crew.
-    if (ci.city.level === 'metropolis') buffer = Math.max(buffer, 4);
+    if (ci.city.level === 'metropolis') buffer = Math.max(buffer, aiConfig.metropolisHouseBuffer);
     // No spare workers for a wished building: more housing means more workers.
     const crew =
       ci.city.level === 'metropolis' && wonderUnfinished(ctx) ? BUILDINGS.wonder.workers : 1;
-    const needsWorkers = ci.slack < crew && ci.freeHousing <= 3;
+    const needsWorkers = ci.slack < crew && ci.freeHousing <= aiConfig.needsWorkersMaxFreeHousing;
     if (ci.freeHousing > buffer && !needsWorkers) continue;
-    const prepare = ci.city.level === 'settlement' && ci.housing < 22 ? 1.2 : 1;
-    const short = ci.slack < 0 ? 1.3 : 1;
+    const prepare =
+      ci.city.level === 'settlement' && ci.housing < aiConfig.preparePolisHousing
+        ? aiConfig.preparePolisFactor
+        : 1;
+    const short = ci.slack < 0 ? aiConfig.workerShortHouseFactor : 1;
     wishBuilding(g, 'house', U.house * prepare * short, 'housing', { wish: 'house', city: ci });
   }
 }
@@ -327,20 +340,30 @@ function chainWishes(g: Gen): void {
 
   // Oil: needed from Polis on, prepared by a settlement that is nearly big enough.
   const oilNeedy = anyLevel(0, cfg.oilChainResidents) || atLeast(1);
-  if (oilNeedy && ctx.net.oil < cfg.oilNetTarget && (ctx.stock.oil < 10 || ctx.net.oil < 0)) {
+  if (
+    oilNeedy &&
+    ctx.net.oil < cfg.oilNetTarget &&
+    (ctx.stock.oil < cfg.oilStartStock || ctx.net.oil < 0)
+  ) {
     const groveCap = cfg.maxPerCity.oliveGrove * cities.length;
     if (ctx.count.oliveGrove <= ctx.count.oilPress) {
       if (ctx.count.oliveGrove < groveCap && ctx.pending.oliveGrove === 0) {
         wishBuilding(g, 'oliveGrove', U.oilChain, 'oil: grove', { reserve: true });
       }
     } else if (ctx.pending.oilPress === 0) {
-      wishBuilding(g, 'oilPress', U.oilChain * 1.1, 'oil: press', { reserve: true });
+      wishBuilding(g, 'oilPress', U.oilChain * cfg.chainSecondFactor, 'oil: press', {
+        reserve: true,
+      });
     }
   }
 
   // Wine: from a big Polis on.
   const wineNeedy = anyLevel(1, cfg.wineChainResidents) || atLeast(2);
-  if (wineNeedy && ctx.net.wine < cfg.wineNetTarget && (ctx.stock.wine < 12 || ctx.net.wine < 0)) {
+  if (
+    wineNeedy &&
+    ctx.net.wine < cfg.wineNetTarget &&
+    (ctx.stock.wine < cfg.wineStartStock || ctx.net.wine < 0)
+  ) {
     if (ctx.count.vineyard <= ctx.count.winery) {
       if (
         ctx.count.vineyard < cfg.maxPerCity.vineyard * cities.length &&
@@ -352,7 +375,9 @@ function chainWishes(g: Gen): void {
         });
       }
     } else if (ctx.pending.winery === 0) {
-      wishBuilding(g, 'winery', U.wineChain * 1.1, 'wine: winery', { reserve: true });
+      wishBuilding(g, 'winery', U.wineChain * cfg.chainSecondFactor, 'wine: winery', {
+        reserve: true,
+      });
     }
   }
 
@@ -368,14 +393,16 @@ function chainWishes(g: Gen): void {
   const bronzeAim = Math.max(wonderDone ? 0 : levelAim, unitAim);
   if (bronzeAim > 0 && ctx.stock.bronze < bronzeAim) {
     if (ctx.count.mine <= ctx.count.smelter) {
-      if (ctx.count.mine < 2 && ctx.pending.mine === 0) {
+      if (ctx.count.mine < cfg.maxMines && ctx.pending.mine === 0) {
         wishBuilding(g, 'mine', U.bronzeChain, 'bronze: mine', {
           reserve: true,
           terrainIfStuck: ['mountains'],
         });
       }
     } else if (ctx.pending.smelter === 0) {
-      wishBuilding(g, 'smelter', U.bronzeChain * 1.1, 'bronze: smelter', { reserve: true });
+      wishBuilding(g, 'smelter', U.bronzeChain * cfg.chainSecondFactor, 'bronze: smelter', {
+        reserve: true,
+      });
     }
   }
 }
@@ -412,7 +439,9 @@ function optionalWishes(g: Gen): void {
 
 /** Sets `g.shortage` from the strongest wishes that cannot be paid yet. */
 function computeShortage(g: Gen): void {
-  const top = [...g.demand].sort((a, b) => b.utility - a.utility).slice(0, 4);
+  const top = [...g.demand]
+    .sort((a, b) => b.utility - a.utility)
+    .slice(0, aiConfig.shortageTopWishes);
   for (const c of top) {
     const missing = missingGoods(g.ctx.stock, c.cost ?? {});
     for (const id of GOOD_IDS) {
@@ -441,7 +470,9 @@ function incomeWishes(g: Gen): void {
       ? cfg.sawmillWoodNeeded
       : 0);
   const stoneTarget =
-    cfg.incomeTarget.stone + ((g.shortage.stone ?? 0) > 0 ? bonus : 0) + 2 * level;
+    cfg.incomeTarget.stone +
+    ((g.shortage.stone ?? 0) > 0 ? bonus : 0) +
+    cfg.stoneIncomePerLevel * level;
 
   const wished = (
     type: BuildingId,
@@ -452,11 +483,17 @@ function incomeWishes(g: Gen): void {
     terrains: readonly TerrainId[],
   ) => {
     const deficit = target - net;
-    wishBuilding(g, type, base * (1 + Math.min(3, deficit / Math.max(1, target))), reason, {
-      income: true,
-      list: 'income',
-      terrainIfStuck: terrains,
-    });
+    wishBuilding(
+      g,
+      type,
+      base * (1 + Math.min(cfg.incomeDeficitCap, deficit / Math.max(1, target))),
+      reason,
+      {
+        income: true,
+        list: 'income',
+        terrainIfStuck: terrains,
+      },
+    );
   };
 
   if (
@@ -479,7 +516,8 @@ function incomeWishes(g: Gen): void {
     planksWanted &&
     ctx.pending.sawmill === 0 &&
     ctx.count.sawmill < cfg.maxPerCity.sawmill * nCities &&
-    (ctx.net.wood >= cfg.sawmillWoodNeeded * (ctx.count.sawmill + 1) || ctx.stock.wood >= 30)
+    (ctx.net.wood >= cfg.sawmillWoodNeeded * (ctx.count.sawmill + 1) ||
+      ctx.stock.wood >= cfg.sawmillWoodStock)
   ) {
     wished('sawmill', U.sawmill, 'income: planks', planksTarget, ctx.net.planks, []);
   }

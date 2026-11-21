@@ -72,6 +72,42 @@ export const aiConfig = {
     buy: 65,
   },
 
+  // --- Tuning of the economy wishes ---
+  // Free housing of a city counted as future workers (a growing city staffs buildings soon).
+  futureWorkerHousing: 3,
+  // Food urgency = 1 + min(foodUrgencyMax, food deficit / foodUrgencyDivisor).
+  foodUrgencyMax: 2,
+  foodUrgencyDivisor: 2,
+  // A food stock this big halves the food urgency.
+  foodStockHalvesUrgency: 20,
+  // Farm / bakery wish strength relative to the base food utility.
+  farmFactor: 0.9,
+  bakeryFactor: 1.1,
+  // Housing buffer a Metropolis keeps (room for the wonder's crew).
+  metropolisHouseBuffer: 4,
+  // A city with at most this much free housing and no spare workers builds houses for workers.
+  needsWorkersMaxFreeHousing: 3,
+  // A Settlement with less housing than this builds houses a bit earlier (prepares the Polis).
+  preparePolisHousing: 22,
+  preparePolisFactor: 1.2,
+  // House wish factor when the city lacks workers.
+  workerShortHouseFactor: 1.3,
+  // Oil / wine stock below which the chain is started (also when the net is negative).
+  oilStartStock: 10,
+  wineStartStock: 12,
+  // Second building of a chain (press, winery, smelter) is wished a bit more than the first.
+  chainSecondFactor: 1.1,
+  // Most mines the bronze chain builds.
+  maxMines: 2,
+  // The shortage of goods is read from this many of the strongest unaffordable wishes.
+  shortageTopWishes: 4,
+  // Extra stone income wanted per city level.
+  stoneIncomePerLevel: 2,
+  // Income building wish: at most 1 + this x (how far the income is below the target).
+  incomeDeficitCap: 3,
+  // A sawmill is also built when this much wood is in stock.
+  sawmillWoodStock: 30,
+
   // --- Targets ---
   // Food net per turn the AI wants to keep (after the residents ate), looking a few turns ahead.
   foodNetTarget: 1,
@@ -208,6 +244,29 @@ export const aiConfig = {
       trainDefenderUnderThreat: 400,
       trainAttacker: 65,
     },
+
+    // --- Unit command tuning ---
+    // Attack utility = attack + damage x attackDamageWeight - counter x attackCounterWeight
+    // + attackKillBonus when the defender dies.
+    attackDamageWeight: 10,
+    attackCounterWeight: 5,
+    attackKillBonus: 100,
+    // Enemies farther than this (tiles) are not considered for moving into attack position.
+    attackSearchRange: 8,
+    // Attack position value: damage - counter + terrain cover + kill bonus - move cost x penalty.
+    positionKillBonus: 3,
+    positionCostPenalty: 0.1,
+    // Army units farther than this from the target city march; closer ones fight.
+    marchStopDistance: 2,
+    // The army considers this many target cities for marching orders.
+    marchTargets: 2,
+    // Utility: unpause the buildings once the wonder is complete / pause one for the crew.
+    unpauseUtility: 200,
+    pauseUtility: 300,
+    // Settler founds a city here although no site was good enough.
+    foundAnywhereUtility: 200,
+    // Radius (tiles) around a site that counts for its score.
+    settleSiteRadius: 2,
 
     // --- Training ---
     // Scouts: alive + ordered at most this many; a second one only from `scoutSecondTurn` while
