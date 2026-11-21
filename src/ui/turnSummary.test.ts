@@ -81,4 +81,27 @@ describe('turnSummary', () => {
       { text: 'Ready to advance to Polis', kind: 'info' },
     ]);
   });
+  it('reports new units by name or by count', () => {
+    const r = { ...report(), units: { spawned: 2, upkeepEaten: {}, starving: false, lost: 0 } };
+    expect(turnSummary(r, { spawnedUnits: ['spearman', 'settler'] })).toEqual([
+      { text: 'Spearman is ready', kind: 'info' },
+      { text: 'Settler is ready', kind: 'info' },
+    ]);
+    expect(turnSummary(r)).toEqual([{ text: '2 units are ready', kind: 'info' }]);
+    expect(turnSummary({ ...r, units: { ...r.units, spawned: 1 } })).toEqual([
+      { text: '1 unit is ready', kind: 'info' },
+    ]);
+  });
+  it('reports hungry and lost units as errors', () => {
+    const r = { ...report(), units: { spawned: 0, upkeepEaten: {}, starving: true, lost: 1 } };
+    expect(turnSummary(r)).toEqual([
+      { text: 'Your units are hungry: each lost 2 HP', kind: 'error' },
+      { text: '1 unit was lost to hunger', kind: 'error' },
+    ]);
+  });
+  it('reports captured cities', () => {
+    expect(turnSummary({ ...report(), captured: [3] })).toEqual([
+      { text: 'You captured a city!', kind: 'info' },
+    ]);
+  });
 });

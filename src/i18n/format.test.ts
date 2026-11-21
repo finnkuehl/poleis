@@ -18,6 +18,11 @@ import {
   formatSold,
   formatTurns,
   formatWorkerCount,
+  formatMoves,
+  formatUnitsReady,
+  formatUnitsLost,
+  formatCaptured,
+  formatAttacked,
 } from './format';
 
 describe('i18n/format', () => {
@@ -77,6 +82,18 @@ describe('i18n/format', () => {
     expect(formatAdvanced('polis')).toBe('Your city is now a Polis.');
     expect(formatSold('wood', 2, 1)).toBe('Sold 2 Wood for 1 drachma.');
     expect(formatBought('wood', 1, 3)).toBe('Bought 1 Wood for 3 drachmas.');
+  });
+  it('formats unit texts', () => {
+    expect(formatMoves(2)).toBe('2');
+    expect(formatMoves(0.5)).toBe('0.5');
+    expect(formatUnitsReady(1)).toBe('1 unit is ready');
+    expect(formatUnitsReady(3)).toBe('3 units are ready');
+    expect(formatUnitsLost(1)).toBe('1 unit was lost to hunger');
+    expect(formatUnitsLost(2)).toBe('2 units were lost to hunger');
+    expect(formatCaptured(1)).toBe('You captured a city!');
+    expect(formatCaptured(2)).toBe('You captured 2 cities!');
+    expect(formatAttacked('Spearman', 5, false)).toBe('Spearman attacked: 5 damage.');
+    expect(formatAttacked('Spearman', 10, true)).toBe('Spearman defeated the enemy.');
   });
   it('fills placeholders', () => {
     expect(fill('Build {building} here?', { building: 'House' })).toBe('Build House here?');

@@ -131,3 +131,28 @@ export function formatSold(good: GoodId, amount: number, price: number): string 
 export function formatBought(good: GoodId, amount: number, price: number): string {
   return fill(en.flow.bought, { amount, good: en.goods[good], price: formatDrachmas(price) });
 }
+
+/** Movement points: whole numbers plain ("2"), fractions with one decimal ("0.5"). */
+export function formatMoves(n: number): string {
+  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
+/** "1 unit is ready" / "3 units are ready" (turn summary, when only a count is known) */
+export function formatUnitsReady(n: number): string {
+  return n === 1 ? en.turnSummary.unitsReadyOne : fill(en.turnSummary.unitsReadyMany, { n });
+}
+
+/** "1 unit was lost to hunger" / "2 units were lost to hunger" */
+export function formatUnitsLost(n: number): string {
+  return n === 1 ? en.turnSummary.unitsLostOne : fill(en.turnSummary.unitsLostMany, { n });
+}
+
+/** "You captured a city!" / "You captured 2 cities!" */
+export function formatCaptured(n: number): string {
+  return n === 1 ? en.turnSummary.capturedOne : fill(en.turnSummary.capturedMany, { n });
+}
+
+/** Toast after an attack: "Spearman attacked: 5 damage." or "Spearman defeated the enemy." */
+export function formatAttacked(unit: string, damage: number, defeated: boolean): string {
+  return fill(defeated ? en.flow.attackedDefeated : en.flow.attacked, { unit, n: damage });
+}

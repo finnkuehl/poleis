@@ -11,3 +11,4 @@ export * from './toast';
 export * from './buildingText';
 export * from './cityText';
 export * from './turnSummary';
+export * from './unitText';
