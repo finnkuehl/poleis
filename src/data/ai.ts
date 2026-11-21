@@ -27,6 +27,11 @@ export const aiConfig = {
   // is AI-only: the human may build it whenever they can).
   wonderFromTurn: 70,
 
+  // Personality of an AI that plays the human's civilization (no civ). Test mode only (`&watch`).
+  watchPersonality: 'builder' as Personality,
+  // Watch mode (`&watch`): milliseconds between two automatic turns.
+  watchIntervalMs: 1000,
+
   // --- Turn driver ---
   // The most actions one AI civilization takes per turn (keeps a turn fast).
   maxActionsPerTurn: 60,

@@ -23,6 +23,8 @@ The game opens with the start menu: continue the autosaved game, load one of 3 s
 - `?seed=123` (or `?seed=athens`) – pre-fills the seed in the start menu; the same seed always makes the same map.
 - `&sandbox` – test mode, skips the menu: a large stock of goods and a passive enemy city, e.g. `?seed=1&sandbox`. The seed label shows "(test mode)". Not autosaved.
 - `&ai=3` / `&size=small|normal|large` – skip the menu and start directly with that many AI rivals / that map size, e.g. `?seed=1&ai=3`.
+- `&reveal` – shows the whole map without fog of war (display only; the game rules and the AI are unchanged), e.g. `?seed=7&ai=3&reveal`.  Use it together with `ai`/`size`/`sandbox` (these skip the menu).
+- `&watch` – watch mode: an AI also plays your civilization and a turn runs every second, with no fog; End turn pauses/resumes; no autosave, e.g. `?seed=7&ai=3&watch`.
 
 ## Testing on a phone over Wi-Fi
 

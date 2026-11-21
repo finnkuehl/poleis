@@ -1,5 +1,5 @@
 // Game controller: holds the GameState and the interaction mode, wires renderer and UI together.
-import { playAiTurns } from '../ai';
+import { playAiTurns, takeAiTurn } from '../ai';
 import { applyAction, type Action } from '../core/actions';
 import { hexEquals, type Hex } from '../core/hex';
 import { terrainAt, tileIndex } from '../core/map';
@@ -38,6 +38,7 @@ import {
   BUILDING_IDS,
   BUILDINGS,
   CITY_LEVELS,
+  aiConfig,
   economyConfig,
   type BuildingId,
   type CityLevel,
@@ -97,13 +98,22 @@ type Mode =
   | { kind: 'roadEnd'; from: Hex }
   | { kind: 'unit'; unitId: number };
 
+/** Dev/test options from the URL: `reveal` = no fog (display only), `watch` = an AI plays the human too. */
+export interface GameOptions {
+  reveal?: boolean;
+  watch?: boolean;
+}
+
 /** Creates the renderer and all UI components and runs the interaction. Rejects on renderer errors. */
 export async function createGame(
   appContainer: HTMLElement,
   uiContainer: HTMLElement,
   initialState: GameState,
   testMode = false,
+  options: GameOptions = {},
 ): Promise<void> {
+  const watch = options.watch === true;
+  const reveal = watch || options.reveal === true;
   let state = initialState;
   let mode: Mode = { kind: 'idle' };
   let selected: Hex | null = null;
@@ -113,7 +123,7 @@ export async function createGame(
   let preferBuilding = false;
 
   // Seed label first: later elements stack above it.
-  createSeedLabel(uiContainer, state.seedText, testMode);
+  createSeedLabel(uiContainer, state.seedText, testMode, watch);
 
   // Unit drag & drop: the unit being dragged (null = no drag)
   let dragUnitId: number | null = null;
@@ -126,6 +136,7 @@ export async function createGame(
     onEnd: (h) => endUnitDrag(h),
     onCancel: () => cancelUnitDrag(),
   });
+  renderer.setRevealAll(reveal);
   const toast = createToast(uiContainer);
   const resourceBar = createResourceBar(uiContainer, {
     onMenu: () => {
@@ -218,9 +229,32 @@ export async function createGame(
         endScreen.show(state, PLAYER);
         return;
       }
+      if (watch) {
+        toggleWatchPause();
+        return;
+      }
       endTurn();
     },
   });
+
+  // Watch mode: an AI plays player 0 and the turns run by themselves; End turn pauses/resumes.
+  let watchPaused = false;
+  let watchTimer: number | undefined;
+  function toggleWatchPause(): void {
+    watchPaused = !watchPaused;
+    toast.show(watchPaused ? en.watchPaused : en.watchRunning);
+  }
+  function startWatch(): void {
+    watchTimer = window.setInterval(() => {
+      if (watchPaused) return;
+      if (state.result) {
+        window.clearInterval(watchTimer);
+        return;
+      }
+      state = takeAiTurn(state, PLAYER);
+      endTurn();
+    }, aiConfig.watchIntervalMs);
+  }
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && mode.kind !== 'idle') resetToIdle();
@@ -258,6 +292,8 @@ export async function createGame(
     state = playAiTurns(state);
     refresh();
     autosave();
+    // Watch mode: no turn-summary toasts (they would pile up every second).
+    if (watch) return;
     // News about the rivals first, then the player's own turn summary.
     const lines = eventLines(state, PLAYER);
     const report = state.result ? null : state.lastReport;
@@ -289,7 +325,7 @@ export async function createGame(
   /** Saves the game to the autosave slot; a failure is reported once per session and never blocks play. */
   function autosave(): void {
     // Test mode (sandbox) never touches the real autosave.
-    if (testMode) return;
+    if (testMode || watch) return;
     const result = saveGame(storage, 'auto', state);
     if (!result.ok && !autosaveFailureShown) {
       autosaveFailureShown = true;
@@ -1120,6 +1156,7 @@ export async function createGame(
   }
 
   refresh();
+  if (watch) startWatch();
   // A new or loaded game is saved right away, so Continue always has something to continue.
   autosave();
 }

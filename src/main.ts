@@ -6,7 +6,7 @@ import { gameConfig, MAP_SIZES, type MapSize } from './data/game';
 import { mapgenConfig } from './data/mapgen';
 import { en } from './i18n/en';
 import { ALL_SLOTS, browserStorage, listSaves, loadGame, type SaveSlot } from './save';
-import { BOOT_INTENT_KEY, createGame } from './ui/interaction';
+import { BOOT_INTENT_KEY, createGame, type GameOptions } from './ui/interaction';
 import { createStartMenu, createToast, formatSaveError, randomSeed, type StartMenu } from './ui';
 
 // iOS Safari: prevent pinch-zoom of the whole page
@@ -59,9 +59,10 @@ function launch(
   uiContainer: HTMLElement,
   state: GameState,
   sandbox = false,
+  options: GameOptions = {},
 ): void {
   writeSeedToUrl(state.seedText);
-  createGame(appContainer, uiContainer, state, sandbox).catch((error: unknown) =>
+  createGame(appContainer, uiContainer, state, sandbox, options).catch((error: unknown) =>
     showError(uiContainer, error),
   );
 }
@@ -86,10 +87,16 @@ function start(appContainer: HTMLElement, uiContainer: HTMLElement): void {
   const loadSlot = takeBootIntent();
 
   // Quick start for testing: these parameters skip the menu.
-  if (loadSlot === null && (params.has('sandbox') || params.has('ai') || params.has('size'))) {
+  // `&reveal` shows the whole map (display only); `&watch` lets an AI play the human too (implies reveal).
+  const watch = params.has('watch');
+  const quick = params.has('sandbox') || params.has('ai') || params.has('size') || watch;
+  if (loadSlot === null && quick) {
     const sandbox = params.has('sandbox');
     const state = createGameState(readSeed(), { sandbox, settings: readSettings() });
-    launch(appContainer, uiContainer, state, sandbox);
+    launch(appContainer, uiContainer, state, sandbox, {
+      reveal: params.has('reveal') || watch,
+      watch,
+    });
     return;
   }
 

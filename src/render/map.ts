@@ -24,6 +24,8 @@ export interface MapView {
   /** Red outlines on attack targets; [] clears. */
   setAttackTargets(hexes: readonly Hex[]): void;
   setSelection(h: Hex | null): void;
+  /** Test option: no fog, enemy units drawn everywhere. Takes effect on the next update. */
+  setRevealAll(value: boolean): void;
   /** Ghost token at world position; null hides it. */
   setGhost(unit: { type: string; owner: number } | null, x?: number, y?: number): void;
   /** Highlights valid tiles; [] clears. */
@@ -119,6 +121,7 @@ export function createMapView(map: MapState): MapView {
   return {
     container,
     bounds: mapWorldBounds(map, hexSize),
+    setRevealAll: unitLayers.setRevealAll,
     update(state, statuses, viewer = 0) {
       economy.update(state, statuses);
       orders.setColor(playerColorOf(state, viewer));

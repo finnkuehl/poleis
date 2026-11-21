@@ -26,6 +26,8 @@ export interface Renderer {
   /** Red outlines on attack targets; [] clears. */
   setAttackTargets(hexes: readonly Hex[]): void;
   selectTile(h: Hex | null): void;
+  /** Test option: shows the whole map (no fog, all units); takes effect on the next setState. */
+  setRevealAll(value: boolean): void;
   /** Highlights valid tiles; [] clears. */
   setHighlights(hexes: readonly Hex[]): void;
   /** Road preview along `path` (dots on `newTiles`); null clears. */
@@ -121,6 +123,7 @@ export async function createRenderer(
     setDragGhost,
     screenToHex,
     selectTile,
+    setRevealAll: view.setRevealAll,
     setHighlights: view.setHighlights,
     setAttackTargets: view.setAttackTargets,
     setPathPreview: (path, newTiles = []) => view.setPathPreview(path, newTiles),

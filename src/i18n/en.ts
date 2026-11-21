@@ -39,6 +39,9 @@ export const en = {
   },
   seedLabel: 'Seed',
   seedLabelTestMode: 'Seed: {seed} (test mode)',
+  seedLabelWatchMode: 'Seed: {seed} (watch mode)',
+  watchPaused: 'Paused',
+  watchRunning: 'Running',
   ui: {
     build: 'Build',
     road: 'Road',

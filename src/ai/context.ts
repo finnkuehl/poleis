@@ -121,7 +121,7 @@ function connectedTiles(state: GameState, player: PlayerId, own: Building[]): bo
 export function buildContext(state: GameState, player: PlayerId): AiContext {
   const me = state.players.find((p) => p.id === player);
   if (!me) throw new Error(`Unknown player ${player}`);
-  const personality: Personality = me.civ ? AI_CIVS[me.civ].personality : 'builder';
+  const personality: Personality = me.civ ? AI_CIVS[me.civ].personality : aiConfig.watchPersonality;
   const map = state.map;
 
   const overview = economyOverview(state, player);

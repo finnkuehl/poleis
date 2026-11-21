@@ -18,6 +18,8 @@ export interface UnitLayers {
   /** Drag ghost, to be added on top of everything. */
   ghost: Container;
   update(state: GameState, viewer: PlayerId): void;
+  /** Test option: no fog, enemy units drawn everywhere. Takes effect on the next update. */
+  setRevealAll(value: boolean): void;
   setAttackTargets(hexes: readonly Hex[]): void;
   /** Semi-transparent ghost token at world position (x, y); null hides it. */
   setGhost(unit: { type: string; owner: number } | null, x?: number, y?: number): void;
@@ -37,6 +39,8 @@ export function createUnitLayers(): UnitLayers {
   /** One Text per unit id, created/destroyed only when units appear/disappear. */
   const iconTexts = new Map<number, { text: Text; type: string }>();
   let fogSig = '';
+  /** Test option: show the whole map (no fog, enemy units everywhere). */
+  let revealAll = false;
   /** Latest state, for the colors of the drag ghost. */
   let lastState: GameState | null = null;
 
@@ -165,8 +169,22 @@ export function createUnitLayers(): UnitLayers {
       ghost.position.set(x, y);
       ghost.visible = true;
     },
+    setRevealAll(value) {
+      revealAll = value;
+      fogSig = '';
+    },
     update(state, viewer) {
       lastState = state;
+      if (revealAll) {
+        drawUnits(
+          state,
+          viewer,
+          state.map.tiles.map(() => true),
+        );
+        fog.clear();
+        fogSig = '';
+        return;
+      }
       const visible = visibleTiles(state, viewer);
       drawUnits(state, viewer, visible);
       drawFog(state, viewer, visible);
