@@ -131,6 +131,8 @@ export interface CityInfo {
   level: CityLevel;
   stats: CityStats;
   check: AdvanceCheck;
+  /** Working and free residents of this city (optional). */
+  workers?: { working: number; free: number };
   /** Goods in stock (to tell whether the city is hungry and which needs are covered). */
   stock: Stock;
   /** If set, the Advance button is shown (enabled when `check.canAdvance`). */
@@ -446,6 +448,7 @@ export function createTileInfoPanel(root: HTMLElement, onClose: () => void): Til
     );
     rows.appendChild(row);
     nodes.push(rows);
+    if (o.workers) nodes.push(line(fill(en.cityPanel.workers, o.workers)));
 
     const growth = growthState(o.level, o.stats, o.stock);
     nodes.push(line(growthText(growth), growth.kind === 'growing' ? 'ok' : 'problem'));

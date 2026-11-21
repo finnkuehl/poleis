@@ -7,12 +7,14 @@ import {
   createBottomBar,
   createBuildMenu,
   createConfirmSheet,
+  createEconomySheet,
   createModeBanner,
   createResourceBar,
   createSeedLabel,
   createTileInfoPanel,
   createToast,
 } from './index';
+import type { EconomyOverview } from '../core/rules/economy';
 import type { AdvanceCheck } from '../core/rules/advance';
 import type { CityReport, CityStats } from '../core/rules/population';
 import type { BuildingStatus, TurnReport } from '../core/rules/production';
@@ -31,13 +33,47 @@ if (!ui || !controls) throw new Error('Missing containers');
 
 const stock = { ...emptyStock(), wood: 6, stone: 1, grain: 4, planks: 2 };
 
-const bar = createResourceBar(ui);
+const economy = createEconomySheet(ui);
+const sampleOverview: EconomyOverview = {
+  workers: { residents: 8, housing: 12, working: 6, free: 2, missing: 1 },
+  goods: [
+    {
+      good: 'wood',
+      stock: 6,
+      produced: [{ source: 'woodcutter', amount: 4, count: 2 }],
+      consumed: [{ source: 'building', detail: 'sawmill', amount: 2, count: 1 }],
+      net: 2,
+      turnsLeft: null,
+    },
+    {
+      good: 'fish',
+      stock: 7,
+      produced: [{ source: 'fishery', amount: 2, count: 1 }],
+      consumed: [
+        { source: 'residents', amount: 3, count: 1 },
+        { source: 'units', amount: 2, count: 1 },
+      ],
+      net: -3,
+      turnsLeft: 2,
+    },
+    {
+      good: 'drachmas',
+      stock: 7,
+      produced: [{ source: 'taxes', amount: 3, count: 1 }],
+      consumed: [],
+      net: 3,
+      turnsLeft: null,
+    },
+  ],
+};
+const bar = createResourceBar(ui, { onOverview: () => economy.open(sampleOverview) });
 bar.update(
   { ...stock, drachmas: 7, grapes: 2, wine: 1 },
   { wood: 2, stone: -1, grain: 3, planks: 0, bread: 1, drachmas: 3 },
   3,
   120,
   { residents: 6, housing: 8 },
+  { residents: 6, housing: 8, working: 4, free: 2, missing: 1 },
 );
 createSeedLabel(ui, '12345');
 const toast = createToast(ui);

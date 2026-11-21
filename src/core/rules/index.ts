@@ -19,3 +19,4 @@ export * from './combat';
 export * from './capture';
 export * from './found';
 export * from './vision';
+export * from './economy';

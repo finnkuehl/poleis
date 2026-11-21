@@ -2,7 +2,8 @@
 import { GOOD_IDS, GOODS, type Goods, type GoodId, type Stock } from '../data';
 import { en } from '../i18n/en';
 import { formatTurnOf } from '../i18n/format';
-import { el } from './dom';
+import type { WorkerSummary } from '../core/rules/economy';
+import { button, el } from './dom';
 
 /** Goods that are always shown, even at 0. */
 const ALWAYS_SHOWN: readonly GoodId[] = ['wood', 'stone'];
@@ -15,13 +16,17 @@ interface Chip {
   delta: HTMLElement;
 }
 
-export function createResourceBar(root: HTMLElement): {
+export function createResourceBar(
+  root: HTMLElement,
+  h: { onOverview(): void },
+): {
   update(
     stock: Stock,
     delta: Goods | null,
     turn: number,
     turnLimit: number,
     people: { residents: number; housing: number },
+    workers: WorkerSummary,
   ): void;
 } {
   const bar = el('header', 'resource-bar');
@@ -39,7 +44,18 @@ export function createResourceBar(root: HTMLElement): {
   residentsIcon.setAttribute('aria-hidden', 'true');
   const residentsAmount = el('span', 'resource-chip__amount');
   residentsChip.append(residentsIcon, residentsAmount);
-  scroll.append(turnChip, residentsChip);
+  const workersChip = el('button', 'resource-chip');
+  workersChip.type = 'button';
+  workersChip.setAttribute('role', 'listitem');
+  const workersIcon = el('span', 'resource-chip__icon', '\u2692');
+  workersIcon.setAttribute('aria-hidden', 'true');
+  const workersAmount = el('span', 'resource-chip__amount');
+  const workersFree = el('span', 'resource-chip__delta is-free');
+  const workersMissing = el('span', 'resource-chip__delta is-missing');
+  workersChip.append(workersIcon, workersAmount, workersFree, workersMissing);
+  const overviewBtn = button('resource-bar__overview', `\u{1F4CA} ${en.economy.button}`);
+  overviewBtn.addEventListener('click', h.onOverview);
+  scroll.append(overviewBtn, turnChip, residentsChip, workersChip);
 
   const chips = new Map<GoodId, Chip>();
   let labelTimer: number | undefined;
@@ -66,16 +82,26 @@ export function createResourceBar(root: HTMLElement): {
     chips.set(id, { root: chip, amount, delta });
   }
   residentsChip.addEventListener('click', () => showLabel(en.ui.residentsHousing));
+  workersChip.addEventListener('click', () => showLabel(en.ui.workersLabel));
   bar.append(scroll, label);
   root.appendChild(bar);
 
   return {
-    update(stock, delta, turn, turnLimit, people) {
+    update(stock, delta, turn, turnLimit, people, workers) {
       turnChip.textContent = formatTurnOf(turn, turnLimit);
       residentsAmount.textContent = `${people.residents} / ${people.housing}`;
       residentsChip.setAttribute(
         'aria-label',
         `${en.ui.residentsHousing} ${people.residents} / ${people.housing}`,
+      );
+      workersAmount.textContent = String(workers.working);
+      workersFree.textContent =
+        workers.free > 0 ? `\u00B7 ${workers.free} ${en.economy.freeShort}` : '';
+      workersMissing.textContent =
+        workers.missing > 0 ? `\u00B7 ${workers.missing} ${en.economy.missingShort}` : '';
+      workersChip.setAttribute(
+        'aria-label',
+        `${en.ui.workersLabel}: ${workers.working}, ${workers.free}, ${workers.missing}`,
       );
       for (const id of GOOD_IDS) {
         const chip = chips.get(id);

@@ -10,6 +10,8 @@ import {
 } from '../data';
 import type { RuleError } from '../core/rules/errors';
 import type { BuildingStatus } from '../core/rules/production';
+import type { GoodFlow, WorkerSummary } from '../core/rules/economy';
+import type { BuildingId } from '../data';
 import { en } from './en';
 
 /** "2 Wood, 1 Stone" in display order; zero amounts are skipped. */
@@ -167,4 +169,65 @@ export function formatAttacked(
   }
   if (r.counter > 0) return fill(en.flow.attackedTook, { unit, n: r.damage, c: r.counter });
   return fill(en.flow.attacked, { unit, n: r.damage });
+}
+
+/** "+4" / "−2" / "0" (net change per turn, with a real minus sign) */
+export function formatNet(n: number): string {
+  return n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : '0';
+}
+
+/** "Runs out this turn" / "Runs out in 1 turn" / "Runs out in 3 turns" */
+export function formatRunsOut(turns: number): string {
+  return turns <= 0
+    ? en.economy.runsOutNow
+    : fill(en.economy.runsOut, { turns: formatTurns(turns) });
+}
+
+function flowPart(name: string, count: number, amount: number, sign: 1 | -1): string {
+  const times = count > 1 ? ` ×${count}` : '';
+  return `${name}${times} ${formatNet(sign * amount)}`;
+}
+
+/** "Woodcutter ×2 +4, Taxes +1" (null = nothing is made) */
+export function formatMade(flow: GoodFlow): string | null {
+  if (flow.produced.length === 0) return null;
+  const parts = flow.produced.map((p) =>
+    flowPart(
+      p.source === 'taxes' ? en.economy.taxes : en.buildings[p.source as BuildingId],
+      p.count,
+      p.amount,
+      1,
+    ),
+  );
+  return `${en.economy.made}: ${parts.join(', ')}`;
+}
+
+/** "Sawmill −2, residents −3, units −1" (null = nothing is used) */
+export function formatUsed(flow: GoodFlow): string | null {
+  if (flow.consumed.length === 0) return null;
+  const parts = flow.consumed.map((c) => {
+    const name =
+      c.source === 'building'
+        ? en.buildings[c.detail as BuildingId]
+        : c.source === 'residents'
+          ? en.economy.residentsUse
+          : c.source === 'units'
+            ? en.economy.unitsUse
+            : c.source === 'needs'
+              ? en.economy.needsUse
+              : en.economy.supplyUse;
+    return flowPart(name, c.source === 'building' ? c.count : 1, c.amount, -1);
+  });
+  return `${en.economy.used}: ${parts.join(', ')}`;
+}
+
+/** "Residents 8 / 12 · Working 6 · Free 2 · Missing 1" */
+export function formatWorkerLine(w: WorkerSummary): string {
+  const parts = [
+    `${en.economy.residents} ${w.residents} / ${w.housing}`,
+    `${en.economy.working} ${w.working}`,
+    `${en.economy.free} ${w.free}`,
+    `${en.economy.missing} ${w.missing}`,
+  ];
+  return parts.join(' · ');
 }

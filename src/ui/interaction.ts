@@ -12,6 +12,7 @@ import {
   reachableTiles,
   unitAt,
   assignWorkers,
+  economyOverview,
   canAfford,
   canTrade,
   cityIdOf,
@@ -60,6 +61,7 @@ import {
   createBottomBar,
   createBuildMenu,
   createConfirmSheet,
+  createEconomySheet,
   createModeBanner,
   createResourceBar,
   createSeedLabel,
@@ -100,7 +102,13 @@ export async function createGame(
 
   const renderer = await createRenderer(appContainer, state, (h) => onTileTap(h));
   const toast = createToast(uiContainer);
-  const resourceBar = createResourceBar(uiContainer);
+  const resourceBar = createResourceBar(uiContainer, {
+    onOverview: () => {
+      resetToIdle();
+      economySheet.open(economyOverview(state, PLAYER));
+    },
+  });
+  const economySheet = createEconomySheet(uiContainer);
   const banner = createModeBanner(uiContainer, () => resetToIdle());
   const confirm = createConfirmSheet(uiContainer);
   const panel = createTileInfoPanel(uiContainer, () => {
@@ -120,6 +128,7 @@ export async function createGame(
   });
   const bottomBar = createBottomBar(uiContainer, {
     onBuild: () => {
+      economySheet.close();
       if (menuOpen || mode.kind === 'placing') {
         resetToIdle();
         return;
@@ -131,6 +140,7 @@ export async function createGame(
       menu.open(stockOf(state), highestLevel(state));
     },
     onRoad: () => {
+      economySheet.close();
       if (mode.kind === 'roadStart' || mode.kind === 'roadEnd') {
         resetToIdle();
         return;
@@ -141,6 +151,7 @@ export async function createGame(
       banner.show(en.flow.roadStartPrompt);
     },
     onUnits: () => {
+      economySheet.close();
       selectNextUnit();
     },
     onEndTurn: () => {
@@ -222,6 +233,17 @@ export async function createGame(
     panel.hide();
   }
 
+  /** Working and free residents of one city. */
+  function cityWorkers(cityId: number): { working: number; free: number } {
+    const assigned = assignWorkers(state, PLAYER, connectedBuildingIds(state, PLAYER));
+    let working = 0;
+    for (const b of state.buildings) {
+      if (b.owner === PLAYER && cityIdOf(state, b) === cityId) working += assigned[b.id] ?? 0;
+    }
+    const residents = state.cities.find((c) => c.id === cityId)?.residents ?? 0;
+    return { working, free: Math.max(0, residents - working) };
+  }
+
   /** Residents and housing summed over the player's cities. */
   function people(): { residents: number; housing: number } {
     let residents = 0;
@@ -240,13 +262,16 @@ export async function createGame(
       statuses[report.buildingId] = report.status;
     }
     renderer.setState(state, statuses, PLAYER);
+    const overview = economyOverview(state, PLAYER);
     resourceBar.update(
       stockOf(state),
       state.lastReport?.delta ?? null,
       state.turn,
       economyConfig.turnLimit,
       people(),
+      overview.workers,
     );
+    if (economySheet.isOpen()) economySheet.open(overview);
     bottomBar.setTurn(state.turn);
     bottomBar.setUnitsEnabled(ownUnits().length > 0);
     if (mode.kind === 'idle') showPanel();
@@ -311,6 +336,7 @@ export async function createGame(
           level: city.level,
           stats: cityStats(afterProduction, cityId),
           check,
+          workers: cityWorkers(cityId),
           stock: stockOf(afterProduction),
           onAdvance: check.to ? () => askAdvance(cityId) : undefined,
         });
@@ -687,6 +713,7 @@ export async function createGame(
     // A tap on the map closes any open sheet or menu and counts as a fresh tap.
     // Cancel path: a build confirm sheet clears the selection marker on cancel.
     confirm.cancel();
+    economySheet.close();
     renderer.setPathPreview(null);
     if (menuOpen) {
       menuOpen = false;

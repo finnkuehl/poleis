@@ -23,7 +23,13 @@ import {
   formatUnitsLost,
   formatCaptured,
   formatAttacked,
+  formatNet,
+  formatRunsOut,
+  formatMade,
+  formatUsed,
+  formatWorkerLine,
 } from './format';
+import type { GoodFlow } from '../core/rules/economy';
 
 describe('i18n/format', () => {
   it('formats goods in display order and skips zeros', () => {
@@ -106,5 +112,31 @@ describe('i18n/format', () => {
   });
   it('fills placeholders', () => {
     expect(fill('Build {building} here?', { building: 'House' })).toBe('Build House here?');
+  });
+  it('formats economy flows', () => {
+    expect(formatNet(4)).toBe('+4');
+    expect(formatNet(-2)).toBe('−2');
+    expect(formatNet(0)).toBe('0');
+    expect(formatRunsOut(0)).toBe('Runs out this turn');
+    expect(formatRunsOut(1)).toBe('Runs out in 1 turn');
+    expect(formatRunsOut(3)).toBe('Runs out in 3 turns');
+    const flow: GoodFlow = {
+      good: 'wood',
+      stock: 5,
+      produced: [{ source: 'woodcutter', amount: 4, count: 2 }],
+      consumed: [
+        { source: 'building', detail: 'sawmill', amount: 2, count: 1 },
+        { source: 'residents', amount: 3, count: 1 },
+        { source: 'units', amount: 1, count: 1 },
+      ],
+      net: -2,
+      turnsLeft: 2,
+    };
+    expect(formatMade(flow)).toBe('Made: Woodcutter ×2 +4');
+    expect(formatUsed(flow)).toBe('Used: Sawmill −2, residents −3, units −1');
+    expect(formatMade({ ...flow, produced: [] })).toBeNull();
+    expect(formatWorkerLine({ residents: 8, housing: 12, working: 6, free: 2, missing: 1 })).toBe(
+      'Residents 8 / 12 · Working 6 · Free 2 · Missing 1',
+    );
   });
 });
