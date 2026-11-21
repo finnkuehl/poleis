@@ -74,12 +74,37 @@ describe('turn order', () => {
     addCity(s, at(0, 0), { radius: 4 });
     addBuilding(s, 'bakery', at(1, 0)); // 2 grain -> 3 bread, 1 worker
     const t = run(s, { type: 'endTurn' });
-    // 3 bread baked, 2 eaten (4 residents), 1 kept; 4 -> 4 residents (no free housing).
-    expect(t.players[0].goods.bread).toBe(1);
+    // 3 bread baked + 1 from the city center, 2 eaten (4 residents), 2 kept; 4 -> 4 residents (no free housing).
+    expect(t.players[0].goods.bread).toBe(2);
     expect(t.players[0].goods.drachmas).toBe(3);
-    expect(t.lastReport?.delta).toEqual({ grain: -2, bread: 1, drachmas: 3 });
+    expect(t.lastReport?.delta).toEqual({ grain: -2, bread: 2, drachmas: 3 });
     expect(t.lastReport?.cities).toHaveLength(1);
     expect(t.lastReport?.cities[0]).toMatchObject({ fed: true, foodEaten: { bread: 2 }, taxes: 3 });
+  });
+});
+
+describe('city center bread', () => {
+  it('a new game without other food never drops below 2 residents', () => {
+    let s = createGameState('bread-test');
+    const residents: number[] = [];
+    for (let i = 0; i < 6; i++) {
+      s = run(s, { type: 'endTurn' });
+      residents.push(s.cities[0].residents);
+    }
+    // Turn 1: 4 residents need 2 bread, only 1 -> 3 residents (starved by 1).
+    // Turn 2: 3 need 2, only 1 -> 2 residents. Then 2 residents eat the 1 bread and are fed;
+    // a fed city with free housing grows by 1, so it swings between 2 and 3 but never lower.
+    expect(residents.slice(0, 2)).toEqual([3, 2]);
+    expect(Math.min(...residents)).toBe(2);
+    expect(Math.max(...residents)).toBeLessThanOrEqual(3);
+  });
+  it('2 residents are fed by the city center bread alone', () => {
+    const s = makeTestState(['ppppp']);
+    addCity(s, at(0, 0), { radius: 2 });
+    s.cities[0].residents = 2;
+    const t = run(s, { type: 'endTurn' });
+    expect(t.lastReport?.cities[0]).toMatchObject({ fed: true, foodEaten: { bread: 1 } });
+    expect(t.players[0].goods.bread).toBe(0);
   });
 });
 

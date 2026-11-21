@@ -82,7 +82,7 @@ Woodcutter ─Wood─┴► Smelter ──Bronze──► Units, wonder
 
 | Building | Placement | Cost | Workers | Per turn | From level |
 |---|---|---|---|---|---|
-| City center | Plains | (start / settler) | – | Storehouse, territory radius 2, +4 housing | Start |
+| City center | Plains | (start / settler) | – | Storehouse, territory radius 2, +4 housing, +1 bread (no workers) | Start |
 | Storehouse | Plains | 4 wood, 2 stone | 0 | additional road connection point | Settlement |
 | House | Plains | 3 wood | 0 | +4 housing | Settlement |
 | Woodcutter | next to forest | 2 wood | 1 | +2 wood | Settlement |
@@ -139,6 +139,7 @@ Every city of a civilization has its own level; the stock is shared.
 
 **Detailed rules (decided in M3)**
 - **Start:** a new city has **4 residents** (its city center is full). Residents live in the city center and the houses in that city's territory and work in that city's buildings.
+- **The city center feeds a little by itself:** it produces **1 bread per turn** without workers. Without other food a city swings between 2 and 3 residents but never gets stuck – a fishery or the bread chain can always be staffed again.
 - **Eating:** fish is eaten first, then bread (bread is kept back for settlers). If food runs short, residents eat what is there and the city loses 1 resident; a city never drops below 1 resident.
 - **Growth** needs only food and free housing; missing oil or wine does not stop growth.
 - **Oil and wine are supplied beforehand:** as soon as oil is in stock, a settlement starts using 1 oil per 10 residents (rounded up) each turn. Turns in a row with enough oil are counted; a turn without enough oil resets the count to 0. Three supplied turns in a row (plus the other requirements) allow the advance to Polis. Wine works the same way for Polis → Metropolis.

@@ -93,13 +93,14 @@ const hillsOrNextToMountains: readonly PlacementOption[] = [
 
 export const BUILDINGS: Record<BuildingId, BuildingDef> = {
   // Start building: storage, +4 housing, claims radius 2. Cannot be built by the player.
+  // Feeds a little by itself (1 bread per turn, no workers), so a city never gets stuck.
   cityCenter: {
     category: 'city',
     placement: onPlains,
     cost: {},
     workers: 0,
     inputs: {},
-    outputs: {},
+    outputs: { bread: 1 },
     housing: 4,
     isStorage: true,
     territoryRadius: 2,

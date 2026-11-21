@@ -22,7 +22,9 @@ describe('perTurnText', () => {
   it('describes housing and storage', () => {
     expect(perTurnText('house')).toBe('Houses 4 residents');
     expect(perTurnText('storehouse')).toBe('Connection point for roads');
-    expect(perTurnText('cityCenter')).toBe('Houses 4 residents. Connection point for roads');
+    expect(perTurnText('cityCenter')).toBe(
+      '+1 Bread. Houses 4 residents. Connection point for roads',
+    );
   });
 });
 
