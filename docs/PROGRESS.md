@@ -2,8 +2,7 @@
 
 ## Next
 
-1. **Multi-turn move orders** (user request) – rules to confirm, see `docs/HANDOVER.md` §5a.
-2. **M5 – First complete game** (AI civilizations, victory, start menu, saving).
+1. **M5 – First complete game** (AI civilizations, victory, start menu, saving) – plan and open questions first.
 
 **Handover for a new session:** see `docs/HANDOVER.md`.
 
@@ -15,6 +14,7 @@
 - **M3 – Population & city levels** (`v0.3.0`): residents eat, grow, starve and pay taxes; city center +1 bread; oil/wine supply streak; advance to Polis/Metropolis; vineyard, winery, marketplace (trading), temple; pause button; city panel; turn summary; test mode `?sandbox`.
 - **Balance pass** (`v0.3.1`): resource buildings on their resource (woodcutter on forest, mine on mountains), border towers, houses hold 6, tap a tile → "Build here".
 - **M4 – Territory & military** (`v0.4.0`): barracks and units, movement (terrain costs, roads, 1-tile rule, explored tiles only), combat with preview (walled city centers), upkeep/healing, capturing, settlers founding cities, fog of war, passive enemy in test mode; workers working/free, "📊 Overview" economy sheet, drag & drop for units. Founding/capturing verified by automated tests only.
+- **Move orders** (`v0.4.1`): send a unit to a far explored tile by drag & drop (or tap + "Go here (N turns)"); it walks on by itself each turn along the cheapest path, shows a faint line with a flag (turn numbers when selected) and stops when it arrives, the way is blocked, a new enemy comes into sight or it is attacked; "Stop" in the unit panel, the "Units" button skips busy units.
 
 ## Known limitations
 

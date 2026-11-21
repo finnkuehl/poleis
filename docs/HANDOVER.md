@@ -10,7 +10,7 @@ Read it together with `CLAUDE.md` (rules), `docs/GAME_DESIGN.md` (game design in
 - **Test mode:** add `&sandbox` → big start stock + a passive red enemy city ~6–9 tiles away (for seed 1: 7 tiles **south** of the player's city). Example: `https://finnkuehl.github.io/poleis/?seed=1&sandbox`.
 - **Done and tagged:** M0 `v0.0.0`, M1 `v0.1.0`, M2 `v0.2.0`, M3 `v0.3.0`, balance pass `v0.3.1`.
 - **M4 – Territory & military is merged as `v0.4.0`** (PR #6): units, combat, capturing, settlers, fog of war, plus the user's overview requests (workers working/free, "📊 Overview" economy sheet, drag & drop for units). The user tested it on desktop: "looks good".
-- **First task in the new session: multi-turn move orders** (see §5a), then M5 – First complete game (see §6).
+- **Multi-turn move orders are done as `v0.4.1`** (§5a, rules in GAME_DESIGN §7 "decided after M4: move orders"). Next: M5 – First complete game (see §6).
 
 ## 2. How we work (important – the user relies on it)
 
@@ -50,7 +50,7 @@ Start 20 wood + 10 stone, city placed automatically; housing/workers full crews 
 - Capturing and founding were verified by automated tests only, not yet in a real browser play-through.
 - Harbor, ships, sea routes (M6); world wonder + temple points (M5); graphics/sound/PWA (M7).
 
-## 5a. First task: multi-turn move orders (user request after M4)
+## 5a. Done: multi-turn move orders (user request after M4, `v0.4.1`)
 
 User's words: "would be nice if I could move units further than they can walk and they move the shortest way according to their movement in the next turns."
 Suggested rules – **confirm them with the user first** (AskUserQuestion, recommendation first), then record them in GAME_DESIGN §7:
