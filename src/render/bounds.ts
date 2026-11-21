@@ -1,10 +1,10 @@
-// Reine Berechnung der Kartenausdehnung (ohne PixiJS, gut testbar).
+// Pure calculation of the map extent (no PixiJS, easy to test).
 import { allHexes } from '../core/map';
 import type { MapState } from '../core/state';
 import { hexToPixel, SQRT3 } from '../core/hex';
 import type { Rect } from './camera';
 
-/** Hülle aller Felder inklusive halber Hexbreite bzw. -höhe als Rand. */
+/** Bounding box of all tiles, including half a hex width/height as margin. */
 export function mapWorldBounds(map: MapState, hexSize: number): Rect {
   let minX = Infinity;
   let minY = Infinity;

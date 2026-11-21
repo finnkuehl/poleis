@@ -1,4 +1,4 @@
-// Zeichnet die Karte einmal statisch (Flächen, Umrisse, Symbole) plus eine Auswahl-Ebene.
+// Draws the map once statically (fills, outlines, symbols) plus a selection layer.
 import { Container, Graphics } from 'pixi.js';
 import { allHexes, inBounds } from '../core/map';
 import { hexCorners, hexToPixel, type Hex, type Point } from '../core/hex';
@@ -39,7 +39,7 @@ function drawMountain(g: Graphics, c: Point, size: number): void {
   const top = { x: c.x, y: c.y - size * 0.5 };
   const baseY = c.y + size * 0.4;
   g.poly([top.x, top.y, c.x + hw, baseY, c.x - hw, baseY]).fill(theme.mountainColor);
-  // weiße Spitze: oberes Drittel des Dreiecks
+  // white peak: top third of the triangle
   const t = 0.35;
   g.poly([
     top.x,

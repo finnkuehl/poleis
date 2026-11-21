@@ -1,8 +1,8 @@
-// Kartengenerator. Ablauf:
-// 1. Rausch-Felder (Küstenform, Höhe, Feuchte)  2. Festland wächst Feld für Feld
-// 3. Inseln  4. Terrain je Landmasse (Berge als Ketten, Hügel, Wald, Rest Ebene)
-// 5. Wasser: Küste oder Ozean.
-// Alles läuft über den Seed-RNG; Gleichstände werden immer über den Index entschieden.
+// Map generator. Steps:
+// 1. Noise fields (coast shape, height, moisture)  2. Mainland grows tile by tile
+// 3. Islands  4. Terrain per landmass (mountains as chains, hills, forest, rest plains)
+// 5. Water: coast or ocean.
+// Everything runs on the seeded RNG; ties are always decided by the index.
 
 import { mapgenConfig as cfg } from '../../data/mapgen';
 import type { TerrainId } from '../../data/terrain';
@@ -17,7 +17,7 @@ export interface GenerateOptions {
 }
 
 export interface MapGenStats {
-  /** Anzahl der Versuche (1 = gleich beim ersten Mal geklappt). */
+  /** Number of attempts (1 = worked on the first try). */
   attempts: number;
 }
 
@@ -25,13 +25,13 @@ interface Grid {
   width: number;
   height: number;
   hexes: Hex[];
-  /** Pixelposition (Hexgröße 1), so verschoben, dass alles >= 0 ist. */
+  /** Pixel position (hex size 1), shifted so that everything is >= 0. */
   px: { x: number; y: number }[];
   pxWidth: number;
   pxHeight: number;
-  /** Nachbar-Indizes (nur Felder innerhalb der Karte), Reihenfolge wie HEX_DIRECTIONS. */
+  /** Neighbor indices (only tiles inside the map), in the same order as HEX_DIRECTIONS. */
   nbrs: number[][];
-  /** Abstand zum Kartenrand in Feldern (0 = Randfeld). */
+  /** Distance to the map edge in tiles (0 = edge tile). */
   edgeDist: number[];
 }
 
@@ -69,7 +69,7 @@ function buildGrid(width: number, height: number): Grid {
   };
 }
 
-/** Abstand jedes Feldes zum nächsten Landfeld (Land = 0), per Breitensuche. */
+/** Distance of every tile to the nearest land tile (land = 0), via breadth-first search. */
 function landDistance(grid: Grid, isLand: boolean[]): number[] {
   const dist = new Array<number>(isLand.length).fill(Infinity);
   const queue: number[] = [];
@@ -97,7 +97,7 @@ function sampleAt(grid: Grid, noise: Noise, i: number): number {
   return noise(grid.px[i].x, grid.px[i].y);
 }
 
-/** Festland: wächst vom besten Feld nahe dem Zentrum nach außen. */
+/** Mainland: grows outward from the best tile near the center. */
 function growMainland(grid: Grid, rng: Rng, shapeNoise: Noise, target: number): number[] | null {
   const shape = cfg.mainlandShape;
   const n = grid.hexes.length;
@@ -107,7 +107,7 @@ function growMainland(grid: Grid, rng: Rng, shapeNoise: Noise, target: number): 
   const shiftAngle = nextFloat(rng) * Math.PI * 2;
   const cx = grid.pxWidth / 2 + Math.cos(shiftAngle) * shape.centerShift * grid.pxWidth;
   const cy = grid.pxHeight / 2 + Math.sin(shiftAngle) * shape.centerShift * grid.pxHeight;
-  // Ellipsenfläche = Fläche der Zielfelder (ein Hexfeld hat die Fläche 1,5·√3).
+  // Ellipse area = area of the target tiles (one hex tile has the area 1.5*sqrt(3)).
   const area = target * 1.5 * Math.sqrt(3);
   const prod = area / Math.PI;
   const a = Math.sqrt(prod * elong);
@@ -129,7 +129,7 @@ function growMainland(grid: Grid, rng: Rng, shapeNoise: Noise, target: number): 
   }
   const valid = (i: number): boolean => grid.edgeDist[i] >= cfg.edgeMargin;
 
-  // Startfeld: gültiges Feld, das dem Zentrum am nächsten liegt.
+  // Start tile: the valid tile closest to the center.
   let start = -1;
   let best = Infinity;
   for (let i = 0; i < n; i++) {
@@ -168,7 +168,7 @@ function growMainland(grid: Grid, rng: Rng, shapeNoise: Noise, target: number): 
   return cells.length === target ? cells : null;
 }
 
-/** Eine Insel wächst aus `start`; null, wenn sie die Mindestgröße nicht erreicht. */
+/** An island grows from `start`; null if it does not reach the minimum size. */
 function growIsland(
   grid: Grid,
   rng: Rng,
@@ -206,7 +206,7 @@ interface TerrainShares {
   forest: number;
 }
 
-/** Verteilt Berge (Ketten), Hügel, Wald und Ebene auf eine Landmasse. */
+/** Distributes mountains (chains), hills, forest and plains over a landmass. */
 function assignTerrain(
   grid: Grid,
   rng: Rng,
@@ -224,12 +224,12 @@ function assignTerrain(
     heightOf.set(c, sampleAt(grid, height, c));
     moistOf.set(c, sampleAt(grid, moisture, c));
   }
-  // 1 = begehbar (noch nicht vergeben), 2 = Berg, 0 = gehört nicht zur Landmasse
+  // 1 = passable (not yet assigned), 2 = mountain, 0 = not part of the landmass
   const kind = new Map<number, number>();
   for (const c of sorted) kind.set(c, 1);
   let passableCount = size;
 
-  /** Bleiben die begehbaren Felder zusammenhängend, wenn `cand` ein Berg wird? */
+  /** Do the passable tiles stay connected if `cand` becomes a mountain? */
   const connectedWithout = (cand: number): boolean => {
     if (passableCount <= 1) return false;
     const start = sorted.find((c) => c !== cand && kind.get(c) === 1);
@@ -247,7 +247,7 @@ function assignTerrain(
     return seen.size === passableCount - 1;
   };
 
-  // Berge als kurze Ketten.
+  // Mountains as short chains.
   const mountainTarget = Math.round(shares.mountains * size);
   let mountains = 0;
   let tries = 0;
@@ -255,7 +255,7 @@ function assignTerrain(
   while (mountains < mountainTarget && tries < maxTries) {
     tries++;
     const free = sorted.filter((c) => kind.get(c) === 1);
-    // Startfeld: aus 5 Zufallskandidaten das höchste (bevorzugt hohes Gelände).
+    // Start tile: the highest of 5 random candidates (prefers high terrain).
     let start = -1;
     for (let k = 0; k < 5; k++) {
       const c = pick(rng, free);
@@ -271,7 +271,7 @@ function assignTerrain(
       mountains++;
       terrain[cur] = 'mountains';
       if (chance(rng, 0.3)) dir += chance(rng, 0.5) ? 1 : -1;
-      // Weiter in Richtung `dir`; ist das Feld unbrauchbar, eine Nachbarrichtung probieren.
+      // Continue in direction `dir`; if that tile is unusable, try a neighboring direction.
       let next = -1;
       for (const d of [dir, dir + 1, dir - 1]) {
         const idx = ((d % 6) + 6) % 6;
@@ -294,7 +294,7 @@ function assignTerrain(
     return list.filter((c) => !chosen.includes(c));
   };
 
-  // Hügel: hohes Gelände, bevorzugt neben Bergen.
+  // Hills: high terrain, preferably next to mountains.
   let rest = sorted.filter((c) => kind.get(c) === 1);
   rest = take(
     rest,
@@ -304,12 +304,12 @@ function assignTerrain(
       (grid.nbrs[c].some((nb) => kind.get(nb) === 2) ? cfg.hillsNearMountainsBonus : 0),
     'hills',
   );
-  // Wald: feuchtes Gelände.
+  // Forest: moist terrain.
   rest = take(rest, Math.round(shares.forest * size), (c) => moistOf.get(c)!, 'forest');
   for (const c of rest) terrain[c] = 'plains';
 }
 
-/** Index des Nachbarn in Richtung `dir` (0..5, wie HEX_DIRECTIONS) oder -1 außerhalb. */
+/** Index of the neighbor in direction `dir` (0..5, like HEX_DIRECTIONS) or -1 if outside. */
 function nbrInDirection(grid: Grid, i: number, dir: number): number {
   const h = grid.hexes[i];
   const dirs = [
@@ -325,7 +325,7 @@ function nbrInDirection(grid: Grid, i: number, dir: number): number {
   return row * grid.width + col;
 }
 
-/** Ein Versuch; null, wenn nicht genug Inseln Platz finden. */
+/** One attempt; null if there is not enough room for the islands. */
 function tryGenerate(grid: Grid, rng: Rng): TerrainId[] | null {
   const n = grid.hexes.length;
   const noiseOf = () => createNoise(rng, grid.pxWidth, grid.pxHeight, cfg.noiseCellSize * 1.5);
@@ -383,9 +383,7 @@ export function generateMapWithStats(
     const tiles = tryGenerate(grid, rng);
     if (tiles) return { map: { width, height, tiles }, rng, stats: { attempts: attempt } };
   }
-  throw new Error(
-    `Kartengenerierung: nach ${cfg.maxAttempts} Versuchen keine gültige Karte (Seed ${seed})`,
-  );
+  throw new Error(`Map generation: no valid map after ${cfg.maxAttempts} attempts (seed ${seed})`);
 }
 
 export function generateMap(

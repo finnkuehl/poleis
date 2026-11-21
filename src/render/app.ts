@@ -1,4 +1,4 @@
-// PixiJS-Anwendung: Canvas, Kartenansicht, Kamera und Feldauswahl.
+// PixiJS application: canvas, map view, camera and tile selection.
 import { Application, Container } from 'pixi.js';
 import { hexEquals, pixelToHex, type Hex } from '../core/hex';
 import { inBounds } from '../core/map';

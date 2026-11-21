@@ -1,4 +1,4 @@
-/* Panels über dem Canvas (mobile first: Bottom Sheet, ab 700 px breite Karte) */
+/* Panels above the canvas (mobile first: bottom sheet, card from 700 px width) */
 .seed-label {
   position: absolute;
   top: calc(8px + env(safe-area-inset-top));

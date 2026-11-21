@@ -1,3 +1,3 @@
-// Spielregeln: Produktion, Straßen-Verbindung, Bevölkerung, Kampf, Territorium, Sieg.
+// Game rules: production, road connections, population, combat, territory, victory.
 
 export {};

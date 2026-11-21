@@ -1,5 +1,5 @@
-// Value-Noise: weiches, zufälliges "Gelände-Rauschen" aus einem groben Gitter.
-// Die Gitterwerte kommen aus dem Seed-RNG, daher ist alles deterministisch.
+// Value noise: smooth, random "terrain noise" built from a coarse grid.
+// The grid values come from the seeded RNG, so everything is deterministic.
 
 import { nextFloat, type Rng } from '../rng';
 
@@ -8,9 +8,9 @@ function smoothstep(t: number): number {
 }
 
 /**
- * Erzeugt eine Rausch-Funktion f(x, y) mit Werten in [0, 1].
- * x/y sind Pixelkoordinaten (Hexgröße 1); width/height ist der abgedeckte Bereich.
- * Jede Oktave halbiert die Zellgröße und die Stärke.
+ * Creates a noise function f(x, y) with values in [0, 1].
+ * x/y are pixel coordinates (hex size 1); width/height is the covered area.
+ * Each octave halves the cell size and the strength.
  */
 export function createNoise(
   rng: Rng,

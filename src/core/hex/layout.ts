@@ -1,5 +1,5 @@
-// Pixel-Umrechnung für pointy-top Hexfelder.
-// `size` ist der Radius vom Mittelpunkt zur Ecke.
+// Pixel conversion for pointy-top hex tiles.
+// `size` is the radius from the center to a corner.
 
 import { hexRound, type Hex } from './coords';
 
@@ -23,7 +23,7 @@ export function pixelToHex(p: Point, size: number): Hex {
   return hexRound(q, r);
 }
 
-/** Die 6 Ecken eines Feldes (Winkel 60° · i − 30°). */
+/** The 6 corners of a tile (angle 60° * i - 30°). */
 export function hexCorners(center: Point, size: number): Point[] {
   const corners: Point[] = [];
   for (let i = 0; i < 6; i++) {

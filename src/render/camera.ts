@@ -1,20 +1,20 @@
 import type { Container } from 'pixi.js';
 import { cameraConfig } from './config';
 
-/** world.position = (x, y), world.scale = zoom; Bildschirm = Welt · zoom + (x, y) */
+/** world.position = (x, y), world.scale = zoom; screen = world * zoom + (x, y) */
 export interface CameraState {
   x: number;
   y: number;
   zoom: number;
 }
-/** Rechteck in Weltkoordinaten (Pixel bei Zoom 1) */
+/** Rectangle in world coordinates (pixels at zoom 1) */
 export interface Rect {
   x: number;
   y: number;
   width: number;
   height: number;
 }
-/** Viewport in CSS-Pixeln */
+/** Viewport in CSS pixels */
 export interface Size {
   width: number;
   height: number;
@@ -39,13 +39,13 @@ export function zoomLimits(world: Rect, viewport: Size, hexSize: number): ZoomLi
   return { min, max };
 }
 
-/** Zoomt so, dass der Weltpunkt unter (sx, sy) an derselben Bildschirmstelle bleibt. */
+/** Zooms so that the world point under (sx, sy) stays at the same screen position. */
 export function zoomAt(cam: CameraState, sx: number, sy: number, newZoom: number): CameraState {
   const w = screenToWorld(cam, sx, sy);
   return { x: sx - w.x * newZoom, y: sy - w.y * newZoom, zoom: newZoom };
 }
 
-/** Begrenzt eine Achse: kleine Karte zentrieren, große höchstens panMarginPx über den Rand. */
+/** Clamps one axis: center a small map, let a large one go at most panMarginPx past the edge. */
 function clampAxis(
   pos: number,
   worldStart: number,
@@ -78,17 +78,17 @@ export function clampCamera(
   };
 }
 
-/** Startansicht: kleinster Zoom, Karte zentriert. */
+/** Start view: minimum zoom, map centered. */
 export function fitCamera(world: Rect, viewport: Size, limits: ZoomLimits): CameraState {
   return clampCamera({ x: 0, y: 0, zoom: limits.min }, world, viewport, limits);
 }
 
 export interface CameraOptions {
-  /** Weltgrenzen der Karte */
+  /** World bounds of the map */
   world: Rect;
-  /** Hex-Radius in Weltpixeln (für die Zoom-Grenze) */
+  /** Hex radius in world pixels (for the zoom limit) */
   hexSize: number;
-  /** Tippen/Klick an Bildschirmposition (relativ zur Canvas-Ecke) */
+  /** Tap/click at a screen position (relative to the canvas corner) */
   onTap: (sx: number, sy: number) => void;
 }
 
@@ -97,7 +97,7 @@ interface PointerInfo {
   y: number;
 }
 
-/** Steuert die Kamera per Pointer Events (Maus, Touch, Stift) und Mausrad. */
+/** Controls the camera via pointer events (mouse, touch, pen) and mouse wheel. */
 export class CameraController {
   private readonly canvas: HTMLCanvasElement;
   private readonly target: Container;
@@ -107,13 +107,13 @@ export class CameraController {
   private cam: CameraState;
 
   private readonly pointers = new Map<number, PointerInfo>();
-  /** Startposition des einzelnen Fingers (für die Tipp-Schwelle) */
+  /** Start position of the single finger (for the tap threshold) */
   private startX = 0;
   private startY = 0;
   private lastX = 0;
   private lastY = 0;
   private dragging = false;
-  /** In dieser Geste waren zwei Finger im Spiel: kein Tippen mehr */
+  /** Two fingers were involved in this gesture: no longer a tap */
   private multiTouch = false;
   private pinchDist = 0;
   private pinchMidX = 0;
@@ -163,7 +163,7 @@ export class CameraController {
     this.pointers.clear();
   }
 
-  /** Begrenzt den Ziel-Zoom, damit zoomAt am Limit die Ansicht nicht verschiebt. */
+  /** Clamps the target zoom so that zoomAt does not shift the view at the limit. */
   private clampZoom(zoom: number): number {
     return Math.min(this.limits.max, Math.max(this.limits.min, zoom));
   }
@@ -178,7 +178,7 @@ export class CameraController {
     this.target.scale.set(this.cam.zoom);
   }
 
-  /** Pointer-Position in Canvas-Koordinaten (CSS-Pixel) */
+  /** Pointer position in canvas coordinates (CSS pixels) */
   private local(e: PointerEvent | WheelEvent): PointerInfo {
     const r = this.canvas.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
@@ -193,7 +193,7 @@ export class CameraController {
     };
   }
 
-  /** Setzt den Startpunkt des (einzigen) verbleibenden Fingers neu, damit nichts springt. */
+  /** Resets the start point of the (only) remaining finger so nothing jumps. */
   private resetSingle(): void {
     const p = [...this.pointers.values()][0];
     this.startX = this.lastX = p.x;
@@ -207,7 +207,7 @@ export class CameraController {
     try {
       this.canvas.setPointerCapture(e.pointerId);
     } catch {
-      // Pointer evtl. schon weg – unkritisch
+      // Pointer may already be gone - not critical
     }
     if (this.pointers.size === 1) {
       this.multiTouch = false;
@@ -265,16 +265,16 @@ export class CameraController {
     try {
       this.canvas.releasePointerCapture(e.pointerId);
     } catch {
-      // schon freigegeben – unkritisch
+      // already released - not critical
     }
     if (this.pointers.size === 2) {
-      // 3 → 2 Finger: Pinch-Ausgangswerte neu setzen, damit nichts springt
+      // 3 -> 2 fingers: reset the pinch starting values so nothing jumps
       const pinch = this.readPinch();
       this.pinchDist = pinch.dist;
       this.pinchMidX = pinch.midX;
       this.pinchMidY = pinch.midY;
     } else if (this.pointers.size === 1) {
-      // 2 → 1 Finger: Rest zieht weiter, ohne Sprung
+      // 2 -> 1 finger: the remaining one keeps dragging, without a jump
       this.dragging = true;
       this.resetSingle();
     }

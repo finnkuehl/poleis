@@ -1,11 +1,11 @@
-// Farben und Schrift der Darstellung (kein Balancing, nur Optik).
+// Colors and font of the rendering (no balancing, looks only).
 import type { TerrainId } from '../data/terrain';
 
 export const theme = {
-  /** Hintergrund: etwas dunkler als der Ozean */
+  /** Background: slightly darker than the ocean */
   background: 0x15384a,
   fontFamily: "Georgia, 'Times New Roman', serif",
-  /** Flächenfarbe je Terrain (mediterrane Palette) */
+  /** Fill color per terrain (Mediterranean palette) */
   terrainColors: {
     ocean: 0x1f4e63,
     coast: 0x3d8ea3,
@@ -14,16 +14,16 @@ export const theme = {
     hills: 0xc2a36b,
     mountains: 0x8a8178,
   } satisfies Record<TerrainId, number>,
-  /** Symbole auf den Feldern */
+  /** Symbols on the tiles */
   treeColor: 0x2c5a26,
   hillColor: 0x7a5a30,
   mountainColor: 0x5e574f,
   mountainPeakColor: 0xffffff,
-  /** Umrisslinie der Felder: dunkel, durchscheinend */
+  /** Outline of the tiles: dark, translucent */
   outlineColor: 0x0b1f2a,
   outlineAlpha: 0.35,
   outlineWidth: 1,
-  /** Auswahl: weißer Umriss + leichte Füllung */
+  /** Selection: white outline + light fill */
   selectionColor: 0xffffff,
   selectionWidth: 3,
   selectionFillAlpha: 0.15,

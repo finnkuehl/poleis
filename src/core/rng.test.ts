@@ -7,19 +7,19 @@ const seq = (seed: number, n: number) => {
 };
 
 describe('rng', () => {
-  it('gleicher Seed liefert gleiche Folge, anderer Seed andere', () => {
+  it('same seed gives the same sequence, a different seed a different one', () => {
     expect(seq(1, 100)).toEqual(seq(1, 100));
     expect(seq(1, 100)).not.toEqual(seq(2, 100));
   });
 
-  it('nextFloat liegt in [0,1)', () => {
+  it('nextFloat lies in [0,1)', () => {
     for (const v of seq(7, 1000)) {
       expect(v).toBeGreaterThanOrEqual(0);
       expect(v).toBeLessThan(1);
     }
   });
 
-  it('nextInt hält Grenzen ein und trifft beide Enden', () => {
+  it('nextInt respects the bounds and hits both ends', () => {
     const rng = createRng(3);
     const seen = new Set<number>();
     for (let i = 0; i < 1000; i++) {
@@ -32,13 +32,13 @@ describe('rng', () => {
     expect(seen.has(5)).toBe(true);
   });
 
-  it('chance respektiert 0 und 1', () => {
+  it('chance respects 0 and 1', () => {
     const rng = createRng(9);
     expect(chance(rng, 0)).toBe(false);
     expect(chance(rng, 1)).toBe(true);
   });
 
-  it('ist JSON-serialisierbar und setzt die Folge identisch fort', () => {
+  it('is JSON-serializable and continues the sequence identically', () => {
     const a = createRng(42);
     for (let i = 0; i < 10; i++) nextFloat(a);
     const b = JSON.parse(JSON.stringify(a)) as typeof a;
@@ -46,7 +46,7 @@ describe('rng', () => {
     expect(nextFloat(b)).toBe(nextFloat(a));
   });
 
-  it('shuffle ist eine Permutation, pick wirft bei leerer Liste', () => {
+  it('shuffle is a permutation, pick throws on an empty list', () => {
     const items = [1, 2, 3, 4, 5, 6, 7, 8];
     const result = shuffle(createRng(5), [...items]);
     expect([...result].sort((x, y) => x - y)).toEqual(items);

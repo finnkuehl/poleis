@@ -1,3 +1,3 @@
-// Speichern/Laden (localStorage bzw. IndexedDB) mit Save-Versionsnummer und Migration.
+// Saving/loading (localStorage or IndexedDB) with save version number and migration.
 
 export {};

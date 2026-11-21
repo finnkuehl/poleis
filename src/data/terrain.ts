@@ -1,20 +1,20 @@
-// Terrain-Werte (siehe docs/GAME_DESIGN.md, Abschnitt 3).
-// Hier stehen nur Zahlen und Regeln, keine Texte (Namen kommen aus i18n).
+// Terrain values (see docs/GAME_DESIGN.md, section 3).
+// Only numbers and rules live here, no texts (names come from i18n).
 
 export type TerrainId = 'ocean' | 'coast' | 'plains' | 'forest' | 'hills' | 'mountains';
 
 export interface TerrainDef {
-  /** Wasserfeld? Wasser können nur Schiffe befahren. */
+  /** Water tile? Only ships can travel on water. */
   isWater: boolean;
-  /** Bewegungskosten für Landeinheiten. null = nicht betretbar (Wasser: nur Schiffe, Berg: unpassierbar). */
+  /** Movement cost for land units. null = cannot be entered (water: ships only, mountains: impassable). */
   moveCost: number | null;
-  /** Verteidigungs-Multiplikator (1.5 = 50 % stärker). null = kein Bonus ("–"). */
+  /** Defense multiplier (1.5 = 50 % stronger). null = no bonus ("–"). */
   defenseBonus: number | null;
-  /** Darf man direkt auf das Feld bauen? (Wald: nein, Holzfäller steht daneben.) */
+  /** Can you build directly on the tile? (Forest: no, the woodcutter stands next to it.) */
   buildable: boolean;
 }
 
-/** Alle Terrain-Arten in fester Reihenfolge (z. B. für Schleifen und Tests). */
+/** All terrain types in a fixed order (e.g. for loops and tests). */
 export const TERRAIN_IDS: readonly TerrainId[] = [
   'ocean',
   'coast',
@@ -25,16 +25,16 @@ export const TERRAIN_IDS: readonly TerrainId[] = [
 ];
 
 export const TERRAIN: Record<TerrainId, TerrainDef> = {
-  // Tiefes Wasser, nur für Schiffe.
+  // Deep water, ships only.
   ocean: { isWater: true, moveCost: null, defenseBonus: null, buildable: false },
-  // Wasser direkt neben Land; Fischer und Hafen grenzen daran.
+  // Water right next to land; fishery and harbor are built next to it.
   coast: { isWater: true, moveCost: null, defenseBonus: null, buildable: false },
-  // Standardfeld: 1 Bewegungspunkt, bebaubar.
+  // Standard tile: 1 movement point, buildable.
   plains: { isWater: false, moveCost: 1, defenseBonus: 1.0, buildable: true },
-  // Holzquelle: 2 Bewegungspunkte, Verteidigung x1,5, nicht direkt bebaubar.
+  // Wood source: 2 movement points, defense x1.5, not directly buildable.
   forest: { isWater: false, moveCost: 2, defenseBonus: 1.5, buildable: false },
-  // Steinbruch, Mine, Weinberg: 2 Bewegungspunkte, Verteidigung x1,5, bebaubar.
+  // Quarry, mine, vineyard: 2 movement points, defense x1.5, buildable.
   hills: { isWater: false, moveCost: 2, defenseBonus: 1.5, buildable: true },
-  // Unpassierbar, nicht bebaubar (Mine/Steinbruch stehen daneben).
+  // Impassable, not buildable (mine/quarry stand next to it).
   mountains: { isWater: false, moveCost: null, defenseBonus: null, buildable: false },
 };

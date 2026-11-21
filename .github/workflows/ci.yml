@@ -1,4 +1,4 @@
-# Prüft bei jedem Push, ob das Projekt sauber ist.
+# Checks on every push that the project is in good shape.
 name: CI
 
 on:
@@ -9,20 +9,20 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      # Code aus dem Repository holen
+      # Fetch the code from the repository
       - uses: actions/checkout@v5
-      # Node.js in der Version aus .nvmrc einrichten (npm-Cache beschleunigt es)
+      # Set up Node.js in the version from .nvmrc (the npm cache speeds it up)
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
           cache: npm
-      # Abhängigkeiten exakt nach package-lock.json installieren
+      # Install dependencies exactly as in package-lock.json
       - run: npm ci
-      # TypeScript-Typen prüfen
+      # Check TypeScript types
       - run: npm run typecheck
-      # Codestil und Architekturregeln prüfen
+      # Check code style and architecture rules
       - run: npm run lint
-      # Unit-Tests ausführen
+      # Run unit tests
       - run: npm test
-      # Kontrolle, dass sich das Spiel bauen lässt
+      # Make sure the game can be built
       - run: npm run build

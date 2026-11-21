@@ -1,3 +1,3 @@
-// endTurn(state): Produktion, Verbrauch, Wachstum, nächster Spieler.
+// endTurn(state): production, consumption, growth, next player.
 
 export {};

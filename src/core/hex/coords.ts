@@ -1,18 +1,18 @@
-// Axiale Hex-Koordinaten (pointy-top), Grundlage: redblobgames.com/grids/hexagons
-// Reine Funktionen ohne Zustand.
+// Axial hex coordinates (pointy-top), based on redblobgames.com/grids/hexagons
+// Pure functions without state.
 
 export interface Hex {
   q: number;
   r: number;
 }
 
-/** Offset-Koordinaten (odd-r: ungerade Zeilen nach rechts verschoben). */
+/** Offset coordinates (odd-r: odd rows shifted to the right). */
 export interface Offset {
   col: number;
   row: number;
 }
 
-/** Richtungen in der Reihenfolge O, NO, NW, W, SW, SO (pointy-top). */
+/** Directions in the order E, NE, NW, W, SW, SE (pointy-top). */
 export const HEX_DIRECTIONS: readonly Hex[] = [
   { q: 1, r: 0 },
   { q: 1, r: -1 },
@@ -22,7 +22,7 @@ export const HEX_DIRECTIONS: readonly Hex[] = [
   { q: 0, r: 1 },
 ];
 
-// "+ 0" wandelt -0 in 0 um (Object.is unterscheidet beide).
+// "+ 0" turns -0 into 0 (Object.is tells them apart).
 const norm = (n: number): number => n + 0;
 
 export function hex(q: number, r: number): Hex {
@@ -37,7 +37,7 @@ export function hexEquals(a: Hex, b: Hex): boolean {
   return a.q === b.q && a.r === b.r;
 }
 
-/** Schlüssel "q,r" für Set/Map außerhalb des States. */
+/** Key "q,r" for Set/Map outside the state. */
 export function hexKey(h: Hex): string {
   return `${h.q},${h.r}`;
 }
@@ -57,11 +57,11 @@ export function distance(a: Hex, b: Hex): number {
   return (Math.abs(dq) + Math.abs(dr) + Math.abs(dq + dr)) / 2;
 }
 
-/** Alle Felder mit exakt `radius` Abstand (radius 0 → nur das Zentrum). */
+/** All tiles at exactly `radius` distance (radius 0 -> only the center). */
 export function ring(center: Hex, radius: number): Hex[] {
   if (radius <= 0) return [hex(center.q, center.r)];
   const results: Hex[] = [];
-  // Start im Südwesten (SW · radius), dann einmal rund herum.
+  // Start in the south-west (SW * radius), then once all the way around.
   let current = hex(
     center.q + HEX_DIRECTIONS[4].q * radius,
     center.r + HEX_DIRECTIONS[4].r * radius,
@@ -75,7 +75,7 @@ export function ring(center: Hex, radius: number): Hex[] {
   return results;
 }
 
-/** Alle Felder mit distance ≤ radius. */
+/** All tiles with distance <= radius. */
 export function range(center: Hex, radius: number): Hex[] {
   const results: Hex[] = [];
   for (let dq = -radius; dq <= radius; dq++) {
@@ -88,7 +88,7 @@ export function range(center: Hex, radius: number): Hex[] {
   return results;
 }
 
-/** Rundet gebrochene axiale Koordinaten auf das nächste Feld (Cube-Rounding). */
+/** Rounds fractional axial coordinates to the nearest tile (cube rounding). */
 export function hexRound(q: number, r: number): Hex {
   const s = -q - r;
   let rq = Math.round(q);
@@ -105,11 +105,11 @@ export function hexRound(q: number, r: number): Hex {
   return hex(rq, rr);
 }
 
-/** Gerade Linie von a nach b, inkl. Start und Ziel (distance + 1 Felder). */
+/** Straight line from a to b, including start and end (distance + 1 tiles). */
 export function line(a: Hex, b: Hex): Hex[] {
   const n = distance(a, b);
   if (n === 0) return [hex(a.q, a.r)];
-  // Kleiner Versatz, damit Punkte exakt auf Kanten deterministisch gerundet werden.
+  // Small offset so that points exactly on edges are rounded deterministically.
   const eps = 1e-6;
   const aq = a.q + eps;
   const ar = a.r + eps * 2;
@@ -123,13 +123,13 @@ export function line(a: Hex, b: Hex): Hex[] {
   return results;
 }
 
-/** Axial → Offset (odd-r). */
+/** Axial -> offset (odd-r). */
 export function axialToOffset(h: Hex): Offset {
   const col = h.q + (h.r - (h.r & 1)) / 2;
   return { col: norm(col), row: norm(h.r) };
 }
 
-/** Offset (odd-r) → Axial. */
+/** Offset (odd-r) -> axial. */
 export function offsetToAxial(o: Offset): Hex {
   const q = o.col - (o.row - (o.row & 1)) / 2;
   return hex(q, o.row);

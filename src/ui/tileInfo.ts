@@ -1,7 +1,7 @@
-// Infopanel für ein angetipptes Feld (Bottom Sheet am Handy, Karte am Desktop).
+// Info panel for a tapped tile (bottom sheet on phones, card on desktop).
 import { axialToOffset, type Hex } from '../core/hex';
 import { TERRAIN, type TerrainId } from '../data/terrain';
-import { de } from '../i18n/de';
+import { en } from '../i18n/en';
 import { theme } from '../render/theme';
 
 export interface InfoRow {
@@ -9,14 +9,14 @@ export interface InfoRow {
   value: string;
 }
 
-/** Zeilen des Infopanels für ein Terrain (reine Funktion, ohne DOM). */
+/** Rows of the info panel for a terrain (pure function, no DOM). */
 export function tileInfoRows(terrain: TerrainId): InfoRow[] {
   const def = TERRAIN[terrain];
-  const t = de.tileInfo;
+  const t = en.tileInfo;
   let movement: string;
-  if (def.moveCost !== null) movement = def.moveCost.toLocaleString('de-DE');
+  if (def.moveCost !== null) movement = def.moveCost.toLocaleString('en-US');
   else movement = def.isWater ? t.shipsOnly : t.impassable;
-  const defense = def.defenseBonus !== null ? `×${def.defenseBonus.toLocaleString('de-DE')}` : '–';
+  const defense = def.defenseBonus !== null ? `×${def.defenseBonus.toLocaleString('en-US')}` : '–';
   return [
     { label: t.movement, value: movement },
     { label: t.defense, value: defense },
@@ -51,7 +51,7 @@ export function createTileInfoPanel(
   close.type = 'button';
   close.className = 'tile-info__close';
   close.textContent = '✕';
-  close.setAttribute('aria-label', de.tileInfo.close);
+  close.setAttribute('aria-label', en.tileInfo.close);
   header.append(swatch, titles, close);
 
   const list = document.createElement('dl');
@@ -79,8 +79,8 @@ export function createTileInfoPanel(
     show(h, terrain) {
       const { col, row } = axialToOffset(h);
       swatch.style.background = cssColor(theme.terrainColors[terrain]);
-      title.textContent = de.terrain[terrain];
-      coords.textContent = `${de.tileInfo.tile} ${col + 1}/${row + 1}`;
+      title.textContent = en.terrain[terrain];
+      coords.textContent = `${en.tileInfo.tile} ${col + 1}/${row + 1}`;
       list.replaceChildren();
       for (const r of tileInfoRows(terrain)) {
         const wrap = document.createElement('div');
@@ -92,7 +92,7 @@ export function createTileInfoPanel(
         wrap.append(dt, dd);
         list.appendChild(wrap);
       }
-      note.textContent = de.terrainNote[terrain];
+      note.textContent = en.terrainNote[terrain];
       panel.hidden = false;
     },
     hide,

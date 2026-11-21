@@ -1,3 +1,3 @@
-// KI-Spieler; benutzt ausschließlich dieselben Actions wie der Mensch.
+// AI players; they use exactly the same actions as the human.
 
 export {};

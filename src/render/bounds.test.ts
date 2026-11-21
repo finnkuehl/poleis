@@ -8,7 +8,7 @@ const map: MapState = { width: 5, height: 4, tiles: Array(20).fill('ocean') };
 const size = 32;
 
 describe('mapWorldBounds', () => {
-  it('enthält alle Feldmittelpunkte plus halbe Hexbreite/-höhe Rand', () => {
+  it('contains all tile centers plus half a hex width/height as margin', () => {
     const b = mapWorldBounds(map, size);
     for (const h of allHexes(map)) {
       const p = hexToPixel(h, size);
@@ -19,11 +19,11 @@ describe('mapWorldBounds', () => {
     }
   });
 
-  it('ist eng: mindestens ein Feld berührt jeden Rand', () => {
+  it('is tight: at least one tile touches each edge', () => {
     const b = mapWorldBounds(map, size);
     expect(b.width).toBeGreaterThan(0);
     expect(b.height).toBeGreaterThan(0);
-    // Höhe: 4 Zeilen, Zeilenabstand 1,5·size, plus 2·size Feldhöhe
+    // Height: 4 rows, row spacing 1.5*size, plus 2*size tile height
     expect(b.height).toBeCloseTo(3 * 1.5 * size + 2 * size);
   });
 });

@@ -1,3 +1,3 @@
-// Alle Spieleraktionen und applyAction(state, action) → neuer State oder Fehler.
+// All player actions and applyAction(state, action) -> new state or error.
 
 export {};

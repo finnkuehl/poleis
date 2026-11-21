@@ -1,33 +1,33 @@
-// Einstiegspunkt: liest den Seed, startet die Darstellung und zeigt bei Fehlern eine Meldung.
+// Entry point: reads the seed, starts the renderer and shows a message on errors.
 import './style.css';
 import './ui/ui.css';
 import { terrainAt } from './core/map';
 import { createGameState } from './core/state';
 import { mapgenConfig } from './data/mapgen';
-import { de } from './i18n/de';
+import { en } from './i18n/en';
 import { createRenderer, type Renderer } from './render/app';
 import { createSeedLabel, createTileInfoPanel } from './ui';
 
-// iOS-Safari: Pinch-Zoom der ganzen Seite verhindern
+// iOS Safari: prevent pinch-zoom of the whole page
 document.addEventListener('gesturestart', (event) => event.preventDefault());
 
-/** Seed aus `?seed=…` (getrimmt, gekürzt); fehlt er, wird einer gewürfelt und in die URL geschrieben. */
+/** Seed from `?seed=...` (trimmed, shortened); if missing, one is rolled and written into the URL. */
 function readSeed(): string {
   const url = new URL(window.location.href);
   const param = url.searchParams.get('seed')?.trim().slice(0, mapgenConfig.seedMaxLength);
   if (param) return param;
   const seed = String(Math.floor(Math.random() * mapgenConfig.randomSeedRange));
   url.searchParams.set('seed', seed);
-  // Pfad und Hash bleiben erhalten (GitHub Pages unter /poleis/)
+  // Path and hash are kept (GitHub Pages lives under /poleis/)
   history.replaceState(null, '', url);
   return seed;
 }
 
-/** Zeigt die Fehlermeldung über der (leeren) Karte an. */
+/** Shows the error message above the (empty) map. */
 function showError(ui: HTMLElement, error: unknown): void {
   console.error(error);
   const message = document.createElement('p');
-  message.textContent = de.renderError;
+  message.textContent = en.renderError;
   message.style.cssText = 'color:#f4e9d8;font-family:Georgia,serif;padding:24px;text-align:center;';
   ui.appendChild(message);
 }
@@ -53,7 +53,7 @@ const appContainer = document.getElementById('app');
 const uiContainer = document.getElementById('ui');
 
 if (appContainer && uiContainer) {
-  // Auch Fehler bei der Kartenerzeugung sollen als Meldung sichtbar werden
+  // Errors during map generation should also become a visible message
   try {
     start(appContainer, uiContainer);
   } catch (error) {
