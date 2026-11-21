@@ -3,3 +3,4 @@
 
 export { generateMap, generateMapWithStats } from './generate';
 export { findLandmasses, isPassableConnected } from './landmass';
+export { findStartPositions } from './startPositions';

@@ -1,5 +1,5 @@
-// Axiale Hex-Koordinaten (q, r): Nachbarn, Distanz, Ringe, Linien, Pixel-Umrechnung.
-// A*-Wegfindung folgt erst in M4.
+// Axial hex coordinates (q, r): neighbors, distance, rings, lines, pixel conversion, A* pathfinding.
 
 export * from './coords';
 export * from './layout';
+export * from './pathfinding';

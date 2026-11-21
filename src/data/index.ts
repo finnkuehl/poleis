@@ -5,3 +5,7 @@
 
 export * from './terrain';
 export * from './mapgen';
+export * from './goods';
+export * from './buildings';
+export * from './economy';
+export * from './startPosition';
