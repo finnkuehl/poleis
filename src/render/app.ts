@@ -1,9 +1,23 @@
-// PixiJS-Anwendung: erzeugt den Canvas und zeichnet (vorerst) nur den Titel.
-import { Application, Text } from 'pixi.js';
-import { de } from '../i18n/de';
+// PixiJS-Anwendung: Canvas, Kartenansicht, Kamera und Feldauswahl.
+import { Application, Container } from 'pixi.js';
+import { hexEquals, pixelToHex, type Hex } from '../core/hex';
+import { inBounds } from '../core/map';
+import type { GameState } from '../core/state';
+import { CameraController, screenToWorld } from './camera';
+import { hexSize } from './config';
+import { createMapView } from './map';
 import { theme } from './theme';
 
-export async function createRenderer(container: HTMLElement): Promise<Application> {
+export interface Renderer {
+  app: Application;
+  selectTile(h: Hex | null): void;
+}
+
+export async function createRenderer(
+  container: HTMLElement,
+  state: GameState,
+  onSelect: (h: Hex | null) => void,
+): Promise<Renderer> {
   const app = new Application();
   await app.init({
     background: theme.background,
@@ -14,25 +28,37 @@ export async function createRenderer(container: HTMLElement): Promise<Applicatio
   });
   container.appendChild(app.canvas);
 
-  const title = new Text({
-    text: de.gameTitle,
-    style: {
-      fill: theme.titleColor,
-      fontFamily: theme.fontFamily,
-      fontSize: 48,
+  const world = new Container();
+  app.stage.addChild(world);
+  const view = createMapView(state.map);
+  world.addChild(view.container);
+
+  let selected: Hex | null = null;
+  const selectTile = (h: Hex | null): void => {
+    selected = h;
+    view.setSelection(h);
+  };
+
+  const controller = new CameraController(app.canvas, world, {
+    world: view.bounds,
+    hexSize,
+    onTap: (sx, sy) => {
+      const w = screenToWorld(controller.state, sx, sy);
+      const h = pixelToHex(w, hexSize);
+      if (!inBounds(state.map, h) || (selected && hexEquals(selected, h))) {
+        selectTile(null);
+        onSelect(null);
+      } else {
+        selectTile(h);
+        onSelect(h);
+      }
     },
   });
-  title.anchor.set(0.5);
-  app.stage.addChild(title);
+  controller.setViewport({ width: app.screen.width, height: app.screen.height });
+  controller.fit();
+  app.renderer.on('resize', (w: number, h: number) => {
+    controller.setViewport({ width: w, height: h });
+  });
 
-  // Titel mittig setzen und Schriftgröße an die kürzere Bildschirmseite anpassen
-  const layout = (): void => {
-    const { width, height } = app.screen;
-    title.style.fontSize = Math.round(Math.min(width, height) * theme.titleSizeRatio);
-    title.position.set(width / 2, height / 2);
-  };
-  layout();
-  app.renderer.on('resize', layout);
-
-  return app;
+  return { app, selectTile };
 }

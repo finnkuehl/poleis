@@ -12,3 +12,6 @@ export const cameraConfig = {
   /** Mausrad-Empfindlichkeit (größer = schnelleres Zoomen) */
   wheelZoomSpeed: 0.0015,
 } as const;
+
+/** Größe der Hexfelder: Radius vom Mittelpunkt zur Ecke in Weltpixeln (bei Zoom 1) */
+export const hexSize = 32;
