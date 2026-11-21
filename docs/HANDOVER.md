@@ -49,7 +49,7 @@ Start 20 wood + 10 stone, city placed automatically; housing/workers full crews 
 
 ## 5. Known limitations / backlog
 
-- AI balance is untested by the user: AIs may grow faster than a beginner (Polis/Metropolis by turn ~50 in simulations); tune in `src/data/ai.ts` (M7 balance pass at the latest). AIs plateau around 40 residents when no wish is left, cannot demolish, and stall on very cramped starts.
+- AI balance is untested by the user: AIs may grow faster than a beginner (Polis/Metropolis by turn ~50 in simulations); tune in `src/data/ai.ts` (M7 balance pass at the latest). AIs plateau around 40 residents when no wish is left, cannot demolish, and stall on very cramped starts; Sparta's economy sometimes stalls (planks/food), so it then attacks little.
 - Any land unit except settlers captures cities – also AI scouts (legal per rules; ask the user if this should change).
 - AI turns have no animation (M7). "Main menu" and in-game "Load" reload the page. Test mode (`&sandbox`) does not autosave.
 - Harbor, ships, sea routes (M6); graphics/sound/PWA (M7). `npm test` takes ~15–20 s because of the AI simulations.
