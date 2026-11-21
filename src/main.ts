@@ -31,8 +31,9 @@ function showError(ui: HTMLElement, error: unknown): void {
 }
 
 function start(appContainer: HTMLElement, uiContainer: HTMLElement): void {
-  const state = createGameState(readSeed());
-  createGame(appContainer, uiContainer, state).catch((error: unknown) =>
+  const sandbox = new URL(window.location.href).searchParams.has('sandbox');
+  const state = createGameState(readSeed(), { sandbox });
+  createGame(appContainer, uiContainer, state, sandbox).catch((error: unknown) =>
     showError(uiContainer, error),
   );
 }

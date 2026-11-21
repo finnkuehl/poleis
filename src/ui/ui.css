@@ -516,6 +516,7 @@
 
 /* ---------- Toast ---------- */
 .toast {
+  white-space: pre-line;
   position: absolute;
   top: calc(var(--bar-h) + var(--safe-top) + 64px);
   left: 50%;
@@ -589,4 +590,149 @@
   .toast {
     transition: none;
   }
+}
+
+/* ---------- City panel, pause button, marketplace, locked build items ---------- */
+.tile-info {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(
+    100vh - var(--bar-h) - var(--bottom-h) - var(--safe-top) - var(--safe-bottom) - 24px
+  );
+  max-height: calc(
+    100dvh - var(--bar-h) - var(--bottom-h) - var(--safe-top) - var(--safe-bottom) - 24px
+  );
+}
+.tile-info__content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+.tile-info__bullet {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+.tile-info__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.tile-info__actions .btn {
+  flex: 1;
+}
+
+.city-next {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--marble-edge);
+}
+.city-next__title {
+  margin: 0 0 6px;
+  font: 700 17px/1.2 var(--font-serif);
+}
+.city-next__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.city-next__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 4px 0;
+  font-variant-numeric: tabular-nums;
+}
+.city-next__row.is-done {
+  color: var(--ink-soft);
+}
+.check {
+  flex: none;
+  width: 18px;
+  color: var(--ink-soft);
+  text-align: center;
+}
+.check.is-done {
+  color: var(--bronze-deep);
+  font-weight: 700;
+}
+.city-next__button {
+  width: 100%;
+  margin-top: 10px;
+}
+.city-next__reason {
+  margin: 8px 0 0;
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+.city-next__top {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.trade {
+  margin: 8px 0 4px;
+}
+.trade__rates,
+.trade__hint {
+  margin: 0 0 6px;
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+.trade__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.trade__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  border-bottom: 1px solid var(--marble-edge);
+}
+.trade__icon {
+  flex: none;
+  width: 30px;
+  font-size: 22px;
+  text-align: center;
+}
+.trade__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+.trade__name {
+  font-weight: 600;
+}
+.trade__amount {
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+.trade__button {
+  flex: none;
+  min-width: 72px;
+  min-height: 44px;
+  padding: 0 10px;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.trade__toggle {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 8px;
+}
+
+.build-item.is-locked {
+  cursor: default;
+}
+.build-item__level {
+  color: var(--ink-soft);
+  font-weight: 600;
 }

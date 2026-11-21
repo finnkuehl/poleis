@@ -79,11 +79,13 @@ export interface GameState {
 }
 
 /** New game: seed text -> map; the RNG state is the one after generation. */
-export function createGameState(seedText: string): GameState {
+export function createGameState(seedText: string, options: { sandbox?: boolean } = {}): GameState {
   const { map, rng } = generateMap(seedFromText(seedText));
   const goods = {} as Stock;
   for (const id of GOOD_IDS) goods[id] = 0;
-  for (const [id, amount] of Object.entries(economyConfig.startGoods)) {
+  for (const [id, amount] of Object.entries(
+    options.sandbox ? economyConfig.sandboxGoods : economyConfig.startGoods,
+  )) {
     goods[id as keyof Stock] = amount;
   }
   // Starting city: same RNG as the map generation, so everything depends on the seed only.

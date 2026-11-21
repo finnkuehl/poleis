@@ -8,6 +8,16 @@ import { createGameState } from './state';
 import { addBuilding, addCity, addRoad, at, makeTestState } from './testing';
 import { endTurn } from './turn';
 
+describe('createGameState sandbox', () => {
+  it('starts with the big sandbox stock but the same city', () => {
+    const normal = createGameState('sb');
+    const sandbox = createGameState('sb', { sandbox: true });
+    expect(sandbox.players[0].goods).toMatchObject(economyConfig.sandboxGoods);
+    expect(sandbox.cities).toEqual(normal.cities);
+    expect(sandbox.map).toEqual(normal.map);
+  });
+});
+
 describe('createGameState', () => {
   const s = createGameState('start-city');
   it('creates the starting city with 4 residents and its territory', () => {

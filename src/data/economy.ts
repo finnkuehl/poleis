@@ -3,6 +3,22 @@
 export const economyConfig = {
   // Goods the player owns at the start of a game.
   startGoods: { wood: 20, stone: 10 },
+  // Only used in test mode (?sandbox in the address): a big stock to test long progressions quickly.
+  sandboxGoods: {
+    wood: 200,
+    stone: 200,
+    planks: 100,
+    grain: 100,
+    bread: 100,
+    fish: 100,
+    olives: 50,
+    oil: 50,
+    ore: 50,
+    bronze: 50,
+    grapes: 50,
+    wine: 50,
+    drachmas: 200,
+  },
   // Cost of every new road tile.
   roadCost: { wood: 1 },
   // Share of the building cost you get back when demolishing (0 = nothing, 0.5 = half).
