@@ -1,0 +1,28 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: #1b3a4b; /* gleiche Farbe wie der Canvas (render/theme.ts) */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+}
+
+canvas {
+  display: block;
+  touch-action: none;
+}
+
+/* HTML-Overlay für spätere Leisten; Kinder setzen pointer-events: auto */
+#ui {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
