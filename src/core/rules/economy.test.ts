@@ -99,3 +99,14 @@ describe('economyOverview priority flags', () => {
     expect(flow(o, 'drachmas')).toMatchObject({ lowPriority: false, canPrioritize: false });
   });
 });
+
+describe('economyOverview low priority row', () => {
+  it('keeps the row of a low-priority good even without stock or flows', () => {
+    const s = setup({}, 1);
+    addBuilding(s, 'woodcutter', at(1, 2));
+    addBuilding(s, 'quarry', at(2, 2));
+    s.players[0].lowPriorityGoods = ['wood'];
+    const wood = flow(economyOverview(s, 0), 'wood');
+    expect(wood).toMatchObject({ lowPriority: true, canPrioritize: true, stock: 0, net: 0 });
+  });
+});

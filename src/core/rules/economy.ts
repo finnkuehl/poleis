@@ -149,7 +149,9 @@ export function economyOverview(state: GameState, player: PlayerId): EconomyOver
     const p = produced.get(id) ?? [];
     const c = consumed.get(id) ?? [];
     const net = p.reduce((s, x) => s + x.amount, 0) - c.reduce((s, x) => s + x.amount, 0);
-    if (real[id] <= 0 && p.length === 0 && c.length === 0) continue;
+    // A low-priority good keeps its row so the toggle can always be undone.
+    if (real[id] <= 0 && p.length === 0 && c.length === 0 && !lowPriorityGoods.includes(id))
+      continue;
     goods.push({
       good: id,
       stock: real[id],
