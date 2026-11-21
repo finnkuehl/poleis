@@ -48,4 +48,9 @@ export const mapgenConfig = {
     /** Wie stark der Zufall einzelne Felder verändert. */
     jitter: 0.15,
   },
+
+  /** Seeds: höchstens so viele Zeichen werden aus `?seed=…` übernommen. */
+  seedMaxLength: 40,
+  /** Ohne Seed in der Adresse wird eine Zufallszahl von 0 bis unter diesem Wert gewürfelt. */
+  randomSeedRange: 1_000_000,
 } as const;
