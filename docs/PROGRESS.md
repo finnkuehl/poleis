@@ -10,6 +10,11 @@
 - [x] Controls: Units button, barracks panel, unit panel, attack preview, found city, combat messages
 - [x] Everything wired together; UX fixes after the browser test (Units button cycles, compact unit panel, attack messages)
 - [x] Browser test: barracks, training, scout movement into the fog, attack preview + attack (scout lost). Founding and capturing only covered by automated tests.
+- [x] code-review: 5 findings fixed (attack ends turn, no moves into fog, no city on a road, Units button, panel ✕); new rule "units only move onto explored tiles"
+- [x] User requests: workers working/free in the top bar and city panel, "📊 Overview" economy sheet (made/used per good, runs-out warning), drag & drop for units
+- [ ] User's phone test on GitHub Pages, merge PR #6, tag `v0.4.0`
+
+**Handover for a new session:** see `docs/HANDOVER.md`.
 - [ ] code-review, merge; phone test on GitHub Pages after the merge
 
 **Design decisions M4:** always 1 tile of movement, one unit per tile, passive enemy in test mode, city centers count as walled.
