@@ -119,7 +119,7 @@ Woodcutter ─Wood─┴► Smelter ──Bronze──► Units, wonder
 - **Demolishing** buildings and roads is allowed, **without refund**. The city center cannot be demolished.
 - **Production order:** raw-material buildings (no inputs) produce first, then processing buildings – so freshly cut wood can become planks in the same turn. If goods run short, older buildings go first.
 - **Workers** go only to connected buildings, in this order: food (farm, fishery, bakery), then raw materials, then processing; older buildings first within a group. A building only gets workers if its **whole crew** can be filled – otherwise it gets none and the workers go on to the next building, so no worker is wasted.
-- **Interim rule until M3:** housing is filled immediately (city center 4 residents, each house +4). No food consumption, growth or taxes yet – food simply piles up.
+- **Pause:** the player can pause any building; a paused building gets no workers and produces nothing, so its workers go to the next building in line.
 
 ## 6. Population & city levels
 
@@ -136,6 +136,16 @@ Woodcutter ─Wood─┴► Smelter ──Bronze──► Units, wonder
 | Metropolis | as Polis + 1 wine per 10 residents | 50 residents, 3 turns wine supplied, 40 planks, 40 stone, 10 bronze, 80 drachmas | World wonder, horseman, trireme |
 
 Every city of a civilization has its own level; the stock is shared.
+
+**Detailed rules (decided in M3)**
+- **Start:** a new city has **4 residents** (its city center is full). Residents live in the city center and the houses in that city's territory and work in that city's buildings.
+- **Eating:** fish is eaten first, then bread (bread is kept back for settlers). If food runs short, residents eat what is there and the city loses 1 resident; a city never drops below 1 resident.
+- **Growth** needs only food and free housing; missing oil or wine does not stop growth.
+- **Oil and wine are supplied beforehand:** as soon as oil is in stock, a settlement starts using 1 oil per 10 residents (rounded up) each turn. Turns in a row with enough oil are counted; a turn without enough oil resets the count to 0. Three supplied turns in a row (plus the other requirements) allow the advance to Polis. Wine works the same way for Polis → Metropolis.
+- **Advancing is the player's decision:** the city panel shows the requirements; the "Advance" button pays the goods and raises the level. A city never drops back a level – a Polis without oil only loses the +50 % tax bonus.
+- **Taxes:** rounded down (e.g. 5 residents → 2 drachmas; with the bonus 2 × 1.5 = 3).
+- **Marketplace:** sell 2 of any good for 1 drachma, or buy 1 good for 3 drachmas. Trading works only while the player has a connected, staffed marketplace.
+- **In M3** the Polis level unlocks vineyard, winery, marketplace and temple. Harbor (M6), units (M4) and the world wonder (M5, with the victory rules) follow later.
 
 ## 7. Units
 
