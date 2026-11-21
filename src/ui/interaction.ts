@@ -15,6 +15,7 @@ import {
   missingGoods,
   planRoad,
   previewProduction,
+  runProduction,
   validPlacements,
   type BuildingStatus,
 } from '../core/rules';
@@ -258,13 +259,17 @@ export async function createGame(
       const city = state.cities.find((c) => c.id === cityId);
       const check = advanceCheck(state, cityId);
       if (city && check) {
+        // Residents eat after this turn's production, so judge food, needs and taxes
+        // against the stock as it will be after production (a copy – the real state stays).
+        const afterProduction = structuredClone(state);
+        runProduction(afterProduction, PLAYER);
         panel.showCity({
           hex,
           terrain,
           level: city.level,
-          stats: cityStats(state, cityId),
+          stats: cityStats(afterProduction, cityId),
           check,
-          stock: stockOf(state),
+          stock: stockOf(afterProduction),
           onAdvance: check.to ? () => askAdvance(cityId) : undefined,
         });
         return;
