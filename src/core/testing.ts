@@ -116,6 +116,7 @@ export function addUnit(
     movesLeft?: number;
     hasMoved?: boolean;
     acted?: boolean;
+    attacked?: boolean;
   } = {},
 ): number {
   const id = state.nextId++;
@@ -129,6 +130,8 @@ export function addUnit(
     movesLeft: opts.movesLeft ?? def.movement,
     hasMoved: opts.hasMoved ?? false,
     acted: opts.acted ?? false,
+    attacked: opts.attacked ?? false,
+    capturing: null,
   });
   return id;
 }

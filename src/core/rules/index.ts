@@ -15,3 +15,6 @@ export * from './advance';
 export * from './trade';
 export * from './movement';
 export * from './units';
+export * from './combat';
+export * from './capture';
+export * from './found';

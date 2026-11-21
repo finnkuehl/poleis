@@ -27,7 +27,13 @@ export type RuleErrorCode =
   | 'notOwnUnit'
   | 'cannotReach'
   | 'notOwnBuilding'
-  | 'alreadyTraining';
+  | 'alreadyTraining'
+  | 'notEnemy'
+  | 'alreadyAttacked'
+  | 'notInRange'
+  | 'notASettler'
+  | 'foreignTerritory'
+  | 'tooCloseToCity';
 
 export interface RuleError {
   code: RuleErrorCode;

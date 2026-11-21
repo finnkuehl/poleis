@@ -28,6 +28,7 @@ function report(...cities: CityReport[]): TurnReport {
     buildings: [],
     cities,
     units: { spawned: 0, upkeepEaten: {}, starving: false, lost: 0 },
+    captured: [],
   };
 }
 

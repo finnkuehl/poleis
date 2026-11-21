@@ -213,6 +213,12 @@ export const en = {
     cannotReach: "This unit can't reach that tile this turn.",
     notOwnBuilding: 'That is not your building.',
     alreadyTraining: 'This barracks is already training a unit this turn.',
+    notEnemy: 'You can only attack enemy units.',
+    alreadyAttacked: 'This unit has already attacked this turn.',
+    notInRange: 'That target is out of range.',
+    notASettler: 'Only settlers can found cities.',
+    foreignTerritory: "You can't found a city in foreign territory.",
+    tooCloseToCity: 'Too close to another city – keep at least {distance} tiles away.',
   },
   status: {
     producing: 'Producing',

@@ -4,18 +4,23 @@ import {
   BUILDINGS,
   economyConfig,
   GOOD_IDS,
+  militaryConfig,
   populationConfig,
+  TERRAIN,
+  UNITS,
   type BuildingId,
   type CityLevel,
   type Stock,
   type TerrainId,
   type UnitId,
 } from '../data';
-import type { Hex } from './hex';
-import { generateMap, findStartPositions } from './mapgen';
+import { distance, neighbors, type Hex } from './hex';
+import { terrainAt, tileIndex } from './map';
+import { generateMap, findLandmasses, findStartPositions } from './mapgen';
+import { createCity } from './rules/found';
 import { claimTerritory } from './rules/territory';
 import type { TurnReport } from './rules/production';
-import { createRng, seedFromText, type Rng } from './rng';
+import { createRng, nextInt, seedFromText, type Rng } from './rng';
 
 export interface MapState {
   width: number;
@@ -66,6 +71,10 @@ export interface Unit {
   hasMoved: boolean;
   /** Moved or attacked this turn (acting units do not heal). */
   acted: boolean;
+  /** Attacked this turn (one attack per turn). */
+  attacked: boolean;
+  /** Id of the enemy city whose center the unit stands on to capture it, else null. */
+  capturing: number | null;
 }
 
 /** A unit ordered in a barracks; it appears at the start of the owner's next turn. */
@@ -147,5 +156,60 @@ export function createGameState(seedText: string, options: { sandbox?: boolean }
     lastReport: null,
   };
   claimTerritory(state, start, BUILDINGS.cityCenter.territoryRadius, 0, 1);
+  if (options.sandbox) addPassiveEnemy(state, start);
   return state;
+}
+
+/**
+ * Test mode: a passive civilization (player 1) with one city and two spearmen.
+ * Picked with the seeded RNG after the human start, so the human's start stays unchanged.
+ */
+function addPassiveEnemy(state: GameState, humanCenter: Hex): void {
+  const { min, max, preferred } = militaryConfig.sandboxEnemyDistance;
+  const walkableNeighbor = (h: Hex) =>
+    neighbors(h).find((n) => {
+      const t = terrainAt(state.map, n);
+      return t !== undefined && TERRAIN[t].moveCost !== null;
+    });
+  const mainland = (findLandmasses(state.map)[0] ?? []).filter(
+    (h) =>
+      terrainAt(state.map, h) === 'plains' &&
+      state.territory[tileIndex(state.map, h)] === -1 &&
+      walkableNeighbor(h) !== undefined,
+  );
+  let pool = mainland.filter((h) => {
+    const d = distance(humanCenter, h);
+    return d >= min && d <= max;
+  });
+  if (pool.length > 0) {
+    // Closest to the preferred distance; the RNG breaks ties.
+    const best = Math.min(...pool.map((h) => Math.abs(distance(humanCenter, h) - preferred)));
+    pool = pool.filter((h) => Math.abs(distance(humanCenter, h) - preferred) === best);
+  } else {
+    // Fallback: the farthest valid plains tile.
+    const far = Math.max(-1, ...mainland.map((h) => distance(humanCenter, h)));
+    pool = mainland.filter((h) => distance(humanCenter, h) === far);
+  }
+  if (pool.length === 0) return;
+  const center = pool[nextInt(state.rng, 0, pool.length - 1)];
+  const goods = {} as Stock;
+  for (const id of GOOD_IDS) goods[id] = 0;
+  state.players.push({ id: 1, isHuman: false, goods });
+  createCity(state, 1, center, populationConfig.startResidents);
+  const spearman = UNITS.spearman;
+  const spots = [center, walkableNeighbor(center) as Hex];
+  for (const hex of spots) {
+    state.units.push({
+      id: state.nextId++,
+      type: 'spearman',
+      owner: 1,
+      hex,
+      hp: spearman.hp,
+      movesLeft: spearman.movement,
+      hasMoved: false,
+      acted: false,
+      attacked: false,
+      capturing: null,
+    });
+  }
 }

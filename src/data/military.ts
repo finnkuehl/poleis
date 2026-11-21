@@ -24,6 +24,9 @@ export const militaryConfig = {
   foundMinDistance: 4,
   // Residents of a city founded by a settler.
   newCityResidents: 2,
+  // Test mode (&sandbox): distance between the human city and the passive enemy city.
+  // The spot closest to `preferred` within min..max is used.
+  sandboxEnemyDistance: { min: 6, max: 9, preferred: 7 },
   // Vision range of units, in tiles.
   visionUnit: 2,
   // Vision range of city centers and border towers, in tiles.

@@ -4,18 +4,23 @@ import {
   BUILDINGS,
   CITY_LEVEL_DEFS,
   economyConfig,
+  UNITS,
   type BuildingId,
   type GoodId,
   type Goods,
   type UnitId,
 } from '../data';
 import type { Hex } from './hex';
-import { hexEquals } from './hex';
+import { distance, hexEquals } from './hex';
 import { tileIndex } from './map';
 import {
   addGoods,
   advanceCheck,
   canTrade,
+  checkFoundCity,
+  combatPreview,
+  foundCity,
+  updateCapturing,
   canAfford,
   checkPlacement,
   claimTerritory,
@@ -39,6 +44,8 @@ export type Action =
   | { type: 'advanceCity'; cityId: number }
   | { type: 'trade'; good: GoodId; direction: 'sell' | 'buy'; lots: number }
   | { type: 'move'; unitId: number; to: Hex }
+  | { type: 'attack'; unitId: number; targetId: number }
+  | { type: 'foundCity'; unitId: number }
   | { type: 'train'; barracksId: number; unit: UnitId }
   | { type: 'endTurn' };
 
@@ -138,6 +145,32 @@ export function applyAction(state: GameState, action: Action): ActionResult {
       unit.movesLeft = Math.max(0, unit.movesLeft - target.cost);
       unit.hasMoved = true;
       unit.acted = true;
+      updateCapturing(next, unit);
+      return { ok: true, state: next };
+    }
+    case 'attack': {
+      const unit = next.units.find((u) => u.id === action.unitId);
+      if (!unit || unit.owner !== player) return fail({ code: 'notOwnUnit' });
+      const target = next.units.find((u) => u.id === action.targetId);
+      if (!target || target.owner === player) return fail({ code: 'notEnemy' });
+      if (unit.attacked) return fail({ code: 'alreadyAttacked' });
+      const range = UNITS[unit.type].range;
+      if (range <= 0 || distance(unit.hex, target.hex) > range) return fail({ code: 'notInRange' });
+      const result = combatPreview(next, unit.id, target.id);
+      target.hp -= result.damage;
+      // A wounded defender loses a pending capture.
+      if (result.damage > 0) target.capturing = null;
+      unit.hp -= result.counter;
+      unit.attacked = true;
+      unit.acted = true;
+      unit.movesLeft = 0;
+      next.units = next.units.filter((u) => u.hp > 0);
+      return { ok: true, state: next };
+    }
+    case 'foundCity': {
+      const error = checkFoundCity(next, player, action.unitId);
+      if (error) return fail(error);
+      foundCity(next, action.unitId);
       return { ok: true, state: next };
     }
     case 'train': {

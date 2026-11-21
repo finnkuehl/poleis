@@ -183,6 +183,8 @@ describe('determinism and JSON', () => {
         movesLeft: 3,
         hasMoved: false,
         acted: false,
+        attacked: false,
+        capturing: null,
       });
       s = endTurn(s);
       return s;
@@ -191,6 +193,6 @@ describe('determinism and JSON', () => {
     const b = run();
     expect(a).toEqual(b);
     expect(JSON.parse(JSON.stringify(a))).toEqual(a);
-    expect(a.units).toHaveLength(1);
+    expect(a.units.filter((u) => u.owner === 0)).toHaveLength(1);
   });
 });

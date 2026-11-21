@@ -4,6 +4,7 @@ import { GOOD_IDS, type Goods } from '../data';
 import type { GameState } from './state';
 import { runPopulation } from './rules/population';
 import { runProduction } from './rules/production';
+import { captureCities } from './rules/capture';
 import { healAndResetUnits, runUpkeep, spawnUnits } from './rules/units';
 
 /**
@@ -20,6 +21,8 @@ export function endTurn(state: GameState): GameState {
   if (!stock) throw new Error(`Unknown player ${player}`);
   const before = { ...stock };
   // Start of the player's turn (docs/GAME_DESIGN.md, section 2):
+  // Units standing on an enemy city center take it over.
+  const captured = captureCities(next, player);
   // Units first: heal, reset, new units appear.
   healAndResetUnits(next, player);
   const spawned = spawnUnits(next, player);
@@ -34,6 +37,7 @@ export function endTurn(state: GameState): GameState {
     if (d !== 0) delta[id] = d;
   }
   report.delta = delta;
+  report.captured = captured;
   next.lastReport = report;
   return next;
 }

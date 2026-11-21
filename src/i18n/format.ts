@@ -1,6 +1,13 @@
 // Turns rule results (goods, errors, statuses) into display texts.
 
-import { GOOD_IDS, type CityLevel, type GoodId, type Goods, type TerrainId } from '../data';
+import {
+  GOOD_IDS,
+  militaryConfig,
+  type CityLevel,
+  type GoodId,
+  type Goods,
+  type TerrainId,
+} from '../data';
 import type { RuleError } from '../core/rules/errors';
 import type { BuildingStatus } from '../core/rules/production';
 import { en } from './en';
@@ -29,6 +36,7 @@ export function formatError(err: RuleError): string {
     level: err.level ? en.levels[err.level] : '',
     good: err.good ? en.goods[err.good].toLowerCase() : '',
     turns: err.turns ?? 0,
+    distance: militaryConfig.foundMinDistance,
   });
 }
 

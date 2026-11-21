@@ -66,6 +66,7 @@ export function healAndResetUnits(state: GameState, player: PlayerId): void {
     u.movesLeft = UNITS[u.type].movement;
     u.hasMoved = false;
     u.acted = false;
+    u.attacked = false;
   }
 }
 
@@ -96,6 +97,8 @@ export function spawnUnits(state: GameState, player: PlayerId): number {
       movesLeft: def.movement,
       hasMoved: false,
       acted: false,
+      attacked: false,
+      capturing: null,
     });
     spawned++;
   }

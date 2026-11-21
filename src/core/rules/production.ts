@@ -46,6 +46,8 @@ export interface TurnReport {
   cities: CityReport[];
   /** Unit report (filled by endTurn). */
   units: UnitsReport;
+  /** Ids of the cities captured at the start of this turn. */
+  captured: number[];
 }
 
 function hasGoods(goods: Goods): boolean {
@@ -108,6 +110,7 @@ function simulate(state: GameState, player: PlayerId, stock: Stock): TurnReport 
     buildings: reports,
     cities: [],
     units: { spawned: 0, upkeepEaten: {}, starving: false, lost: 0 },
+    captured: [],
   };
 }
 
