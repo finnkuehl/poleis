@@ -35,6 +35,7 @@ const addPlayer1 = (s: GameState) => {
     alive: true,
     goods: { ...s.players[0].goods },
     explored: s.map.tiles.map(() => true),
+    lowPriorityGoods: [],
   });
   addCity(s, at(s.map.width - 1, s.map.height - 1), { owner: 1, radius: 0 });
 };

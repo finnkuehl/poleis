@@ -18,6 +18,8 @@
 
 - **M5 – First complete game** (`v0.5.0`): start menu (name, color, 1–3 rivals, map size, seed with live map preview, victory types), AI civilizations Athens/Sparta/Corinth (utility-based economy, exploring, defense, attacks after turn 15, new cities, wonder from turn 70, fog-fair), turn order with instant AI turns and a summary of what you saw, world wonder, scores sheet, victory/defeat (wonder, conquest, points after 120 turns, last city lost), autosave every turn + 3 save slots, fair start positions for 4 civilizations.
 
+- **Low priority per good** (`v0.5.1`, user request): toggle in the 📊 Overview – buildings of that good get workers only after all others, so production slows instead of stopping; saves from v0.5.0 are converted automatically.
+
 ## Known limitations
 
 - AI balance not yet tuned with real play: AIs may be strong for beginners (numbers in `src/data/ai.ts`). AI turns have no animation (M7).

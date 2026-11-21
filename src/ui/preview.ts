@@ -41,7 +41,6 @@ if (!ui || !controls) throw new Error('Missing containers');
 
 const stock = { ...emptyStock(), wood: 6, stone: 1, grain: 4, planks: 2 };
 
-const economy = createEconomySheet(ui);
 const sampleOverview: EconomyOverview = {
   workers: { residents: 8, housing: 12, working: 6, free: 2, missing: 1 },
   goods: [
@@ -52,6 +51,8 @@ const sampleOverview: EconomyOverview = {
       consumed: [{ source: 'building', detail: 'sawmill', amount: 2, count: 1 }],
       net: 2,
       turnsLeft: null,
+      lowPriority: true,
+      canPrioritize: true,
     },
     {
       good: 'fish',
@@ -63,6 +64,8 @@ const sampleOverview: EconomyOverview = {
       ],
       net: -3,
       turnsLeft: 2,
+      lowPriority: false,
+      canPrioritize: true,
     },
     {
       good: 'drachmas',
@@ -71,9 +74,18 @@ const sampleOverview: EconomyOverview = {
       consumed: [],
       net: 3,
       turnsLeft: null,
+      lowPriority: false,
+      canPrioritize: false,
     },
   ],
 };
+const economy = createEconomySheet(ui, {
+  onTogglePriority: (good, low) => {
+    const flow = sampleOverview.goods.find((g) => g.good === good);
+    if (flow) flow.lowPriority = low;
+    economy.open(sampleOverview);
+  },
+});
 const bar = createResourceBar(ui, { onOverview: () => economy.open(sampleOverview) });
 bar.update(
   { ...stock, drachmas: 7, grapes: 2, wine: 1 },

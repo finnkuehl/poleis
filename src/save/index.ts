@@ -4,7 +4,7 @@
 import type { GameState } from '../core/state';
 
 /** Current save format version. Bump it and add a step to MIGRATIONS when the state changes. */
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 /** Number of manual save slots (technical constant, not a balancing value). */
 export const SAVE_SLOT_COUNT = 3;
@@ -72,9 +72,20 @@ function slotKey(slot: SaveSlot): string {
   return `${KEY_PREFIX}save.${slot === 'auto' ? 'auto' : `slot${slot}`}`;
 }
 
-/** Version n -> n+1 upgrade steps, keyed by the version they upgrade FROM. Empty for now. */
+/** Version n -> n+1 upgrade steps, keyed by the version they upgrade FROM. */
 export const MIGRATIONS: Record<number, (env: Record<string, unknown>) => Record<string, unknown>> =
-  {};
+  {
+    // 1 -> 2: players got `lowPriorityGoods` (worker priority per good).
+    1: (env) => {
+      const state = env.state;
+      if (isRecord(state) && Array.isArray(state.players)) {
+        for (const p of state.players) {
+          if (isRecord(p) && !Array.isArray(p.lowPriorityGoods)) p.lowPriorityGoods = [];
+        }
+      }
+      return env;
+    },
+  };
 
 type MigrationResult =
   { ok: true; envelope: SaveEnvelope } | { ok: false; error: 'corrupt' | 'tooNew' };

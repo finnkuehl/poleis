@@ -149,7 +149,11 @@ export async function createGame(
       economySheet.open(economyOverview(state, PLAYER));
     },
   });
-  const economySheet = createEconomySheet(uiContainer);
+  const economySheet = createEconomySheet(uiContainer, {
+    onTogglePriority: (good, low) => {
+      commit({ type: 'setGoodPriority', good, low });
+    },
+  });
   const scoresSheet = createScoresSheet(uiContainer);
   const banner = createModeBanner(uiContainer, () => resetToIdle());
   const confirm = createConfirmSheet(uiContainer);

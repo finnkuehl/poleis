@@ -119,3 +119,44 @@ describe('city buildings and workers', () => {
     expect([w3[farm], w3[wc], w3[market]]).toEqual([2, 1, 1]);
   });
 });
+
+describe('low priority goods', () => {
+  const crews = (s: ReturnType<typeof setup>) => assignWorkers(s, 0, connectedBuildingIds(s, 0));
+
+  it('a low-priority woodcutter is staffed after a quarry when residents are short', () => {
+    const s = setup();
+    s.cities[0].residents = 1;
+    const wc = addBuilding(s, 'woodcutter', at(1, 2));
+    const quarry = addBuilding(s, 'quarry', at(2, 2));
+    expect([crews(s)[wc], crews(s)[quarry]]).toEqual([1, 0]);
+    s.players[0].lowPriorityGoods = ['wood'];
+    expect([crews(s)[wc], crews(s)[quarry]]).toEqual([0, 1]);
+  });
+  it('with enough residents both get crews', () => {
+    const s = setup();
+    s.cities[0].residents = 2;
+    s.players[0].lowPriorityGoods = ['wood'];
+    const wc = addBuilding(s, 'woodcutter', at(1, 2));
+    const quarry = addBuilding(s, 'quarry', at(2, 2));
+    expect([crews(s)[wc], crews(s)[quarry]]).toEqual([1, 1]);
+  });
+  it('a building built later follows the setting', () => {
+    const s = setup();
+    s.cities[0].residents = 1;
+    s.players[0].lowPriorityGoods = ['wood'];
+    const quarry = addBuilding(s, 'quarry', at(1, 2));
+    const wc = addBuilding(s, 'woodcutter', at(2, 2));
+    expect([crews(s)[wc], crews(s)[quarry]]).toEqual([0, 1]);
+  });
+  it('works per city', () => {
+    const s = makeTestState(['ppppppppppppp']);
+    addCity(s, at(0, 0), { radius: 2, residents: 1 });
+    addCity(s, at(10, 0), { radius: 2, residents: 1 });
+    s.players[0].lowPriorityGoods = ['wood'];
+    const wcA = addBuilding(s, 'woodcutter', at(1, 0));
+    const quarryB = addBuilding(s, 'quarry', at(9, 0));
+    const wcB = addBuilding(s, 'woodcutter', at(11, 0));
+    const w = assignWorkers(s, 0, connectedBuildingIds(s, 0));
+    expect([w[wcA], w[quarryB], w[wcB]]).toEqual([1, 1, 0]);
+  });
+});

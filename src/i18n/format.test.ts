@@ -131,6 +131,8 @@ describe('i18n/format', () => {
       ],
       net: -2,
       turnsLeft: 2,
+      lowPriority: false,
+      canPrioritize: true,
     };
     expect(formatMade(flow)).toBe('Made: Woodcutter ×2 +4');
     expect(formatUsed(flow)).toBe('Used: Sawmill −2, residents −3, units −1');

@@ -121,6 +121,7 @@ Woodcutter ─Wood─┴► Smelter ──Bronze──► Units, wonder
 - **Production order:** raw-material buildings (no inputs) produce first, then processing buildings – so freshly cut wood can become planks in the same turn. If goods run short, older buildings go first.
 - **Workers** go only to connected buildings, in this order: food (farm, fishery, bakery), then raw materials, then processing; older buildings first within a group. A building only gets workers if its **whole crew** can be filled – otherwise it gets none and the workers go on to the next building, so no worker is wasted.
 - **Pause:** the player can pause any building; a paused building gets no workers and produces nothing, so its workers go to the next building in line.
+- **Low priority per good** (decided after M5, toggle in the 📊 Overview): buildings that produce a good marked "low priority" get workers only after all other buildings of their city are staffed. They keep producing with leftover workers, so production slows instead of stopping. The setting is per civilization and also applies to buildings built later.
 
 ## 6. Population & city levels
 

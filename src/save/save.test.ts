@@ -119,3 +119,22 @@ describe('save/load', () => {
     expect(() => saveGame(b, 1, state)).not.toThrow();
   });
 });
+
+describe('migration 1 -> 2', () => {
+  it('adds lowPriorityGoods to players that lack it', () => {
+    const old = structuredClone(state) as unknown as Record<string, unknown>;
+    for (const p of old.players as Record<string, unknown>[]) delete p.lowPriorityGoods;
+    const res = migrateEnvelope({
+      format: 'poleis-save',
+      version: 1,
+      savedAt: t1.toISOString(),
+      summary: { turn: 1 },
+      state: old,
+    });
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.envelope.version).toBe(SAVE_VERSION);
+      expect(res.envelope.state.players.every((p) => p.lowPriorityGoods.length === 0)).toBe(true);
+    }
+  });
+});
