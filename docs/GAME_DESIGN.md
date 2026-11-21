@@ -111,6 +111,16 @@ Woodcutter ─Wood─┴► Smelter ──Bronze──► Units, wonder
 - If something is missing, the building shows a status symbol and the info panel shows the reason.
 - Building a road: 1 wood per tile (from Polis on, optionally paved road: 1 stone, later).
 
+**Detailed rules (decided in M2)**
+- **Start:** stock of **20 wood and 10 stone**. The first city center is placed **automatically** on plains on the mainland; its territory (radius 2) is guaranteed to contain forest, hills or mountains and enough plains. The camera starts there.
+- **"next to X" placement:** the building stands on a buildable tile (plains or hills) next to X. Woodcutter: plains/hills next to forest. Quarry and mine: on hills, or on plains next to mountains. Fishery: plains next to coastal water.
+- **One thing per tile:** a tile holds either one building or one road.
+- **Roads** only on walkable land in the player's own territory (plains, forest, hills – not mountains, not water). A road may pass through the player's own buildings at no cost.
+- **Demolishing** buildings and roads is allowed, **without refund**. The city center cannot be demolished.
+- **Production order:** raw-material buildings (no inputs) produce first, then processing buildings – so freshly cut wood can become planks in the same turn. If goods run short, older buildings go first.
+- **Workers** go only to connected buildings, in this order: food (farm, fishery, bakery), then raw materials, then processing; older buildings first within a group.
+- **Interim rule until M3:** housing is filled immediately (city center 4 residents, each house +4). No food consumption, growth or taxes yet – food simply piles up.
+
 ## 6. Population & city levels
 
 - Residents live in the city center and houses (housing) and work in buildings automatically (order: food first, then raw materials, then processing).

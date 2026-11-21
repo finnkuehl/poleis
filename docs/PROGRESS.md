@@ -2,7 +2,16 @@
 
 ## Current milestone: M2 – Economy (in progress, branch `m2-economy`)
 
-- [ ] Plan approved, implementation starting
+- [x] Plan approved; project switched to English (chat, game texts, comments, docs, commits)
+- [ ] Goods and building data, rules: placement, territory, connection, workers, production
+- [ ] A* pathfinding and automatic start position
+- [ ] Game state with city, actions (build, road, demolish), end of turn
+- [ ] Rendering: territory border, roads, buildings with status, highlights, road preview
+- [ ] UI: resource bar, bottom bar, build menu, confirmation, building panel, error messages
+- [ ] Interaction modes wired up; camera starts at the city
+- [ ] Browser test desktop + phone, code-review, pull request
+
+**Design decisions M2** (in `docs/GAME_DESIGN.md` §5 "Detailed rules"): start with 20 wood + 10 stone, automatic start position, housing filled immediately until M3, demolish without refund.
 
 ## Done
 
