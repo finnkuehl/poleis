@@ -113,6 +113,20 @@ describe('demolish', () => {
       error: { code: 'nothingToDemolish' },
     });
   });
+
+  it('refuses a world wonder, finished or not', () => {
+    const s = makeTestState(['ppp']);
+    addBuilding(s, 'wonder', at(1, 0));
+    expect(applyAction(s, { type: 'demolish', hex: at(1, 0) })).toEqual({
+      ok: false,
+      error: { code: 'cannotDemolishWonder' },
+    });
+    s.buildings[0].progress = 5;
+    expect(applyAction(s, { type: 'demolish', hex: at(1, 0) })).toEqual({
+      ok: false,
+      error: { code: 'cannotDemolishWonder' },
+    });
+  });
 });
 
 describe('endTurn', () => {

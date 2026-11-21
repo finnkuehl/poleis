@@ -24,6 +24,7 @@ export type RuleErrorCode =
   | 'roadNotAllowed'
   | 'nothingToDemolish'
   | 'cannotDemolishCityCenter'
+  | 'cannotDemolishWonder'
   | 'cannotPause'
   | 'notOwnUnit'
   | 'cannotReach'

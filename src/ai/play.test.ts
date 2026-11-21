@@ -20,14 +20,17 @@ describe('playAiTurns', () => {
     expect(playAiTurns(s)).toBe(s);
   });
 
-  it('runs the actions of `decide` and skips failed ones', () => {
-    const s0 = createGameState('5', { settings: { aiCount: 1 } });
+  it('lets `takeTurn` play each AI turn and ends it afterwards', () => {
+    const s0 = createGameState('5', { settings: { aiCount: 2 } });
     const s = { ...s0, currentPlayer: 1 };
-    const out = playAiTurns(s, (_state, player) => [
-      { type: 'demolish', hex: { q: -99, r: -99 } },
-      { type: 'build', building: 'house', hex: s.cities.find((c) => c.owner === player)!.center },
-    ]);
+    const seen: number[] = [];
+    const out = playAiTurns(s, (state, player) => {
+      seen.push(player);
+      return state;
+    });
+    expect(seen).toEqual([1, 2]);
     expect(out.currentPlayer).toBe(0);
+    expect(out.turn).toBe(s.turn + 1);
   });
 
   it('stops without looping if the human is out of the game', () => {

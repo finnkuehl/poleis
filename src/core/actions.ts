@@ -241,6 +241,7 @@ function applyActionInner(state: GameState, action: Action): ActionResult {
       );
       if (building) {
         if (building.type === 'cityCenter') return fail({ code: 'cannotDemolishCityCenter' });
+        if (building.type === 'wonder') return fail({ code: 'cannotDemolishWonder' });
         next.buildings = next.buildings.filter((b) => b !== building);
         addGoods(stock, scaleGoods(BUILDINGS[building.type].cost, economyConfig.demolishRefund));
         return { ok: true, state: next };
