@@ -90,3 +90,13 @@ export function roadGeometry(state: GameState): RoadGeometry {
 export function tileCenter(state: GameState, index: number, size: number): Point {
   return hexToPixel(hexAtIndex(state.map, index), size);
 }
+
+/**
+ * Midpoint of the hex edge shared by two adjacent tiles. It lies halfway between both centers,
+ * so order paths start next to the unit token instead of under it.
+ */
+export function sharedEdgeMidpoint(a: Hex, b: Hex, size: number): Point {
+  const pa = hexToPixel(a, size);
+  const pb = hexToPixel(b, size);
+  return { x: (pa.x + pb.x) / 2, y: (pa.y + pb.y) / 2 };
+}

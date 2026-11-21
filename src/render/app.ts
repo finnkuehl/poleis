@@ -7,6 +7,7 @@ import type { GameState, PlayerId } from '../core/state';
 import { CameraController, screenToWorld } from './camera';
 import { hexSize, startHexScreenRadiusPx } from './config';
 import { createMapView } from './map';
+import type { OrderPath } from './orderLayers';
 import { theme } from './theme';
 
 /** Optional hooks for dragging a unit; `h` is the hex under the pointer (null outside the map). */
@@ -29,6 +30,8 @@ export interface Renderer {
   setHighlights(hexes: readonly Hex[]): void;
   /** Road preview along `path` (dots on `newTiles`); null clears. */
   setPathPreview(path: readonly Hex[] | null, newTiles?: readonly Hex[]): void;
+  /** Draws move-order paths (faint for units on their way, active for the selected one); [] clears. */
+  setOrderPaths(paths: readonly OrderPath[]): void;
   /** Centers the view on `h`; a hex gets the given screen radius (clamped to the zoom limits). */
   centerOn(h: Hex, hexScreenRadiusPx?: number): void;
   /** Ghost token of `unitId` at the screen position; null hides it. */
@@ -121,7 +124,9 @@ export async function createRenderer(
     setHighlights: view.setHighlights,
     setAttackTargets: view.setAttackTargets,
     setPathPreview: (path, newTiles = []) => view.setPathPreview(path, newTiles),
+    setOrderPaths: view.setOrderPaths,
     centerOn,
     centerOnScreenPoint,
   };
 }
+export type { OrderPath } from './orderLayers';
