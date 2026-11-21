@@ -4,25 +4,34 @@ import {
   BUILDINGS,
   CITY_LEVEL_DEFS,
   economyConfig,
+  UNITS,
   type BuildingId,
   type GoodId,
   type Goods,
+  type UnitId,
 } from '../data';
 import type { Hex } from './hex';
-import { hexEquals } from './hex';
+import { distance, hexEquals } from './hex';
 import { tileIndex } from './map';
 import {
   addGoods,
   advanceCheck,
   canTrade,
+  checkFoundCity,
+  combatPreview,
+  foundCity,
+  updateCapturing,
   canAfford,
   checkPlacement,
   claimTerritory,
   missingGoods,
   ownerAt,
   pay,
+  orderTraining,
   planRoad,
+  reachableTiles,
   scaleGoods,
+  updateAllExplored,
   type RuleError,
 } from './rules';
 import type { GameState } from './state';
@@ -35,6 +44,10 @@ export type Action =
   | { type: 'togglePause'; hex: Hex }
   | { type: 'advanceCity'; cityId: number }
   | { type: 'trade'; good: GoodId; direction: 'sell' | 'buy'; lots: number }
+  | { type: 'move'; unitId: number; to: Hex }
+  | { type: 'attack'; unitId: number; targetId: number }
+  | { type: 'foundCity'; unitId: number }
+  | { type: 'train'; barracksId: number; unit: UnitId }
   | { type: 'endTurn' };
 
 export type ActionResult = { ok: true; state: GameState } | { ok: false; error: RuleError };
@@ -43,6 +56,12 @@ const fail = (error: RuleError): ActionResult => ({ ok: false, error });
 
 /** Applies an action of the current player. Never mutates `state`. */
 export function applyAction(state: GameState, action: Action): ActionResult {
+  const result = applyActionInner(state, action);
+  if (result.ok && action.type !== 'endTurn') updateAllExplored(result.state);
+  return result;
+}
+
+function applyActionInner(state: GameState, action: Action): ActionResult {
   const player = state.currentPlayer;
   if (action.type === 'endTurn') return { ok: true, state: endTurn(state) };
 
@@ -123,6 +142,53 @@ export function applyAction(state: GameState, action: Action): ActionResult {
           : { [action.good]: action.lots },
       );
       return { ok: true, state: next };
+    }
+    case 'move': {
+      const unit = next.units.find((u) => u.id === action.unitId);
+      if (!unit || unit.owner !== player) return fail({ code: 'notOwnUnit' });
+      const target = reachableTiles(next, unit.id).find((r) => hexEquals(r.hex, action.to));
+      if (!target) {
+        const seen = reachableTiles(next, unit.id, { ignoreHiddenUnits: true });
+        return fail({
+          code: seen.some((r) => hexEquals(r.hex, action.to)) ? 'blockedByUnseen' : 'cannotReach',
+        });
+      }
+      unit.hex = target.hex;
+      unit.movesLeft = Math.max(0, unit.movesLeft - target.cost);
+      unit.hasMoved = true;
+      unit.acted = true;
+      updateCapturing(next, unit);
+      return { ok: true, state: next };
+    }
+    case 'attack': {
+      const unit = next.units.find((u) => u.id === action.unitId);
+      if (!unit || unit.owner !== player) return fail({ code: 'notOwnUnit' });
+      const target = next.units.find((u) => u.id === action.targetId);
+      if (!target || target.owner === player) return fail({ code: 'notEnemy' });
+      if (unit.attacked) return fail({ code: 'alreadyAttacked' });
+      const range = UNITS[unit.type].range;
+      if (range <= 0 || distance(unit.hex, target.hex) > range) return fail({ code: 'notInRange' });
+      const result = combatPreview(next, unit.id, target.id);
+      target.hp -= result.damage;
+      // A wounded defender loses a pending capture.
+      if (result.damage > 0) target.capturing = null;
+      unit.hp -= result.counter;
+      unit.attacked = true;
+      unit.hasMoved = true;
+      unit.acted = true;
+      unit.movesLeft = 0;
+      next.units = next.units.filter((u) => u.hp > 0);
+      return { ok: true, state: next };
+    }
+    case 'foundCity': {
+      const error = checkFoundCity(next, player, action.unitId);
+      if (error) return fail(error);
+      foundCity(next, action.unitId);
+      return { ok: true, state: next };
+    }
+    case 'train': {
+      const error = orderTraining(next, player, action.barracksId, action.unit);
+      return error ? fail(error) : { ok: true, state: next };
     }
     case 'demolish': {
       const building = next.buildings.find(

@@ -3,12 +3,14 @@
 import {
   BUILDINGS,
   GOOD_IDS,
+  UNITS,
   populationConfig,
   type BuildingId,
   type CityLevel,
   type Goods,
   type Stock,
   type TerrainId,
+  type UnitId,
 } from '../data';
 import { offsetToAxial, type Hex } from './hex';
 import { tileIndex } from './map';
@@ -36,7 +38,7 @@ export function at(col: number, row: number): Hex {
  */
 export function makeTestState(
   rows: string[],
-  opts: { goods?: Goods; ownAll?: boolean } = {},
+  opts: { goods?: Goods; ownAll?: boolean; explored?: boolean } = {},
 ): GameState {
   const width = rows[0].length;
   const tiles = rows.flatMap((row) =>
@@ -55,12 +57,14 @@ export function makeTestState(
     rng: createRng(1),
     turn: 1,
     currentPlayer: 0,
-    players: [{ id: 0, isHuman: true, goods }],
+    players: [{ id: 0, isHuman: true, goods, explored: tiles.map(() => opts.explored ?? true) }],
     buildings: [],
     roads: tiles.map(() => false),
     territory: tiles.map(() => ((opts.ownAll ?? true) ? 0 : -1)),
     cities: [],
     tileCity: tiles.map(() => -1),
+    units: [],
+    training: [],
     nextId: 1,
     lastReport: null,
   };
@@ -98,5 +102,36 @@ export function addCity(
     supplyStreak: 0,
   });
   claimTerritory(state, h, opts.radius ?? BUILDINGS.cityCenter.territoryRadius, owner, id);
+  return id;
+}
+
+/** Inserts a unit (full HP and moves unless given) without any checks; returns its id. */
+export function addUnit(
+  state: GameState,
+  type: UnitId,
+  h: Hex,
+  opts: {
+    owner?: PlayerId;
+    hp?: number;
+    movesLeft?: number;
+    hasMoved?: boolean;
+    acted?: boolean;
+    attacked?: boolean;
+  } = {},
+): number {
+  const id = state.nextId++;
+  const def = UNITS[type];
+  state.units.push({
+    id,
+    type,
+    owner: opts.owner ?? 0,
+    hex: h,
+    hp: opts.hp ?? def.hp,
+    movesLeft: opts.movesLeft ?? def.movement,
+    hasMoved: opts.hasMoved ?? false,
+    acted: opts.acted ?? false,
+    attacked: opts.attacked ?? false,
+    capturing: null,
+  });
   return id;
 }

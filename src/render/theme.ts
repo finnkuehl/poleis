@@ -29,8 +29,8 @@ export const theme = {
   selectionColor: 0xffffff,
   selectionWidth: 2,
   selectionFillAlpha: 0.15,
-  /** Player colors, index = PlayerId (0 = human, Tyrian purple) */
-  playerColors: [0x6e3a8e, 0x2e6da4, 0xb23a30, 0xc9a227],
+  /** Player colors, index = PlayerId (0 = human purple, 1 = red, 2 = blue, 3 = gold) */
+  playerColors: [0x6e3a8e, 0xb23a30, 0x2e6da4, 0xc9a227],
   /** Territory tint (alpha) and border (world px, alpha) */
   territoryTintAlpha: 0.12,
   territoryBorderWidth: 3,
@@ -63,4 +63,31 @@ export const theme = {
   previewColor: 0x3e7d6b,
   previewWidthFactor: 0.3,
   previewDotRadiusFactor: 0.12,
+  /** Fog of war: unexplored tiles opaque; explored but not visible tiles dimmed */
+  fogHiddenColor: 0x0d1b22,
+  fogDimColor: 0x0d1b22,
+  fogDimAlpha: 0.5,
+  /** Unit token: radius (fraction of hex size), rim, icon size (fraction) */
+  unitRadiusFactor: 0.5,
+  unitRimColor: 0xf4e9d8,
+  unitRimWidth: 1.5,
+  unitIconSizeFactor: 0.62,
+  /** Ghost token while dragging a unit: opacity and size relative to the normal token */
+  dragGhostAlpha: 0.7,
+  dragGhostScale: 1.25,
+  /** Unit that is done for the turn (own units only) */
+  unitDoneAlpha: 0.6,
+  /** HP bar under the token: size (fraction of hex size), background, colors by HP share */
+  hpBarWidthFactor: 0.8,
+  hpBarHeightFactor: 0.14,
+  hpBarBackColor: 0x1d2b36,
+  hpBarGoodColor: 0x4caf50,
+  hpBarMidColor: 0xc2902a,
+  hpBarLowColor: 0xd6453a,
+  /** Token moves up (fraction of hex size) when a building stands on the same tile */
+  unitOnBuildingOffsetFactor: 0.38,
+  /** Attack targets: red outline + light red fill */
+  attackColor: 0xd6453a,
+  attackWidth: 3,
+  attackFillAlpha: 0.2,
 } as const;

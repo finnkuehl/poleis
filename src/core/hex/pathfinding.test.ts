@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { distance, hex, hexKey, neighbors, type Hex } from './coords';
-import { findPath } from './pathfinding';
+import { findPath, reachable } from './pathfinding';
 
 const open = (): number => 1;
 
@@ -86,5 +86,31 @@ describe('findPath', () => {
     const b = hex(5, 0);
     expect(findPath(a, b, open, { maxCost: 4 })).toBeNull();
     expect(findPath(a, b, open, { maxCost: 5 })?.cost).toBe(5);
+  });
+});
+
+describe('reachable', () => {
+  it('respects the budget and reports costs without the start', () => {
+    const start = hex(0, 0);
+    const res = reachable(start, open, 2);
+    // 6 + 12 tiles within distance 2.
+    expect(res).toHaveLength(18);
+    expect(res.some((r) => hexKey(r.hex) === hexKey(start))).toBe(false);
+    for (const r of res) expect(r.cost).toBe(distance(start, r.hex));
+  });
+
+  it('uses the cheapest way and skips blocked tiles', () => {
+    const start = hex(0, 0);
+    const cost = (_from: Hex, to: Hex): number | null =>
+      hexKey(to) === hexKey(hex(1, 0)) ? null : hexKey(to) === hexKey(hex(0, 1)) ? 3 : 1;
+    const res = reachable(start, cost, 2);
+    const keys = res.map((r) => hexKey(r.hex));
+    expect(keys).not.toContain(hexKey(hex(1, 0)));
+    expect(keys).not.toContain(hexKey(hex(0, 1)));
+    expect(reachable(start, cost, 0)).toEqual([]);
+  });
+
+  it('is deterministic', () => {
+    expect(reachable(hex(3, -1), open, 3)).toEqual(reachable(hex(3, -1), open, 3));
   });
 });

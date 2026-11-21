@@ -4,6 +4,9 @@ import { GOOD_IDS, type Goods } from '../data';
 import type { GameState } from './state';
 import { runPopulation } from './rules/population';
 import { runProduction } from './rules/production';
+import { updateAllExplored } from './rules/vision';
+import { captureCities } from './rules/capture';
+import { healAndResetUnits, runUpkeep, spawnUnits } from './rules/units';
 
 /**
  * Ends the current turn and returns the new state (the input stays untouched).
@@ -19,17 +22,24 @@ export function endTurn(state: GameState): GameState {
   if (!stock) throw new Error(`Unknown player ${player}`);
   const before = { ...stock };
   // Start of the player's turn (docs/GAME_DESIGN.md, section 2):
-  // 1. production, then 2./3. consumption, growth and taxes.
-  // M4: unit upkeep joins the consumption step.
+  // Units standing on an enemy city center take it over.
+  const captured = captureCities(next, player);
+  // Units first: heal, reset, new units appear.
+  healAndResetUnits(next, player);
+  const spawned = spawnUnits(next, player);
+  // Then production, consumption, growth and taxes; the units eat last (after the residents).
   const report = runProduction(next, player);
   report.cities = runPopulation(next, player);
-  // Combined net change of production and population.
+  report.units = { spawned, ...runUpkeep(next, player, stock) };
+  // Combined net change of production, population and upkeep.
   const delta: Goods = {};
   for (const id of GOOD_IDS) {
     const d = stock[id] - before[id];
     if (d !== 0) delta[id] = d;
   }
   report.delta = delta;
+  report.captured = captured;
   next.lastReport = report;
+  updateAllExplored(next);
   return next;
 }

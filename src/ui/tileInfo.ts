@@ -7,12 +7,16 @@ import {
   BUILDING_IDS,
   BUILDINGS,
   GOODS,
+  GOOD_IDS,
+  UNITS,
   economyConfig,
   type BuildingId,
   type CityLevel,
   type GoodId,
   type Stock,
+  type UnitId,
 } from '../data';
+import type { Unit } from '../core/state';
 import { TERRAIN, type TerrainId } from '../data/terrain';
 import { en } from '../i18n/en';
 import {
@@ -20,6 +24,8 @@ import {
   formatAdvanceTo,
   formatDrachmas,
   formatMissing,
+  formatMoves,
+  formatResidents,
   formatStatus,
   formatTileGain,
 } from '../i18n/format';
@@ -35,6 +41,7 @@ import {
   tradeRows,
 } from './cityText';
 import { button, el } from './dom';
+import { unitStatLine, unitStatus, unitStatusText, type TrainOption } from './unitText';
 
 export interface InfoRow {
   label: string;
@@ -87,6 +94,27 @@ export interface BuildingInfo {
   onTogglePause?: () => void;
   /** Marketplace only: the list of tradable goods. */
   trade?: TradeInfo;
+  /** Barracks only: the units that can be trained. */
+  train?: TrainInfo;
+}
+
+export interface TrainInfo {
+  options: TrainOption[];
+  /** Unit already ordered this turn (one order per barracks): the list is disabled. */
+  pending: UnitId | null;
+  onTrain(id: UnitId): void;
+}
+
+export interface UnitInfo {
+  hex: Hex;
+  terrain: TerrainId;
+  unit: Unit;
+  /** false = a foreign unit: tagged "Enemy", no moves or hint. */
+  own: boolean;
+  /** Own units: is there an attack target in reach (for the status line)? */
+  hasTargets?: boolean;
+  /** Settlers only: the "Found city here" button. */
+  found?: { ok: boolean; reason?: string; onFound(): void };
 }
 
 export interface TradeInfo {
@@ -103,6 +131,8 @@ export interface CityInfo {
   level: CityLevel;
   stats: CityStats;
   check: AdvanceCheck;
+  /** Working and free residents of this city (optional). */
+  workers?: { working: number; free: number };
   /** Goods in stock (to tell whether the city is hungry and which needs are covered). */
   stock: Stock;
   /** If set, the Advance button is shown (enabled when `check.canAdvance`). */
@@ -128,6 +158,7 @@ export interface TileInfoPanel {
   showTerrain(h: Hex, terrain: TerrainId, extra?: TerrainExtra): void;
   showBuilding(o: BuildingInfo): void;
   showCity(o: CityInfo): void;
+  showUnit(o: UnitInfo): void;
   showRoad(o: RoadInfo): void;
   /** Same as `showTerrain` (kept for existing callers). */
   show(h: Hex, terrain: TerrainId, extra?: TerrainExtra): void;
@@ -270,6 +301,97 @@ export function createTileInfoPanel(root: HTMLElement, onClose: () => void): Til
     return wrap;
   }
 
+  /** Barracks: one row per unit type; ready rows train with one tap. */
+  function trainSection(t: TrainInfo): HTMLElement {
+    const wrap = el('div', 'build-here');
+    wrap.appendChild(el('h3', 'build-here__title', en.unitText.train));
+    if (t.pending) {
+      wrap.appendChild(
+        el('p', 'tile-info__hint', fill(en.unitText.training, { unit: en.units[t.pending] })),
+      );
+    }
+    for (const o of t.options) {
+      const def = UNITS[o.id];
+      const ok = o.state === 'ok' && !t.pending;
+      const item = button(`build-item build-item--here${ok ? '' : ' is-muted'}`, '');
+      item.disabled = !ok;
+      const icon = el('span', 'build-item__icon', def.icon);
+      icon.setAttribute('aria-hidden', 'true');
+      const body = el('span', 'build-item__body');
+      body.appendChild(el('span', 'build-item__name', en.units[o.id]));
+      const sub = el('span', 'build-item__effect');
+      if (o.state === 'locked' && o.level) {
+        sub.textContent = fill(en.ui.fromLevel, { level: en.levels[o.level] });
+      } else if (o.state === 'noResidents') {
+        sub.textContent = fill(en.unitText.needsResidents, { n: o.residentsNeeded ?? 0 });
+      } else if (o.state === 'unaffordable' && o.missing) {
+        sub.className = 'build-item__missing';
+        sub.textContent = formatMissing(o.missing);
+      } else {
+        const parts = GOOD_IDS.filter((g) => (def.cost[g] ?? 0) > 0).map(
+          (g) => `${GOODS[g].icon} ${def.cost[g]} ${en.goods[g]}`,
+        );
+        if (def.residents > 0) parts.push(formatResidents(def.residents));
+        sub.textContent = parts.join(', ');
+      }
+      body.appendChild(sub);
+      body.appendChild(el('span', 'build-item__stats', unitStatLine(o.id)));
+      if (o.state === 'ok')
+        body.appendChild(el('span', 'build-item__gain', en.unitText.readyNextTurn));
+      item.append(icon, body);
+      if (ok) item.addEventListener('click', () => t.onTrain(o.id));
+      wrap.appendChild(item);
+    }
+    return wrap;
+  }
+
+  function showUnit(o: UnitInfo): void {
+    const def = UNITS[o.unit.type];
+    setHeader(o.hex, en.units[o.unit.type], def.icon, o.terrain);
+    const nodes: HTMLElement[] = [];
+    if (!o.own) nodes.push(el('p', 'unit-tag', en.unitText.enemy));
+    const hp = el('div', 'hp');
+    const track = el('span', 'hp__track');
+    const fillBar = el('span', 'hp__fill');
+    const ratio = Math.max(0, Math.min(1, o.unit.hp / def.hp));
+    fillBar.style.width = `${Math.round(ratio * 100)}%`;
+    if (ratio <= 0.34) fillBar.classList.add('is-low');
+    track.appendChild(fillBar);
+    hp.append(track, el('span', 'hp__text', fill(en.unitText.hp, { hp: o.unit.hp, max: def.hp })));
+    nodes.push(hp);
+    // Own units: compact panel (name, HP, moves, status), so the map stays visible above it.
+    if (!o.own) nodes.push(el('p', 'tile-info__line', unitStatLine(o.unit.type)));
+    if (o.own) {
+      nodes.push(
+        el(
+          'p',
+          'tile-info__line',
+          fill(en.unitText.movesLeft, {
+            left: formatMoves(o.unit.movesLeft),
+            max: def.movement,
+          }),
+        ),
+      );
+      const status = unitStatus(o.unit, o.hasTargets ?? false);
+      const row = el('p', `tile-info__status is-${status === 'done' ? 'neutral' : 'ok'}`);
+      row.append(el('span', 'status-dot'), document.createTextNode(unitStatusText(status)));
+      nodes.push(row);
+    } else {
+      nodes.push(terrainLine(o.terrain));
+    }
+    if (o.own && o.found) {
+      const found = o.found;
+      const b = button('btn btn--primary unit-found', en.unitText.foundCity);
+      b.disabled = !found.ok;
+      if (found.ok) b.addEventListener('click', found.onFound);
+      nodes.push(b);
+      if (!found.ok && found.reason) nodes.push(el('p', 'city-next__reason', found.reason));
+    }
+    content.replaceChildren(...nodes);
+    content.scrollTop = 0;
+    panel.hidden = false;
+  }
+
   function showBuildingInner(o: BuildingInfo): void {
     const def = BUILDINGS[o.type];
     setHeader(o.hex, en.buildings[o.type], def.icon, o.terrain);
@@ -291,6 +413,7 @@ export function createTileInfoPanel(root: HTMLElement, onClose: () => void): Til
       );
     }
     if (o.trade) nodes.push(tradeSection(o.trade, () => showBuildingInner(o)));
+    if (o.train) nodes.push(trainSection(o.train));
     nodes.push(terrainLine(o.terrain));
     const actions = el('div', 'tile-info__actions');
     if (o.onTogglePause && canPause(o.type)) {
@@ -325,6 +448,7 @@ export function createTileInfoPanel(root: HTMLElement, onClose: () => void): Til
     );
     rows.appendChild(row);
     nodes.push(rows);
+    if (o.workers) nodes.push(line(fill(en.cityPanel.workers, o.workers)));
 
     const growth = growthState(o.level, o.stats, o.stock);
     nodes.push(line(growthText(growth), growth.kind === 'growing' ? 'ok' : 'problem'));
@@ -443,6 +567,7 @@ export function createTileInfoPanel(root: HTMLElement, onClose: () => void): Til
     show: showTerrain,
     showBuilding: showBuildingInner,
     showCity,
+    showUnit,
     showRoad(o) {
       setHeader(o.hex, en.ui.road, '\u{1F6E4}\uFE0F', o.terrain);
       content.replaceChildren(terrainLine(o.terrain), demolishButton(o.onDemolish));

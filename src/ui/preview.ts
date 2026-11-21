@@ -7,12 +7,14 @@ import {
   createBottomBar,
   createBuildMenu,
   createConfirmSheet,
+  createEconomySheet,
   createModeBanner,
   createResourceBar,
   createSeedLabel,
   createTileInfoPanel,
   createToast,
 } from './index';
+import type { EconomyOverview } from '../core/rules/economy';
 import type { AdvanceCheck } from '../core/rules/advance';
 import type { CityReport, CityStats } from '../core/rules/population';
 import type { BuildingStatus, TurnReport } from '../core/rules/production';
@@ -20,6 +22,10 @@ import type { BuildingId, CityLevel, Stock } from '../data';
 import { formatAdvanced, formatBought, formatSold } from '../i18n/format';
 import { turnSummary } from './turnSummary';
 import type { BuildOption } from './buildOptions';
+import type { Unit } from '../core/state';
+import { UNITS, type UnitId } from '../data';
+import { formatAttacked } from '../i18n/format';
+import { attackPreviewLines, trainOptions } from './unitText';
 
 const ui = document.getElementById('ui');
 const controls = document.getElementById('preview-controls');
@@ -27,13 +33,47 @@ if (!ui || !controls) throw new Error('Missing containers');
 
 const stock = { ...emptyStock(), wood: 6, stone: 1, grain: 4, planks: 2 };
 
-const bar = createResourceBar(ui);
+const economy = createEconomySheet(ui);
+const sampleOverview: EconomyOverview = {
+  workers: { residents: 8, housing: 12, working: 6, free: 2, missing: 1 },
+  goods: [
+    {
+      good: 'wood',
+      stock: 6,
+      produced: [{ source: 'woodcutter', amount: 4, count: 2 }],
+      consumed: [{ source: 'building', detail: 'sawmill', amount: 2, count: 1 }],
+      net: 2,
+      turnsLeft: null,
+    },
+    {
+      good: 'fish',
+      stock: 7,
+      produced: [{ source: 'fishery', amount: 2, count: 1 }],
+      consumed: [
+        { source: 'residents', amount: 3, count: 1 },
+        { source: 'units', amount: 2, count: 1 },
+      ],
+      net: -3,
+      turnsLeft: 2,
+    },
+    {
+      good: 'drachmas',
+      stock: 7,
+      produced: [{ source: 'taxes', amount: 3, count: 1 }],
+      consumed: [],
+      net: 3,
+      turnsLeft: null,
+    },
+  ],
+};
+const bar = createResourceBar(ui, { onOverview: () => economy.open(sampleOverview) });
 bar.update(
   { ...stock, drachmas: 7, grapes: 2, wine: 1 },
   { wood: 2, stone: -1, grain: 3, planks: 0, bread: 1, drachmas: 3 },
   3,
   120,
   { residents: 6, housing: 8 },
+  { residents: 6, housing: 8, working: 4, free: 2, missing: 1 },
 );
 createSeedLabel(ui, '12345');
 const toast = createToast(ui);
@@ -60,6 +100,10 @@ const bottom = createBottomBar(ui, {
   onRoad: () => {
     bottom.setMode('road');
     banner.show(en.flow.roadStartPrompt);
+  },
+  onUnits: () => {
+    bottom.setMode('units');
+    toast.show('Units mode');
   },
   onEndTurn: () => toast.show('Turn ended'),
 });
@@ -287,7 +331,15 @@ function cityReport(over: Partial<CityReport>): CityReport {
   };
 }
 function turnReport(...cities: CityReport[]): TurnReport {
-  return { turn: 5, player: 0, delta: {}, buildings: [], cities };
+  return {
+    turn: 5,
+    player: 0,
+    delta: {},
+    buildings: [],
+    cities,
+    units: { spawned: 0, upkeepEaten: {}, starving: false, lost: 0 },
+    captured: [],
+  };
 }
 addControl('Turn summary toasts', () => {
   const sequence = [
@@ -372,6 +424,152 @@ addControl('Confirm demolish', () =>
     onCancel: () => undefined,
   }),
 );
+// ---- Units ----
+function sampleUnit(type: UnitId, over: Partial<Unit> = {}): Unit {
+  return {
+    id: 1,
+    type,
+    owner: 0,
+    hex,
+    hp: UNITS[type].hp,
+    movesLeft: UNITS[type].movement,
+    hasMoved: false,
+    acted: false,
+    attacked: false,
+    capturing: null,
+    ...over,
+  };
+}
+addControl('Units button disabled', () => bottom.setUnitsEnabled(false));
+addControl('Units button enabled', () => bottom.setUnitsEnabled(true));
+addControl('Unit: own, ready', () =>
+  panel.showUnit({ hex, terrain: 'plains', unit: sampleUnit('spearman'), own: true }),
+);
+addControl('Unit: own, hurt, can attack', () =>
+  panel.showUnit({
+    hex,
+    terrain: 'forest',
+    unit: sampleUnit('archer', { hp: 3, movesLeft: 0, acted: true }),
+    own: true,
+  }),
+);
+addControl('Unit: own, done', () =>
+  panel.showUnit({
+    hex,
+    terrain: 'hills',
+    unit: sampleUnit('spearman', { movesLeft: 0, acted: true, attacked: true }),
+    own: true,
+  }),
+);
+addControl('Unit: enemy', () =>
+  panel.showUnit({
+    hex,
+    terrain: 'plains',
+    unit: sampleUnit('hoplite', { owner: 1, hp: 8, movesLeft: 0 }),
+    own: false,
+  }),
+);
+addControl('Settler: can found', () =>
+  panel.showUnit({
+    hex,
+    terrain: 'plains',
+    unit: sampleUnit('settler'),
+    own: true,
+    found: { ok: true, onFound: () => toast.show(en.flow.cityFounded) },
+  }),
+);
+addControl('Settler: blocked', () =>
+  panel.showUnit({
+    hex,
+    terrain: 'plains',
+    unit: sampleUnit('settler'),
+    own: true,
+    found: {
+      ok: false,
+      reason: en.errors.tooCloseToCity.replace('{distance}', '4'),
+      onFound: () => undefined,
+    },
+  }),
+);
+const trainStock: Stock = { ...emptyStock(), planks: 5, bronze: 0, bread: 4, drachmas: 9 };
+function showBarracks(pending: UnitId | null): void {
+  panel.showBuilding({
+    hex,
+    terrain: 'plains',
+    type: 'barracks',
+    status: { kind: 'working' },
+    workers: { assigned: 1, needed: 1 },
+    train: {
+      options: trainOptions({ cityLevel: 'settlement', residents: 2, stock: trainStock }),
+      pending,
+      onTrain: (id) => {
+        toast.show(en.flow.trainOrdered.replace('{unit}', en.units[id]));
+        showBarracks(id);
+      },
+    },
+  });
+}
+addControl('Barracks: train list', () => showBarracks(null));
+addControl('Barracks: order pending', () => showBarracks('spearman'));
+addControl('Confirm attack', () => {
+  const a = sampleUnit('spearman');
+  const d = sampleUnit('spearman', { id: 2, owner: 1 });
+  confirm.show({
+    title: en.attack.confirmTitle.replace('{unit}', en.units.spearman),
+    lines: attackPreviewLines(
+      { damage: 5, counter: 5, defenderDies: false, attackerDies: false },
+      a,
+      d,
+    ),
+    confirmLabel: en.attack.confirm,
+    onConfirm: () =>
+      toast.show(
+        formatAttacked('Spearman', {
+          damage: 5,
+          counter: 5,
+          defenderDies: false,
+          attackerDies: false,
+        }),
+      ),
+    onCancel: () => undefined,
+  });
+});
+addControl('Confirm attack: kill', () => {
+  const d = sampleUnit('archer', { id: 2, owner: 1, hp: 4 });
+  confirm.show({
+    title: en.attack.confirmTitle.replace('{unit}', en.units.archer),
+    lines: attackPreviewLines(
+      { damage: 5, counter: 0, defenderDies: true, attackerDies: false },
+      sampleUnit('spearman'),
+      d,
+    ),
+    confirmLabel: en.attack.confirm,
+    onConfirm: () =>
+      toast.show(
+        formatAttacked('Spearman', {
+          damage: 5,
+          counter: 0,
+          defenderDies: true,
+          attackerDies: false,
+        }),
+      ),
+    onCancel: () => undefined,
+  });
+});
+addControl('Turn summary: units', () => {
+  const base = turnReport();
+  const sequence = [
+    ...turnSummary(
+      { ...base, units: { spawned: 1, upkeepEaten: {}, starving: false, lost: 0 } },
+      { spawnedUnits: ['spearman'] },
+    ),
+    ...turnSummary({ ...base, units: { spawned: 0, upkeepEaten: {}, starving: true, lost: 1 } }),
+    ...turnSummary({ ...base, captured: [2] }),
+  ];
+  sequence.forEach((line, i) =>
+    window.setTimeout(() => toast.show(line.text, line.kind), i * 3200),
+  );
+});
 addControl('Toast', () => toast.show(en.flow.roadBuilt));
 addControl('Error toast', () => toast.show('This tile is already occupied.', 'error'));
 addControl(

@@ -18,7 +18,18 @@ import {
   formatSold,
   formatTurns,
   formatWorkerCount,
+  formatMoves,
+  formatUnitsReady,
+  formatUnitsLost,
+  formatCaptured,
+  formatAttacked,
+  formatNet,
+  formatRunsOut,
+  formatMade,
+  formatUsed,
+  formatWorkerLine,
 } from './format';
+import type { GoodFlow } from '../core/rules/economy';
 
 describe('i18n/format', () => {
   it('formats goods in display order and skips zeros', () => {
@@ -78,7 +89,54 @@ describe('i18n/format', () => {
     expect(formatSold('wood', 2, 1)).toBe('Sold 2 Wood for 1 drachma.');
     expect(formatBought('wood', 1, 3)).toBe('Bought 1 Wood for 3 drachmas.');
   });
+  it('formats unit texts', () => {
+    expect(formatMoves(2)).toBe('2');
+    expect(formatMoves(0.5)).toBe('0.5');
+    expect(formatUnitsReady(1)).toBe('1 unit is ready');
+    expect(formatUnitsReady(3)).toBe('3 units are ready');
+    expect(formatUnitsLost(1)).toBe('1 unit was lost to hunger');
+    expect(formatUnitsLost(2)).toBe('2 units were lost to hunger');
+    expect(formatCaptured(1)).toBe('You captured a city!');
+    expect(formatCaptured(2)).toBe('You captured 2 cities!');
+    const base = { damage: 5, counter: 0, defenderDies: false, attackerDies: false };
+    expect(formatAttacked('Spearman', base)).toBe('Spearman attacked: 5 damage.');
+    expect(formatAttacked('Spearman', { ...base, damage: 10, defenderDies: true })).toBe(
+      'Spearman defeated the enemy.',
+    );
+    expect(formatAttacked('Spearman', { ...base, counter: 3 })).toBe(
+      'Spearman attacked: 5 damage, took 3.',
+    );
+    expect(formatAttacked('Scout', { ...base, damage: 1, counter: 4, attackerDies: true })).toBe(
+      'Scout attacked: 1 damage. Your scout was lost.',
+    );
+  });
   it('fills placeholders', () => {
     expect(fill('Build {building} here?', { building: 'House' })).toBe('Build House here?');
+  });
+  it('formats economy flows', () => {
+    expect(formatNet(4)).toBe('+4');
+    expect(formatNet(-2)).toBe('−2');
+    expect(formatNet(0)).toBe('0');
+    expect(formatRunsOut(0)).toBe('Runs out this turn');
+    expect(formatRunsOut(1)).toBe('Runs out in 1 turn');
+    expect(formatRunsOut(3)).toBe('Runs out in 3 turns');
+    const flow: GoodFlow = {
+      good: 'wood',
+      stock: 5,
+      produced: [{ source: 'woodcutter', amount: 4, count: 2 }],
+      consumed: [
+        { source: 'building', detail: 'sawmill', amount: 2, count: 1 },
+        { source: 'residents', amount: 3, count: 1 },
+        { source: 'units', amount: 1, count: 1 },
+      ],
+      net: -2,
+      turnsLeft: 2,
+    };
+    expect(formatMade(flow)).toBe('Made: Woodcutter ×2 +4');
+    expect(formatUsed(flow)).toBe('Used: Sawmill −2, residents −3, units −1');
+    expect(formatMade({ ...flow, produced: [] })).toBeNull();
+    expect(formatWorkerLine({ residents: 8, housing: 12, working: 6, free: 2, missing: 1 })).toBe(
+      'Residents 8 / 12 · Working 6 · Free 2 · Missing 1',
+    );
   });
 });

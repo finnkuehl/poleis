@@ -4,17 +4,24 @@ import {
   BUILDINGS,
   economyConfig,
   GOOD_IDS,
+  militaryConfig,
   populationConfig,
+  TERRAIN,
+  UNITS,
   type BuildingId,
   type CityLevel,
   type Stock,
   type TerrainId,
+  type UnitId,
 } from '../data';
-import type { Hex } from './hex';
-import { generateMap, findStartPositions } from './mapgen';
+import { distance, neighbors, type Hex } from './hex';
+import { terrainAt, tileIndex } from './map';
+import { generateMap, findLandmasses, findStartPositions } from './mapgen';
+import { createCity } from './rules/found';
 import { claimTerritory } from './rules/territory';
+import { updateAllExplored } from './rules/vision';
 import type { TurnReport } from './rules/production';
-import { createRng, seedFromText, type Rng } from './rng';
+import { createRng, nextInt, seedFromText, type Rng } from './rng';
 
 export interface MapState {
   width: number;
@@ -30,6 +37,8 @@ export interface PlayerState {
   isHuman: boolean;
   /** Shared stock of the civilization. */
   goods: Stock;
+  /** Per tile index: has the player ever seen this tile (fog of war)? */
+  explored: boolean[];
 }
 
 export interface Building {
@@ -52,6 +61,32 @@ export interface City {
   supplyStreak: number;
 }
 
+export interface Unit {
+  /** From the shared `nextId` counter. */
+  id: number;
+  type: UnitId;
+  owner: PlayerId;
+  hex: Hex;
+  hp: number;
+  /** Movement points left this turn (may be fractional, e.g. 0.5). */
+  movesLeft: number;
+  /** Moved this turn (for the "first step is always allowed" rule). */
+  hasMoved: boolean;
+  /** Moved or attacked this turn (acting units do not heal). */
+  acted: boolean;
+  /** Attacked this turn (one attack per turn). */
+  attacked: boolean;
+  /** Id of the enemy city whose center the unit stands on to capture it, else null. */
+  capturing: number | null;
+}
+
+/** A unit ordered in a barracks; it appears at the start of the owner's next turn. */
+export interface TrainingOrder {
+  barracksId: number;
+  unit: UnitId;
+  owner: PlayerId;
+}
+
 export interface GameState {
   version: 1;
   seedText: string;
@@ -72,7 +107,11 @@ export interface GameState {
   cities: City[];
   /** Per tile index: id of the city whose territory it is, -1 = none. */
   tileCity: number[];
-  /** Id of the next building. */
+  /** All units (ids come from `nextId`). */
+  units: Unit[];
+  /** Units ordered this turn, waiting to appear. */
+  training: TrainingOrder[];
+  /** Id of the next building or unit. */
   nextId: number;
   /** Result of the latest production (for the UI). */
   lastReport: TurnReport | null;
@@ -99,7 +138,7 @@ export function createGameState(seedText: string, options: { sandbox?: boolean }
     rng: gameRng,
     turn: 1,
     currentPlayer: 0,
-    players: [{ id: 0, isHuman: true, goods }],
+    players: [{ id: 0, isHuman: true, goods, explored: map.tiles.map(() => false) }],
     buildings: [{ id: 1, type: 'cityCenter', owner: 0, hex: start, paused: false }],
     roads: map.tiles.map(() => false),
     territory,
@@ -114,9 +153,72 @@ export function createGameState(seedText: string, options: { sandbox?: boolean }
       },
     ],
     tileCity: map.tiles.map(() => -1),
+    units: [],
+    training: [],
     nextId: 2,
     lastReport: null,
   };
   claimTerritory(state, start, BUILDINGS.cityCenter.territoryRadius, 0, 1);
+  if (options.sandbox) addPassiveEnemy(state, start);
+  updateAllExplored(state);
   return state;
+}
+
+/**
+ * Test mode: a passive civilization (player 1) with one city and two spearmen.
+ * Picked with the seeded RNG after the human start, so the human's start stays unchanged.
+ */
+function addPassiveEnemy(state: GameState, humanCenter: Hex): void {
+  const { min, max, preferred } = militaryConfig.sandboxEnemyDistance;
+  const walkableNeighbor = (h: Hex) =>
+    neighbors(h).find((n) => {
+      const t = terrainAt(state.map, n);
+      return t !== undefined && TERRAIN[t].moveCost !== null;
+    });
+  const mainland = (findLandmasses(state.map)[0] ?? []).filter(
+    (h) =>
+      terrainAt(state.map, h) === 'plains' &&
+      state.territory[tileIndex(state.map, h)] === -1 &&
+      walkableNeighbor(h) !== undefined,
+  );
+  let pool = mainland.filter((h) => {
+    const d = distance(humanCenter, h);
+    return d >= min && d <= max;
+  });
+  if (pool.length > 0) {
+    // Closest to the preferred distance; the RNG breaks ties.
+    const best = Math.min(...pool.map((h) => Math.abs(distance(humanCenter, h) - preferred)));
+    pool = pool.filter((h) => Math.abs(distance(humanCenter, h) - preferred) === best);
+  } else {
+    // Fallback: the farthest valid plains tile.
+    const far = Math.max(-1, ...mainland.map((h) => distance(humanCenter, h)));
+    pool = mainland.filter((h) => distance(humanCenter, h) === far);
+  }
+  if (pool.length === 0) return;
+  const center = pool[nextInt(state.rng, 0, pool.length - 1)];
+  const goods = {} as Stock;
+  for (const id of GOOD_IDS) goods[id] = 0;
+  state.players.push({
+    id: 1,
+    isHuman: false,
+    goods,
+    explored: state.map.tiles.map(() => false),
+  });
+  createCity(state, 1, center, populationConfig.startResidents);
+  const spearman = UNITS.spearman;
+  const spots = [center, walkableNeighbor(center) as Hex];
+  for (const hex of spots) {
+    state.units.push({
+      id: state.nextId++,
+      type: 'spearman',
+      owner: 1,
+      hex,
+      hp: spearman.hp,
+      movesLeft: spearman.movement,
+      hasMoved: false,
+      acted: false,
+      attacked: false,
+      capturing: null,
+    });
+  }
 }

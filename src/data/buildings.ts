@@ -8,6 +8,7 @@ export type BuildingId =
   | 'cityCenter'
   | 'storehouse'
   | 'borderTower'
+  | 'barracks'
   | 'house'
   | 'woodcutter'
   | 'quarry'
@@ -69,6 +70,7 @@ export const BUILDING_IDS: readonly BuildingId[] = [
   'cityCenter',
   'storehouse',
   'borderTower',
+  'barracks',
   'house',
   'woodcutter',
   'quarry',
@@ -134,6 +136,21 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     minLevel: 'settlement',
     playerCanBuild: true,
     icon: '🗼',
+  },
+  // Trains land units (also settlers); the unit appears next turn.
+  barracks: {
+    category: 'city',
+    placement: onPlains,
+    cost: { planks: 6, stone: 4 },
+    workers: 0,
+    inputs: {},
+    outputs: {},
+    housing: 0,
+    isStorage: false,
+    territoryRadius: 0,
+    minLevel: 'settlement',
+    playerCanBuild: true,
+    icon: '🏰',
   },
   // +6 housing.
   house: {

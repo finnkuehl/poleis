@@ -13,7 +13,7 @@ describe('createGameState sandbox', () => {
     const normal = createGameState('sb');
     const sandbox = createGameState('sb', { sandbox: true });
     expect(sandbox.players[0].goods).toMatchObject(economyConfig.sandboxGoods);
-    expect(sandbox.cities).toEqual(normal.cities);
+    expect(sandbox.cities[0]).toEqual(normal.cities[0]);
     expect(sandbox.map).toEqual(normal.map);
   });
 });

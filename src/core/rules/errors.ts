@@ -23,7 +23,18 @@ export type RuleErrorCode =
   | 'roadNotAllowed'
   | 'nothingToDemolish'
   | 'cannotDemolishCityCenter'
-  | 'cannotPause';
+  | 'cannotPause'
+  | 'notOwnUnit'
+  | 'cannotReach'
+  | 'blockedByUnseen'
+  | 'notOwnBuilding'
+  | 'alreadyTraining'
+  | 'notEnemy'
+  | 'alreadyAttacked'
+  | 'notInRange'
+  | 'notASettler'
+  | 'foreignTerritory'
+  | 'tooCloseToCity';
 
 export interface RuleError {
   code: RuleErrorCode;

@@ -5,7 +5,14 @@ import { terrainAt, tileIndex } from '../core/map';
 import { TERRAIN, type TerrainId } from '../data/terrain';
 import {
   advanceCheck,
+  attackTargets,
+  checkFoundCity,
+  combatPreview,
+  isVisible,
+  reachableTiles,
+  unitAt,
   assignWorkers,
+  economyOverview,
   canAfford,
   canTrade,
   cityIdOf,
@@ -22,7 +29,7 @@ import {
   validPlacements,
   type BuildingStatus,
 } from '../core/rules';
-import type { GameState } from '../core/state';
+import type { GameState, Unit } from '../core/state';
 import {
   BUILDING_IDS,
   BUILDINGS,
@@ -32,12 +39,14 @@ import {
   type CityLevel,
   type GoodId,
   type Stock,
+  type UnitId,
 } from '../data';
 import { en } from '../i18n/en';
 import {
   fill,
   formatAdvanced,
   formatAdvanceTo,
+  formatAttacked,
   formatBought,
   formatError,
   formatGoods,
@@ -52,12 +61,15 @@ import {
   createBottomBar,
   createBuildMenu,
   createConfirmSheet,
+  createEconomySheet,
   createModeBanner,
   createResourceBar,
   createSeedLabel,
   createTileInfoPanel,
   createToast,
+  attackPreviewLines,
   perTurnText,
+  trainOptions,
   turnSummary,
 } from './index';
 
@@ -67,7 +79,8 @@ type Mode =
   | { kind: 'idle' }
   | { kind: 'placing'; building: BuildingId }
   | { kind: 'roadStart' }
-  | { kind: 'roadEnd'; from: Hex };
+  | { kind: 'roadEnd'; from: Hex }
+  | { kind: 'unit'; unitId: number };
 
 /** Creates the renderer and all UI components and runs the interaction. Rejects on renderer errors. */
 export async function createGame(
@@ -81,16 +94,35 @@ export async function createGame(
   let selected: Hex | null = null;
   let statuses: Record<number, BuildingStatus> = {};
   let menuOpen = false;
+  // A unit stands on the selected building tile and the player asked for the building panel.
+  let preferBuilding = false;
 
   // Seed label first: later elements stack above it.
   createSeedLabel(uiContainer, state.seedText, testMode);
 
-  const renderer = await createRenderer(appContainer, state, (h) => onTileTap(h));
+  // Unit drag & drop: the unit being dragged (null = no drag)
+  let dragUnitId: number | null = null;
+  const renderer = await createRenderer(appContainer, state, (h) => onTileTap(h), {
+    onStart: (h, sx, sy) => startUnitDrag(h, sx, sy),
+    onMove: (h, sx, sy) => moveUnitDrag(h, sx, sy),
+    onEnd: (h) => endUnitDrag(h),
+    onCancel: () => cancelUnitDrag(),
+  });
   const toast = createToast(uiContainer);
-  const resourceBar = createResourceBar(uiContainer);
+  const resourceBar = createResourceBar(uiContainer, {
+    onOverview: () => {
+      resetToIdle();
+      economySheet.open(economyOverview(state, PLAYER));
+    },
+  });
+  const economySheet = createEconomySheet(uiContainer);
   const banner = createModeBanner(uiContainer, () => resetToIdle());
   const confirm = createConfirmSheet(uiContainer);
   const panel = createTileInfoPanel(uiContainer, () => {
+    if (mode.kind === 'unit') {
+      resetToIdle();
+      return;
+    }
     selected = null;
     renderer.selectTile(null);
   });
@@ -103,6 +135,7 @@ export async function createGame(
   });
   const bottomBar = createBottomBar(uiContainer, {
     onBuild: () => {
+      economySheet.close();
       if (menuOpen || mode.kind === 'placing') {
         resetToIdle();
         return;
@@ -114,6 +147,7 @@ export async function createGame(
       menu.open(stockOf(state), highestLevel(state));
     },
     onRoad: () => {
+      economySheet.close();
       if (mode.kind === 'roadStart' || mode.kind === 'roadEnd') {
         resetToIdle();
         return;
@@ -122,6 +156,10 @@ export async function createGame(
       mode = { kind: 'roadStart' };
       bottomBar.setMode('road');
       banner.show(en.flow.roadStartPrompt);
+    },
+    onUnits: () => {
+      economySheet.close();
+      selectNextUnit();
     },
     onEndTurn: () => {
       resetToIdle();
@@ -159,6 +197,7 @@ export async function createGame(
   /** Ends the turn and shows one toast with the news of the turn. */
   function endTurn(): void {
     const readyBefore = readyCities(state);
+    const unitsBefore = new Set(ownUnits().map((u) => u.id));
     if (!commit({ type: 'endTurn' })) return;
     const report = state.lastReport;
     if (!report) return;
@@ -171,7 +210,10 @@ export async function createGame(
       if (check.to && check.canAdvance && !readyBefore.has(c.id)) canAdvance[c.id] = check.to;
       supply[c.id] = { good: check.supply.good, turnsNeeded: check.supply.turns };
     }
-    const lines = turnSummary(report, { canAdvance, supply });
+    const spawnedUnits = ownUnits()
+      .filter((u) => !unitsBefore.has(u.id))
+      .map((u) => u.type);
+    const lines = turnSummary(report, { canAdvance, supply, spawnedUnits });
     if (lines.length === 0) return;
     const isError = lines.some((l) => l.kind === 'error');
     toast.show(
@@ -189,11 +231,24 @@ export async function createGame(
     confirm.hide();
     banner.hide();
     renderer.setHighlights([]);
+    renderer.setAttackTargets([]);
     renderer.setPathPreview(null);
     bottomBar.setMode('idle');
     selected = null;
+    preferBuilding = false;
     renderer.selectTile(null);
     panel.hide();
+  }
+
+  /** Working and free residents of one city. */
+  function cityWorkers(cityId: number): { working: number; free: number } {
+    const assigned = assignWorkers(state, PLAYER, connectedBuildingIds(state, PLAYER));
+    let working = 0;
+    for (const b of state.buildings) {
+      if (b.owner === PLAYER && cityIdOf(state, b) === cityId) working += assigned[b.id] ?? 0;
+    }
+    const residents = state.cities.find((c) => c.id === cityId)?.residents ?? 0;
+    return { working, free: Math.max(0, residents - working) };
   }
 
   /** Residents and housing summed over the player's cities. */
@@ -213,16 +268,21 @@ export async function createGame(
     for (const report of previewProduction(state, PLAYER).buildings) {
       statuses[report.buildingId] = report.status;
     }
-    renderer.setState(state, statuses);
+    renderer.setState(state, statuses, PLAYER);
+    const overview = economyOverview(state, PLAYER);
     resourceBar.update(
       stockOf(state),
       state.lastReport?.delta ?? null,
       state.turn,
       economyConfig.turnLimit,
       people(),
+      overview.workers,
     );
+    if (economySheet.isOpen()) economySheet.open(overview);
     bottomBar.setTurn(state.turn);
+    bottomBar.setUnitsEnabled(ownUnits().length > 0);
     if (mode.kind === 'idle') showPanel();
+    else if (mode.kind === 'unit') refreshUnitMode();
   }
 
   /** Applies an action; on success stores the state and refreshes, otherwise shows the error. */
@@ -258,6 +318,15 @@ export async function createGame(
       panel.hide();
       return;
     }
+    const unit = unitAt(state, hex);
+    if (unit && unit.owner === PLAYER && !preferBuilding) {
+      showUnitPanel(unit);
+      return;
+    }
+    if (unit && unit.owner !== PLAYER && isVisible(state, PLAYER, hex)) {
+      showUnitPanel(unit);
+      return;
+    }
     const building = buildingAt(hex);
     if (building?.type === 'cityCenter') {
       const cityId = cityIdOf(state, building);
@@ -274,6 +343,7 @@ export async function createGame(
           level: city.level,
           stats: cityStats(afterProduction, cityId),
           check,
+          workers: cityWorkers(cityId),
           stock: stockOf(afterProduction),
           onAdvance: check.to ? () => askAdvance(cityId) : undefined,
         });
@@ -316,6 +386,7 @@ export async function createGame(
                 },
               }
             : undefined,
+        train: building.type === 'barracks' ? trainInfo(building) : undefined,
         onDemolish:
           building.type === 'cityCenter'
             ? undefined
@@ -336,6 +407,279 @@ export async function createGame(
     } else {
       showEmptyTile(hex, terrain);
     }
+  }
+
+  function ownUnits(): Unit[] {
+    return state.units.filter((u) => u.owner === PLAYER);
+  }
+
+  function isExplored(h: Hex): boolean {
+    const i = tileIndex(state.map, h);
+    const player = state.players.find((p) => p.id === PLAYER);
+    return i >= 0 && player?.explored[i] === true;
+  }
+
+  /** Training list of a barracks, from its city's level, residents and the player's goods. */
+  function trainInfo(building: GameState['buildings'][number]): {
+    options: ReturnType<typeof trainOptions>;
+    pending: UnitId | null;
+    onTrain(id: UnitId): void;
+  } {
+    const city = state.cities.find((c) => c.id === cityIdOf(state, building));
+    return {
+      options: trainOptions({
+        cityLevel: city?.level ?? 'settlement',
+        residents: city?.residents ?? 0,
+        stock: stockOf(state),
+      }),
+      pending: state.training.find((t) => t.barracksId === building.id)?.unit ?? null,
+      onTrain: (id) => {
+        if (commit({ type: 'train', barracksId: building.id, unit: id })) {
+          toast.show(fill(en.flow.trainOrdered, { unit: en.units[id] }));
+        }
+      },
+    };
+  }
+
+  /** Unit panel; own settlers get the "Found city here" button. */
+  function showUnitPanel(unit: Unit): void {
+    const terrain = terrainAt(state.map, unit.hex);
+    if (!terrain) return;
+    const own = unit.owner === PLAYER;
+    let found: { ok: boolean; reason?: string; onFound(): void } | undefined;
+    if (own && unit.type === 'settler') {
+      const error = checkFoundCity(state, PLAYER, unit.id);
+      found = {
+        ok: error === null,
+        reason: error ? formatError(error) : undefined,
+        onFound: () => foundHere(unit),
+      };
+    }
+    panel.showUnit({
+      hex: unit.hex,
+      terrain,
+      unit,
+      own,
+      hasTargets: own && visibleTargets(unit).length > 0,
+      found,
+    });
+  }
+
+  function foundHere(unit: Unit): void {
+    const hex = unit.hex;
+    leaveUnitMode();
+    selected = hex;
+    preferBuilding = false;
+    renderer.selectTile(hex);
+    if (commit({ type: 'foundCity', unitId: unit.id })) {
+      toast.show(en.flow.cityFounded);
+    }
+  }
+
+  /** Can the unit still do something this turn (a reachable tile or an attack target)? */
+  function canAct(unit: Unit): boolean {
+    if (
+      !unit.attacked &&
+      unit.movesLeft > 0 &&
+      reachableTiles(state, unit.id, { ignoreHiddenUnits: true }).length > 0
+    ) {
+      return true;
+    }
+    return attackTargets(state, unit.id).some((t) => isVisible(state, PLAYER, t.hex));
+  }
+
+  /** Units button: the next own unit (by id, after the current one, wrapping) that can still act. */
+  function selectNextUnit(): void {
+    const inUnitMode = mode.kind === 'unit';
+    const current = selected ? unitAt(state, selected) : undefined;
+    const currentId =
+      mode.kind === 'unit' ? mode.unitId : current?.owner === PLAYER ? current.id : -1;
+    const sorted = ownUnits().sort((a, b) => a.id - b.id);
+    // In unit mode the current unit is skipped; otherwise it comes last (it may still be due).
+    const ordered = [
+      ...sorted.filter((u) => u.id > currentId),
+      ...sorted.filter((u) => u.id < currentId),
+      ...sorted.filter((u) => u.id === currentId && !inUnitMode),
+    ];
+    // If the selected unit is the only one that can still act, keep it (and re-center on it).
+    const next = ordered.find(canAct) ?? sorted.find((u) => u.id === currentId && canAct(u));
+    if (!next) {
+      toast.show(en.unitText.allDone);
+      return;
+    }
+    enterUnitMode(next);
+  }
+
+  /** A press on an own unit that can still act turns into a drag instead of a map pan. */
+  function startUnitDrag(hex: Hex | null, sx: number, sy: number): boolean {
+    if (!hex || (mode.kind !== 'idle' && mode.kind !== 'unit')) return false;
+    const unit = unitAt(state, hex);
+    if (!unit || unit.owner !== PLAYER || !canAct(unit)) return false;
+    // No re-centering: the map must stay under the finger.
+    enterUnitMode(unit, false);
+    if (mode.kind !== 'unit') return false;
+    dragUnitId = unit.id;
+    renderer.setDragGhost(unit.id, sx, sy);
+    return true;
+  }
+
+  function moveUnitDrag(hex: Hex | null, sx: number, sy: number): void {
+    if (dragUnitId === null) return;
+    renderer.setDragGhost(dragUnitId, sx, sy);
+    const unit = state.units.find((u) => u.id === dragUnitId);
+    renderer.selectTile(hex ?? unit?.hex ?? null);
+  }
+
+  function endUnitDrag(hex: Hex | null): void {
+    const id = dragUnitId;
+    if (id === null) return;
+    dragUnitId = null;
+    renderer.setDragGhost(null);
+    const unit = state.units.find((u) => u.id === id);
+    if (mode.kind !== 'unit' || mode.unitId !== id || !unit) {
+      renderer.selectTile(selected);
+      return;
+    }
+    if (hex && !hexEquals(hex, unit.hex)) {
+      const target = visibleTargets(unit).find((t) => hexEquals(t.hex, hex));
+      if (target) {
+        askAttack(unit, target);
+        return;
+      }
+      if (
+        reachableTiles(state, unit.id, { ignoreHiddenUnits: true }).some((r) =>
+          hexEquals(r.hex, hex),
+        )
+      ) {
+        commit({ type: 'move', unitId: unit.id, to: hex });
+        return;
+      }
+    }
+    // Dropped elsewhere: nothing happens, the unit stays selected.
+    refreshUnitMode();
+  }
+
+  function cancelUnitDrag(): void {
+    if (dragUnitId === null) return;
+    dragUnitId = null;
+    renderer.setDragGhost(null);
+    refreshUnitMode();
+  }
+
+  function enterUnitMode(unit: Unit, center = true): void {
+    resetToIdle();
+    mode = { kind: 'unit', unitId: unit.id };
+    selected = unit.hex;
+    preferBuilding = false;
+    renderer.selectTile(unit.hex);
+    bottomBar.setMode('units');
+    refreshUnitMode();
+    if (center) centerAbovePanel(unit.hex);
+  }
+
+  /** Pans the map so the unit sits in the free map area above (or, on wide screens, beside) the panel. */
+  function centerAbovePanel(hex: Hex): void {
+    const panelEl = document.querySelector<HTMLElement>('.tile-info');
+    const rect = panelEl && !panelEl.hidden ? panelEl.getBoundingClientRect() : null;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    if (!rect) {
+      renderer.centerOn(hex);
+    } else if (w >= 700) {
+      // Card at the bottom left: use the area to its right.
+      renderer.centerOnScreenPoint(hex, (rect.right + w) / 2, h / 2);
+    } else {
+      // Bottom sheet: use the area between the top of the screen and the sheet.
+      renderer.centerOnScreenPoint(hex, w / 2, rect.top / 2 + 24);
+    }
+  }
+
+  /** Leaves unit mode but keeps the selection (highlights and targets are cleared). */
+  function leaveUnitMode(): void {
+    mode = { kind: 'idle' };
+    renderer.setHighlights([]);
+    renderer.setAttackTargets([]);
+    bottomBar.setMode('idle');
+  }
+
+  /** Redraws panel, highlights and red targets of the selected unit after any change. */
+  function refreshUnitMode(): void {
+    if (mode.kind !== 'unit') return;
+    const unitId = mode.unitId;
+    const unit = state.units.find((u) => u.id === unitId && u.owner === PLAYER);
+    if (!unit) {
+      resetToIdle();
+      return;
+    }
+    selected = unit.hex;
+    renderer.selectTile(unit.hex);
+    if (!canAct(unit)) {
+      // Nothing left to do: back to idle, the unit stays selected ("Done for this turn").
+      leaveUnitMode();
+      showPanel();
+      return;
+    }
+    renderer.setHighlights(
+      reachableTiles(state, unit.id, { ignoreHiddenUnits: true }).map((r) => r.hex),
+    );
+    renderer.setAttackTargets(visibleTargets(unit).map((t) => t.hex));
+    showUnitPanel(unit);
+  }
+
+  function visibleTargets(unit: Unit): Unit[] {
+    return attackTargets(state, unit.id).filter((t) => isVisible(state, PLAYER, t.hex));
+  }
+
+  function askAttack(attacker: Unit, defender: Unit): void {
+    const preview = combatPreview(state, attacker.id, defender.id);
+    panel.hide();
+    confirm.show({
+      title: fill(en.attack.confirmTitle, { unit: en.units[defender.type] }),
+      lines: attackPreviewLines(preview, attacker, defender),
+      confirmLabel: en.attack.confirm,
+      onConfirm: () => {
+        if (commit({ type: 'attack', unitId: attacker.id, targetId: defender.id })) {
+          toast.show(formatAttacked(en.units[attacker.type], preview));
+        } else {
+          refreshUnitMode();
+        }
+      },
+      onCancel: () => refreshUnitMode(),
+    });
+  }
+
+  /** A tap while a unit is selected: move, attack, switch unit or fall back to the idle tap. */
+  function tapUnitMode(unitId: number, hex: Hex | null): void {
+    const unit = state.units.find((u) => u.id === unitId);
+    if (!unit || !hex) {
+      leaveUnitMode();
+      tapIdle(hex);
+      return;
+    }
+    const target = visibleTargets(unit).find((t) => hexEquals(t.hex, hex));
+    if (target) {
+      askAttack(unit, target);
+      return;
+    }
+    if (
+      reachableTiles(state, unit.id, { ignoreHiddenUnits: true }).some((r) => hexEquals(r.hex, hex))
+    ) {
+      commit({ type: 'move', unitId: unit.id, to: hex });
+      return;
+    }
+    const other = unitAt(state, hex);
+    if (other && other.owner === PLAYER) {
+      if (other.id !== unit.id) {
+        enterUnitMode(other);
+      } else if (buildingAt(hex)) {
+        leaveUnitMode();
+        preferBuilding = true;
+        showPanel();
+      }
+      return;
+    }
+    leaveUnitMode();
+    tapIdle(hex);
   }
 
   /** Panel for a tile without building and road: build list in own territory, else a hint. */
@@ -432,6 +776,7 @@ export async function createGame(
     // A tap on the map closes any open sheet or menu and counts as a fresh tap.
     // Cancel path: a build confirm sheet clears the selection marker on cancel.
     confirm.cancel();
+    economySheet.close();
     renderer.setPathPreview(null);
     if (menuOpen) {
       menuOpen = false;
@@ -451,12 +796,37 @@ export async function createGame(
       case 'roadEnd':
         if (hex) tapRoadEnd(mode.from, hex);
         break;
+      case 'unit':
+        tapUnitMode(mode.unitId, hex);
+        break;
     }
   }
 
   function tapIdle(hex: Hex | null): void {
-    selected = hex && !(selected && hexEquals(selected, hex)) ? hex : null;
+    const same = hex !== null && selected !== null && hexEquals(selected, hex);
+    if (hex && !same && !isExplored(hex)) {
+      // Fog: nothing is revealed about an unexplored tile.
+      selected = null;
+      preferBuilding = false;
+      renderer.selectTile(null);
+      panel.hide();
+      toast.show(en.unitText.unexplored);
+      return;
+    }
+    const unit = hex ? unitAt(state, hex) : undefined;
+    if (hex && same && unit?.owner === PLAYER && buildingAt(hex) && !preferBuilding) {
+      // Second tap on a unit standing on a building: show the building instead.
+      preferBuilding = true;
+      showPanel();
+      return;
+    }
+    selected = hex && !same ? hex : null;
+    preferBuilding = false;
     renderer.selectTile(selected);
+    if (selected && unit && unit.owner === PLAYER) {
+      enterUnitMode(unit);
+      return;
+    }
     showPanel();
   }
 

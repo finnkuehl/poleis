@@ -142,3 +142,42 @@ export function findPath(
   }
   return null;
 }
+
+/**
+ * All tiles reachable from `start` with a total cost of at most `maxCost` (start not included).
+ * `stepCost(from, to)` as in `findPath`. Dijkstra flood; the result is sorted by cost, then by
+ * discovery order, so it is deterministic.
+ */
+export function reachable(
+  start: Hex,
+  stepCost: (from: Hex, to: Hex) => number | null,
+  maxCost: number,
+): { hex: Hex; cost: number }[] {
+  const startKey = hexKey(start);
+  const bestCost = new Map<string, number>([[startKey, 0]]);
+  const done = new Set<string>();
+  const result: { hex: Hex; cost: number }[] = [];
+  const open = new MinHeap();
+  let seq = 0;
+  open.push({ hex: start, g: 0, h: 0, f: 0, seq: seq++ });
+  while (open.size > 0) {
+    const cur = open.pop();
+    const curKey = hexKey(cur.hex);
+    if (done.has(curKey)) continue;
+    done.add(curKey);
+    if (curKey !== startKey) result.push({ hex: cur.hex, cost: cur.g });
+    for (const next of neighbors(cur.hex)) {
+      const nextKey = hexKey(next);
+      if (done.has(nextKey)) continue;
+      const step = stepCost(cur.hex, next);
+      if (step === null) continue;
+      const g = cur.g + step;
+      if (g > maxCost) continue;
+      const known = bestCost.get(nextKey);
+      if (known !== undefined && known <= g) continue;
+      bestCost.set(nextKey, g);
+      open.push({ hex: next, g, h: 0, f: g, seq: seq++ });
+    }
+  }
+  return result;
+}

@@ -1,16 +1,11 @@
 # Progress
 
-## Current milestone: Balance pass after M3 (implemented, pull request open, tag `v0.3.1` after merge)
+## Next
 
-Why: in playtesting, a radius-2 city (≈11 free building tiles) could not fit the ≈14 buildings needed for Polis.
+1. **Multi-turn move orders** (user request) – rules to confirm, see `docs/HANDOVER.md` §5a.
+2. **M5 – First complete game** (AI civilizations, victory, start menu, saving).
 
-- [x] Plan approved; rules updated in `docs/GAME_DESIGN.md` (§3 terrain, §5 table and "Resource placement", §11 controls)
-- [x] Placement: woodcutter on/next to forest, quarry on/next to hills or mountains, mine on mountains only
-- [x] Border tower (moved forward from M4): claims radius 2 around it; shows "+N tiles" before building
-- [x] Houses hold 6 residents (was 4)
-- [x] Tap an empty tile → "Build here" list, one tap builds; "Road from here"
-- [x] Browser test (build list, one-tap house, forest, outside territory, border tower +9 tiles)
-- [ ] code-review, merge; phone test on GitHub Pages after the merge
+**Handover for a new session:** see `docs/HANDOVER.md`.
 
 ## Done
 
@@ -18,11 +13,13 @@ Why: in playtesting, a radius-2 city (≈11 free building tiles) could not fit t
 - **M1 – Map** (`v0.1.0`): hex math, seeded map generator, camera (touch + mouse), tile selection with info panel, seed via URL.
 - **M2 – Economy** (`v0.2.0`): project in English; starting city, 12 settlement buildings, terrain placement, roads (A*), connection check, workers, production, demolish, controls.
 - **M3 – Population & city levels** (`v0.3.0`): residents eat, grow, starve and pay taxes; city center +1 bread; oil/wine supply streak; advance to Polis/Metropolis; vineyard, winery, marketplace (trading), temple; pause button; city panel; turn summary; test mode `?sandbox`.
+- **Balance pass** (`v0.3.1`): resource buildings on their resource (woodcutter on forest, mine on mountains), border towers, houses hold 6, tap a tile → "Build here".
+- **M4 – Territory & military** (`v0.4.0`): barracks and units, movement (terrain costs, roads, 1-tile rule, explored tiles only), combat with preview (walled city centers), upkeep/healing, capturing, settlers founding cities, fog of war, passive enemy in test mode; workers working/free, "📊 Overview" economy sheet, drag & drop for units. Founding/capturing verified by automated tests only.
 
 ## Known limitations
 
 - No saving yet (M5) – reloading the page starts a new game.
-- No units yet (M4).
+- The test-mode enemy is passive (no AI until M5); there is no victory or defeat yet (M5).
 - With 4 civilizations, `findStartPositions` can place starts close together on a few seeds (e.g. seed 49). Fix when AI civilizations arrive (M5): relax plains/forest minimums before accepting a short distance.
 - A dev-only UI preview lives at `/ui-preview.html` (not part of the production build).
 
