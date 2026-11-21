@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  centeredCamera,
   clampCamera,
   fitCamera,
   screenToWorld,
@@ -96,5 +97,16 @@ describe('fitCamera', () => {
     const mid = worldToScreen(c, bigWorld.x + bigWorld.width / 2, bigWorld.y + bigWorld.height / 2);
     expect(mid.x).toBeCloseTo(viewport.width / 2);
     expect(mid.y).toBeCloseTo(viewport.height / 2);
+  });
+});
+
+describe('centeredCamera', () => {
+  it('puts the world point in the viewport center and clamps the zoom', () => {
+    const limits = zoomLimits(bigWorld, viewport, hexSize);
+    const c = centeredCamera(300, 400, 99, viewport, limits);
+    expect(c.zoom).toBe(limits.max);
+    const s = worldToScreen(c, 300, 400);
+    expect(s.x).toBeCloseTo(viewport.width / 2);
+    expect(s.y).toBeCloseTo(viewport.height / 2);
   });
 });

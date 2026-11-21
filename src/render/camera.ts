@@ -83,6 +83,18 @@ export function fitCamera(world: Rect, viewport: Size, limits: ZoomLimits): Came
   return clampCamera({ x: 0, y: 0, zoom: limits.min }, world, viewport, limits);
 }
 
+/** Camera that shows world point (wx, wy) in the viewport center; the zoom is clamped first. */
+export function centeredCamera(
+  wx: number,
+  wy: number,
+  zoom: number,
+  viewport: Size,
+  limits: ZoomLimits,
+): CameraState {
+  const z = Math.min(limits.max, Math.max(limits.min, zoom));
+  return { zoom: z, x: viewport.width / 2 - wx * z, y: viewport.height / 2 - wy * z };
+}
+
 export interface CameraOptions {
   /** World bounds of the map */
   world: Rect;
@@ -150,6 +162,11 @@ export class CameraController {
   fit(): void {
     this.cam = fitCamera(this.options.world, this.viewport, this.limits);
     this.apply();
+  }
+
+  /** Centers the view on a world point at the given zoom (clamped like everything else). */
+  centerOn(worldX: number, worldY: number, zoom: number): void {
+    this.set(centeredCamera(worldX, worldY, zoom, this.viewport, this.limits));
   }
 
   destroy(): void {

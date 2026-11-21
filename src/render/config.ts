@@ -13,5 +13,8 @@ export const cameraConfig = {
   wheelZoomSpeed: 0.0015,
 } as const;
 
+/** Start zoom: a hex has this radius (center to corner) on the screen, in CSS pixels */
+export const startHexScreenRadiusPx = 26;
+
 /** Size of the hex tiles: radius from center to corner in world pixels (at zoom 1) */
 export const hexSize = 32;

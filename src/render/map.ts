@@ -1,12 +1,14 @@
-// Draws the map once statically (fills, outlines, symbols) plus a selection layer.
+// Draws the terrain once statically (fills, outlines, symbols); dynamic layers above it.
 import { Container, Graphics } from 'pixi.js';
 import { allHexes, inBounds } from '../core/map';
 import { hexCorners, hexToPixel, type Hex, type Point } from '../core/hex';
-import type { MapState } from '../core/state';
+import type { BuildingStatus } from '../core/rules/production';
+import type { GameState, MapState } from '../core/state';
 import { terrainAt } from '../core/map';
 import { mapWorldBounds } from './bounds';
 import type { Rect } from './camera';
 import { hexSize } from './config';
+import { createEconomyLayers } from './economyLayers';
 import { theme } from './theme';
 
 export { mapWorldBounds };
@@ -14,7 +16,13 @@ export { mapWorldBounds };
 export interface MapView {
   container: Container;
   bounds: Rect;
+  /** Redraws the dynamic layers (territory, roads, buildings, badges). */
+  update(state: GameState, statuses: Record<number, BuildingStatus>): void;
   setSelection(h: Hex | null): void;
+  /** Highlights valid tiles; [] clears. */
+  setHighlights(hexes: readonly Hex[]): void;
+  /** Road preview along `path`, dots on `newTiles`; null clears. */
+  setPathPreview(path: readonly Hex[] | null, newTiles: readonly Hex[]): void;
 }
 
 function drawTree(g: Graphics, cx: number, cy: number, s: number): void {
@@ -56,6 +64,7 @@ export function createMapView(map: MapState): MapView {
   const fields = new Graphics();
   const symbols = new Graphics();
   const selection = new Graphics();
+  const economy = createEconomyLayers();
 
   for (const h of allHexes(map)) {
     const terrain = terrainAt(map, h);
@@ -80,11 +89,14 @@ export function createMapView(map: MapState): MapView {
     }
   }
 
-  container.addChild(fields, symbols, selection);
+  container.addChild(fields, symbols, ...economy.layers, selection);
 
   return {
     container,
     bounds: mapWorldBounds(map, hexSize),
+    update: economy.update,
+    setHighlights: economy.setHighlights,
+    setPathPreview: economy.setPathPreview,
     setSelection(h) {
       selection.clear();
       if (!h || !inBounds(map, h)) return;
