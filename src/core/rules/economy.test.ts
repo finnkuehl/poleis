@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { addBuilding, addCity, addUnit, at, makeTestState } from '../testing';
-import { economyOverview } from './economy';
+import { wonderConfig } from '../../data';
+import { economyOverview, workerSummary } from './economy';
 
 const rows = Array.from({ length: 5 }, () => 'ppppp');
 
@@ -74,5 +75,16 @@ describe('economyOverview', () => {
   it('skips goods without stock and flow', () => {
     const o = economyOverview(setup(), 0);
     expect(flow(o, 'ore')).toBeUndefined();
+  });
+});
+
+describe('workerSummary', () => {
+  it('does not count a completed wonder as missing workers', () => {
+    const s = makeTestState(rows);
+    addCity(s, at(0, 2), { radius: 6, residents: 0, level: 'metropolis' });
+    const id = addBuilding(s, 'wonder', at(1, 2));
+    const wonder = s.buildings.find((b) => b.id === id)!;
+    wonder.progress = wonderConfig.buildTurns;
+    expect(workerSummary(s, 0).missing).toBe(0);
   });
 });

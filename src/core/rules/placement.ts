@@ -1,6 +1,6 @@
 // Placement rules for buildings.
 
-import { BUILDINGS, CITY_LEVELS, type BuildingId, type TerrainId } from '../../data';
+import { BUILDINGS, CITY_LEVELS, wonderConfig, type BuildingId, type TerrainId } from '../../data';
 import { hexEquals, neighbors, type Hex } from '../hex';
 import { allHexes, inBounds, tileIndex, terrainAt } from '../map';
 import type { GameState, PlayerId } from '../state';
@@ -38,6 +38,13 @@ export function checkPlacement(
   const level = city?.level ?? CITY_LEVELS[0];
   if (CITY_LEVELS.indexOf(level) < CITY_LEVELS.indexOf(def.minLevel)) {
     return { code: 'levelTooLow', level: def.minLevel };
+  }
+  if (
+    type === 'wonder' &&
+    state.buildings.filter((b) => b.type === 'wonder' && b.owner === player).length >=
+      wonderConfig.maxPerCivilization
+  ) {
+    return { code: 'wonderLimit' };
   }
   if (state.buildings.some((b) => hexEquals(b.hex, h)) || state.roads[tileIndex(state.map, h)]) {
     return { code: 'tileOccupied' };

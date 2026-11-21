@@ -1,11 +1,21 @@
 // Residents and worker assignment.
 
-import { BUILDINGS, type BuildingCategory } from '../../data';
+import { BUILDINGS, wonderConfig, type BuildingCategory } from '../../data';
 import { tileIndex } from '../map';
 import type { Building, GameState, PlayerId } from '../state';
 
 /** Worker priority: food first, then raw materials, processing, and city buildings last. */
 const CATEGORY_ORDER: readonly BuildingCategory[] = ['food', 'raw', 'processing', 'city'];
+
+/** True for a world wonder that has all its working turns done. */
+export function isWonderComplete(building: Building): boolean {
+  return building.type === 'wonder' && (building.progress ?? 0) >= wonderConfig.buildTurns;
+}
+
+/** Workers a building needs: 0 for a completed wonder, else the building's own number. */
+export function workersNeeded(building: Building): number {
+  return isWonderComplete(building) ? 0 : BUILDINGS[building.type].workers;
+}
 
 /** Id of the city whose territory the building stands in; -1 = none. */
 export function cityIdOf(state: GameState, building: Building): number {
@@ -49,11 +59,11 @@ export function assignWorkers(
             connected.has(b.id) &&
             cityIdOf(state, b) === city.id &&
             BUILDINGS[b.type].category === category &&
-            BUILDINGS[b.type].workers > 0,
+            workersNeeded(b) > 0,
         )
         .sort((a, b) => a.id - b.id);
       for (const b of group) {
-        const needed = BUILDINGS[b.type].workers;
+        const needed = workersNeeded(b);
         const n = remaining >= needed ? needed : 0;
         assigned[b.id] = n;
         remaining -= n;

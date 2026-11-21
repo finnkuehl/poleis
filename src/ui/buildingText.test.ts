@@ -84,4 +84,16 @@ describe('canPause', () => {
     expect(canPause('house')).toBe(false);
     expect(canPause('temple')).toBe(false);
   });
+
+  it('follows the workers a building needs right now (wonder)', () => {
+    expect(canPause('wonder', 4)).toBe(true);
+    expect(canPause('wonder', 0)).toBe(false);
+  });
+});
+
+describe('statusTone for the world wonder', () => {
+  it('is ok while building and when complete', () => {
+    expect(statusTone({ kind: 'wonderBuilding', progress: 2, total: 5 })).toBe('ok');
+    expect(statusTone({ kind: 'wonderComplete' })).toBe('ok');
+  });
 });

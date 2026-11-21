@@ -19,6 +19,8 @@ export interface OrderLayers {
   /** Lines, flags, dots and badges; add the container (it holds the numbers too). */
   layer: Container;
   setOrderPaths(paths: readonly OrderPath[]): void;
+  /** Color of the flags (the viewer's player color); applies to the next `setOrderPaths`. */
+  setColor(color: number): void;
 }
 
 function sameHex(a: Hex, b: Hex): boolean {
@@ -27,6 +29,7 @@ function sameHex(a: Hex, b: Hex): boolean {
 
 export function createOrderLayers(): OrderLayers {
   const layer = new Container();
+  let flagColor: number = theme.playerColors[0];
   const g = new Graphics();
   const numbers = new Container();
   layer.addChild(g, numbers);
@@ -67,7 +70,7 @@ export function createOrderLayers(): OrderLayers {
       .lineTo(x, y - h)
       .stroke({ color: theme.orderMarbleColor, width: 2, alpha });
     g.poly([x, y - h, x + w, y - h + ph / 2, x, y - h + ph])
-      .fill({ color: theme.playerColors[0], alpha })
+      .fill({ color: flagColor, alpha })
       .stroke({ color: theme.orderMarbleColor, width: 1, alpha });
   }
 
@@ -141,6 +144,9 @@ export function createOrderLayers(): OrderLayers {
 
   return {
     layer,
+    setColor(color) {
+      flagColor = color;
+    },
     setOrderPaths(paths) {
       g.clear();
       used = 0;

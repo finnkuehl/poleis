@@ -24,6 +24,7 @@ export type RuleErrorCode =
   | 'roadNotAllowed'
   | 'nothingToDemolish'
   | 'cannotDemolishCityCenter'
+  | 'cannotDemolishWonder'
   | 'cannotPause'
   | 'notOwnUnit'
   | 'cannotReach'
@@ -35,7 +36,9 @@ export type RuleErrorCode =
   | 'notInRange'
   | 'notASettler'
   | 'foreignTerritory'
-  | 'tooCloseToCity';
+  | 'tooCloseToCity'
+  | 'wonderLimit'
+  | 'gameOver';
 
 export interface RuleError {
   code: RuleErrorCode;

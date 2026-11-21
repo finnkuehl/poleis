@@ -10,7 +10,9 @@ Read it together with `CLAUDE.md` (rules), `docs/GAME_DESIGN.md` (game design in
 - **Test mode:** add `&sandbox` → big start stock + a passive red enemy city ~6–9 tiles away (for seed 1: 7 tiles **south** of the player's city). Example: `https://finnkuehl.github.io/poleis/?seed=1&sandbox`.
 - **Done and tagged:** M0 `v0.0.0`, M1 `v0.1.0`, M2 `v0.2.0`, M3 `v0.3.0`, balance pass `v0.3.1`.
 - **M4 – Territory & military is merged as `v0.4.0`** (PR #6): units, combat, capturing, settlers, fog of war, plus the user's overview requests (workers working/free, "📊 Overview" economy sheet, drag & drop for units). The user tested it on desktop: "looks good".
-- **Multi-turn move orders are done as `v0.4.1`** (§5a, rules in GAME_DESIGN §7 "decided after M4: move orders"). Next: M5 – First complete game (see §6).
+- **Multi-turn move orders are done as `v0.4.1`** (§5a, rules in GAME_DESIGN §7 "decided after M4: move orders").
+- **M5 – First complete game** (`v0.5.0`, branch `m5-complete-game`): start menu, 1–3 AI civilizations (Athens, Sparta, Corinth), victory/defeat, scores, saving (autosave + 3 slots). Rules in GAME_DESIGN "Detailed rules (decided in M5)". Next: M6 – Seafaring (see §6).
+- **Quick-start URLs for testing** skip the start menu: `?seed=1&sandbox` (test mode, no autosave), `?seed=1&ai=3` (3 AIs), `&size=small|normal|large`.
 
 ## 2. How we work (important – the user relies on it)
 
@@ -29,26 +31,28 @@ Read it together with `CLAUDE.md` (rules), `docs/GAME_DESIGN.md` (game design in
 ## 3. Code map
 
 - `src/core/` – pure logic, JSON state, deterministic (seeded RNG in state). ESLint forbids render/ui/save imports, `Math.random`, `window`/`document` there.
-  - `state.ts` – `GameState` (map, rng, turn, players [goods, explored], buildings [paused], roads[], territory[], cities [level, residents, supplyStreak], tileCity[], units [hp, movesLeft, hasMoved, acted, attacked, capturing, order], training[], nextId, lastReport); `createGameState(seed, { sandbox })` (+ passive enemy).
+  - `state.ts` – `GameState` (settings [aiCount, mapSize, victory, turnLimit, playerName, playerColor], map, rng, turn, currentPlayer, players [goods, explored, civ, name, color, alive], buildings [paused, progress for the wonder], roads[], territory[], cities [level, residents, supplyStreak], tileCity[], units [hp, movesLeft, hasMoved, acted, attacked, capturing, order], training[], nextId, lastReport, events[], result); `createGameState(seed, { sandbox, settings })` (+ AI civs or the passive sandbox enemy).
   - `actions.ts` – `applyAction` (structuredClone, never mutates): build, buildRoad, demolish, togglePause, advanceCity, trade, train, move, attack, foundCity, endTurn; updates fog (`updateAllExplored`) after every action.
-  - `turn.ts` – start of the player's turn: capture → heal/reset units → spawn trained units → move orders walk on → production → population (eat, needs, supply, growth, taxes) → unit upkeep; `lastReport` with deltas, cities, units, captured.
-  - `rules/` – placement, territory (+`territoryGain`), connection (BFS), workers (full crews, per city, paused), production (status kinds), population, advance, trade, roads (A*), movement (explored-only, 1-tile rule, `ignoreHiddenUnits`), units (training/spawn/upkeep/heal), combat (formula + preview), capture, found, vision (fog), economy (overview/estimate), orders (multi-turn move orders: plan, walk, stop reasons), errors.
+  - `turn.ts` – `endTurn` passes the turn to the next alive, non-passive player (turn + 1 when the order wraps; events are cleared when the human ends the turn); points victory at the turn limit; then the start of that player's turn: capture → eliminations + victory check → heal/reset units → spawn trained units → move orders walk on → production (wonder progress) → population → unit upkeep; `lastReport` = latest turn start.
+  - `rules/` – placement, territory (+`territoryGain`), connection (BFS), workers (full crews, per city, paused), production (status kinds), population, advance, trade, roads (A*), movement (explored-only, 1-tile rule, `ignoreHiddenUnits`), units (training/spawn/upkeep/heal), combat (formula + preview), capture, found, vision (fog), economy (overview/estimate), orders (multi-turn move orders: plan, walk, stop reasons), events (`seenBy`), elimination, score (`scoreOf`, `scoreboard`), victory, errors.
   - `hex/` (axial pointy-top, A*, `reachable`), `mapgen/` (map + start positions).
-- `src/data/` – ALL numbers: terrain, goods, buildings, economy (start goods, market, sandbox goods), population, cityLevels, units, military, mapgen, startPosition.
+- `src/data/` – ALL numbers: terrain, goods, buildings, economy (start goods, market, sandbox goods), population, cityLevels, units, military, mapgen, startPosition, game (civs, map sizes, default settings), victory (wonder, points), **ai** (all AI weights/targets per personality, peace time, wonder start turn).
+- `src/ai/` – AI players: `play.ts` (`playAiTurns` after the human's End turn), `turn.ts` (`takeAiTurn`: pick the highest-utility candidate, apply, repeat), `context.ts` (what the AI knows this decision), `view.ts` (fog-fair view of enemies), generators: `economy.ts`, `training.ts`, `units.ts` (scouts, defenders, army), `settle.ts`, `wonder.ts`. Tests run headless multi-AI simulations.
+- `src/save/` – `saveGame`/`loadGame`/`listSaves` with an envelope (`SAVE_VERSION`, migrations). **Bump `SAVE_VERSION` and add a migration whenever `GameState` changes shape.**
 - `src/render/` – PixiJS: terrain once, dynamic layers (territory, roads, buildings, badges, units, fog, highlights, preview, attack targets, selection), camera (pan/pinch/wheel, `centerOn`, `centerOnScreenPoint`).
-- `src/ui/` – HTML/CSS components (resource bar, bottom bar, build menu, tile/city/building/unit panels, confirm sheet, toast, mode banner, economy sheet) + **`interaction.ts` = controller** (modes idle / placing / roadStart / roadEnd / unit; refresh after every action). `preview.ts` + `/ui-preview.html` = dev-only component gallery.
+- `src/ui/` – HTML/CSS components (resource bar with menu button, bottom bar, build menu, tile/city/building/unit panels, confirm sheet, toast, mode banner, economy sheet, start menu + seed preview, game menu, scores sheet, end screen, event texts) + **`interaction.ts` = controller** (modes idle / placing / roadStart / roadEnd / unit; refresh after every action; after End turn: AI turns → autosave → summary toast; end screen when `state.result`). `main.ts` boots: quick-start params → boot intent (in-game Load) → start menu. `preview.ts` + `/ui-preview.html` = dev-only component gallery.
 - `src/i18n/en.ts` + `format.ts` – every visible text.
 
 ## 4. Decisions already taken (details in GAME_DESIGN)
 
-Start 20 wood + 10 stone, city placed automatically; housing/workers full crews only; demolish without refund; start 4 residents, city center +1 bread; oil/wine supplied 3 turns in a row before advancing; marketplace 2 goods → 1 drachma / 1 good for 3; pause per building; woodcutter on/next to forest, quarry on/next to hills or mountains, mine on mountains; border towers (radius 2); houses hold 6; tap a tile → "Build here"; units: always 1 tile, one unit per tile, walled city centers ×1.5, settlers found cities with 2 residents, units only move onto explored tiles.
+Start 20 wood + 10 stone, city placed automatically; housing/workers full crews only; demolish without refund; start 4 residents, city center +1 bread; oil/wine supplied 3 turns in a row before advancing; marketplace 2 goods → 1 drachma / 1 good for 3; pause per building; woodcutter on/next to forest, quarry on/next to hills or mountains, mine on mountains; border towers (radius 2); houses hold 6; tap a tile → "Build here"; units: always 1 tile, one unit per tile, walled city centers ×1.5, settlers found cities with 2 residents, units only move onto explored tiles. Move orders: drag or tap + confirm, walk on each turn, stop on arrival / blocked / new enemy in sight / attacked. M5: AI turns instant + summary, peace until turn 15, wonder paid at placement + 5 working turns (never demolished; AI places it from turn 70), out of the game without a city, start menu (name, color, rivals 1–3, map size, seed, victory types), autosave + 3 slots, scores of all civs visible.
 
 ## 5. Known limitations / backlog
 
-- No saving, no victory/defeat, enemy is passive (all M5).
-- `findStartPositions` can place 4 civilizations too close on a few seeds (e.g. seed 49) – fix in M5 (relax plains/forest minimums before accepting a short distance).
-- Capturing and founding were verified by automated tests only, not yet in a real browser play-through.
-- Harbor, ships, sea routes (M6); world wonder + temple points (M5); graphics/sound/PWA (M7).
+- AI balance is untested by the user: AIs may grow faster than a beginner (Polis/Metropolis by turn ~50 in simulations); tune in `src/data/ai.ts` (M7 balance pass at the latest). AIs plateau around 40 residents when no wish is left, cannot demolish, and stall on very cramped starts; Sparta's economy sometimes stalls (planks/food), so it then attacks little.
+- Any land unit except settlers captures cities – also AI scouts (legal per rules; ask the user if this should change).
+- AI turns have no animation (M7). "Main menu" and in-game "Load" reload the page. Test mode (`&sandbox`) does not autosave.
+- Harbor, ships, sea routes (M6); graphics/sound/PWA (M7). `npm test` takes ~15–20 s because of the AI simulations.
 
 ## 5a. Done: multi-turn move orders (user request after M4, `v0.4.1`)
 
@@ -60,13 +64,13 @@ Suggested rules – **confirm them with the user first** (AskUserQuestion, recom
 - Units with an active order are skipped by the "Units" button; the map shows their remaining path faintly; the turn summary says e.g. "Scout arrived" / "Scout stopped: enemy in sight".
 Implementation sketch: `Unit.destination: Hex | null` (JSON-plain) + a core action `{ type: 'setDestination'; unitId; to }`; auto-move in `turn.ts` via the existing pathfinding over explored tiles; UI in `interaction.ts` (drop/tap outside this turn's reach but on explored land → order), render path line in `unitLayers.ts`. Tests: auto-move over several turns, stop conditions, fog respected, determinism.
 
-## 6. Next: M5 – First complete game (from CLAUDE.md)
+## 6. Next: M6 – Seafaring (from CLAUDE.md)
 
-AI civilizations (1–3; personalities from GAME_DESIGN §9: Athens trader, Sparta warrior, Corinth builder; utility-based, only regular actions, only what their fog allows – use `isVisible`/`economyOverview`), victory conditions + score display (GAME_DESIGN §10), start menu (map size, number of AIs, seed), save/load (`src/save/`, versioned) + autosave every turn, victory/defeat screen. Start with questions for the gameplay gaps (e.g. AI turn order/animation, difficulty, what happens to the passive sandbox enemy, how the world wonder is built over 5 turns).
+Harbor, transport ship, trireme, sea routes as a connection between storehouses, embarking units, settling islands. Start with questions for the gameplay gaps (e.g. how embarking works – a unit walks onto a transport next to land?, how many units fit, how a sea route is set up and whether it needs a harbor at both ends, whether the AI uses ships in M6 or later). Remember the save migration when `GameState` changes.
 
 ## 7. Start prompt for the new session
 
 ```
 Read docs/HANDOVER.md, CLAUDE.md, docs/PROGRESS.md and docs/GAME_DESIGN.md.
-Then continue where we left off: first the multi-turn move orders from HANDOVER §5a (ask me the open rules, then plan, then build on a branch with a PR), afterwards the plan for M5 with the open gameplay questions first.
+Then continue where we left off: the plan for M6 – Seafaring, with the open gameplay questions first (HANDOVER §6).
 ```

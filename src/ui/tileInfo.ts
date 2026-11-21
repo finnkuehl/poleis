@@ -434,7 +434,7 @@ export function createTileInfoPanel(root: HTMLElement, onClose: () => void): Til
     if (o.train) nodes.push(trainSection(o.train));
     nodes.push(terrainLine(o.terrain));
     const actions = el('div', 'tile-info__actions');
-    if (o.onTogglePause && canPause(o.type)) {
+    if (o.onTogglePause && canPause(o.type, o.workers.needed)) {
       const pause = button(
         'btn btn--secondary tile-info__pause',
         o.paused ? en.ui.resume : en.ui.pause,

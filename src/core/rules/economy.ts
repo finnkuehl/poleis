@@ -1,13 +1,13 @@
 // Economy overview: where every good comes from and where it goes in the next turn.
 // Estimated on a copy of the state the same way endTurn runs it (production, residents, units).
 
-import { BUILDINGS, GOOD_IDS, type BuildingId, type GoodId, type Stock } from '../../data';
+import { GOOD_IDS, type BuildingId, type GoodId, type Stock } from '../../data';
 import type { GameState, PlayerId } from '../state';
 import { connectedBuildingIds } from './connection';
 import { cityStats, runPopulation } from './population';
 import { runProduction } from './production';
 import { runUpkeep } from './units';
-import { assignWorkers, housing, population } from './workers';
+import { assignWorkers, housing, population, workersNeeded } from './workers';
 
 export interface GoodFlow {
   good: GoodId;
@@ -51,7 +51,7 @@ export function workerSummary(state: GameState, player: PlayerId): WorkerSummary
     if (b.owner !== player) continue;
     const got = assigned[b.id] ?? 0;
     working += got;
-    const needed = BUILDINGS[b.type].workers;
+    const needed = workersNeeded(b);
     if (!b.paused && connected.has(b.id) && needed > 0 && got < needed) missing += needed - got;
   }
   const residents = population(state, player);

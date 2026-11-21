@@ -18,7 +18,9 @@ import {
   advanceCheck,
   canTrade,
   checkFoundCity,
+  addEvent,
   combatPreview,
+  playersSeeing,
   foundCity,
   updateCapturing,
   canAfford,
@@ -33,6 +35,7 @@ import {
   scaleGoods,
   setMoveOrder,
   updateAllExplored,
+  workersNeeded,
   type RuleError,
 } from './rules';
 import type { GameState } from './state';
@@ -66,6 +69,7 @@ export function applyAction(state: GameState, action: Action): ActionResult {
 
 function applyActionInner(state: GameState, action: Action): ActionResult {
   const player = state.currentPlayer;
+  if (state.result) return fail({ code: 'gameOver' });
   if (action.type === 'endTurn') return { ok: true, state: endTurn(state) };
 
   const next = structuredClone(state);
@@ -84,7 +88,17 @@ function applyActionInner(state: GameState, action: Action): ActionResult {
         owner: player,
         hex: action.hex,
         paused: false,
+        ...(action.building === 'wonder' ? { progress: 0 } : {}),
       });
+      if (action.building === 'wonder') {
+        addEvent(next, {
+          type: 'wonderStarted',
+          turn: next.turn,
+          player,
+          hex: action.hex,
+          seenBy: next.players.map((p) => p.id),
+        });
+      }
       if (def.territoryRadius > 0) {
         const i = tileIndex(next.map, action.hex);
         claimTerritory(next, action.hex, def.territoryRadius, player, next.tileCity[i]);
@@ -106,7 +120,7 @@ function applyActionInner(state: GameState, action: Action): ActionResult {
       const building = next.buildings.find(
         (b) => b.owner === player && hexEquals(b.hex, action.hex),
       );
-      if (!building || BUILDINGS[building.type].workers <= 0) return fail({ code: 'cannotPause' });
+      if (!building || workersNeeded(building) <= 0) return fail({ code: 'cannotPause' });
       building.paused = !building.paused;
       return { ok: true, state: next };
     }
@@ -194,6 +208,20 @@ function applyActionInner(state: GameState, action: Action): ActionResult {
       unit.hasMoved = true;
       unit.acted = true;
       unit.movesLeft = 0;
+      addEvent(next, {
+        type: 'attack',
+        turn: next.turn,
+        attacker: player,
+        defender: target.owner,
+        attackerUnit: unit.type,
+        defenderUnit: target.type,
+        hex: target.hex,
+        damage: result.damage,
+        counter: result.counter,
+        defenderKilled: target.hp <= 0,
+        attackerKilled: unit.hp <= 0,
+        seenBy: playersSeeing(next, target.hex, [player, target.owner]),
+      });
       next.units = next.units.filter((u) => u.hp > 0);
       return { ok: true, state: next };
     }
@@ -213,6 +241,7 @@ function applyActionInner(state: GameState, action: Action): ActionResult {
       );
       if (building) {
         if (building.type === 'cityCenter') return fail({ code: 'cannotDemolishCityCenter' });
+        if (building.type === 'wonder') return fail({ code: 'cannotDemolishWonder' });
         next.buildings = next.buildings.filter((b) => b !== building);
         addGoods(stock, scaleGoods(BUILDINGS[building.type].cost, economyConfig.demolishRefund));
         return { ok: true, state: next };

@@ -4,6 +4,7 @@ import { BUILDINGS, militaryConfig } from '../../data';
 import { distance, hexEquals } from '../hex';
 import { terrainAt, tileIndex } from '../map';
 import type { GameState, PlayerId } from '../state';
+import { addEvent, playersSeeing } from './events';
 import type { RuleError } from './errors';
 import { claimTerritory, ownerAt } from './territory';
 
@@ -35,7 +36,16 @@ export function foundCity(state: GameState, unitId: number): number {
   const unit = state.units.find((u) => u.id === unitId);
   if (!unit) throw new Error('foundCity: unknown unit');
   state.units = state.units.filter((u) => u.id !== unitId);
-  return createCity(state, unit.owner, unit.hex, militaryConfig.newCityResidents);
+  const cityId = createCity(state, unit.owner, unit.hex, militaryConfig.newCityResidents);
+  addEvent(state, {
+    type: 'cityFounded',
+    turn: state.turn,
+    by: unit.owner,
+    cityId,
+    hex: unit.hex,
+    seenBy: playersSeeing(state, unit.hex, [unit.owner]),
+  });
+  return cityId;
 }
 
 /** Adds a city-center building + City and claims the free land around it. Returns the city id. */

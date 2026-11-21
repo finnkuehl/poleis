@@ -11,9 +11,17 @@ import {
   createModeBanner,
   createResourceBar,
   createSeedLabel,
+  createEndScreen,
+  createGameMenu,
+  createMenuButton,
+  createScoresSheet,
+  createStartMenu,
   createTileInfoPanel,
   createToast,
+  eventLines,
 } from './index';
+import { createGameState, type GameEvent } from '../core/state';
+import type { SaveListEntry } from '../save';
 import type { EconomyOverview } from '../core/rules/economy';
 import type { AdvanceCheck } from '../core/rules/advance';
 import type { CityReport, CityStats } from '../core/rules/population';
@@ -607,3 +615,108 @@ addControl(
     };
   })(),
 );
+
+// ---- Menus, scores, end screen (a 4-civilization game with sample data) ----
+const game = createGameState('preview', { settings: { aiCount: 3, playerName: 'Ilios' } });
+game.turn = 47;
+game.players[2].alive = false;
+game.buildings.push({
+  id: 900,
+  type: 'wonder',
+  owner: 1,
+  hex: { q: 6, r: 6 },
+  paused: false,
+  progress: 2,
+});
+const sampleEvents: GameEvent[] = [
+  {
+    type: 'attack',
+    turn: 47,
+    attacker: 1,
+    defender: 0,
+    attackerUnit: 'hoplite',
+    defenderUnit: 'scout',
+    hex,
+    damage: 4,
+    counter: 0,
+    defenderKilled: false,
+    attackerKilled: false,
+    seenBy: [0, 1],
+  },
+  { type: 'cityFounded', turn: 47, by: 3, cityId: 9, hex, seenBy: [0, 3] },
+  { type: 'wonderStarted', turn: 47, player: 1, hex, seenBy: [0, 1, 2, 3] },
+  { type: 'eliminated', turn: 47, player: 2, seenBy: [0, 2] },
+  { type: 'cityCaptured', turn: 47, by: 1, from: 0, cityId: 1, hex, seenBy: [0, 1] },
+];
+const sampleSaves: SaveListEntry[] = [
+  {
+    slot: 'auto',
+    savedAt: '2026-11-21T14:05:00Z',
+    summary: { turn: 47, playerName: 'Ilios', aiCount: 3, mapSize: 'normal', seedText: 'preview' },
+  },
+  {
+    slot: 2,
+    savedAt: '2026-11-20T19:30:00Z',
+    summary: { turn: 31, playerName: '', aiCount: 2, mapSize: 'small', seedText: '7' },
+  },
+];
+
+const startMenu = createStartMenu(ui, {
+  seed: '12345',
+  saves: sampleSaves,
+  onNewGame: (settings, seed) => {
+    startMenu.hide();
+    toast.show(
+      `${settings.aiCount} rivals, ${settings.mapSize}, seed ${seed}, color ${settings.playerColor}`,
+    );
+  },
+  onContinue: () => {
+    startMenu.hide();
+    toast.show('Continue');
+  },
+  onLoad: (slot) => {
+    startMenu.hide();
+    toast.show(`Load slot ${String(slot)}`);
+  },
+});
+const scores = createScoresSheet(ui);
+const gameMenu = createGameMenu(ui, {
+  confirm,
+  getSaves: () => sampleSaves,
+  onScores: () => scores.open(game, 0),
+  onSave: (slot) => toast.show(`Saved to slot ${slot}`),
+  onLoad: (slot) => toast.show(`Load ${String(slot)}`),
+  onMainMenu: () => toast.show('Main menu'),
+});
+const endScreen = createEndScreen(ui, {
+  onNewGame: () => toast.show('New game'),
+  onLookAtMap: () => toast.show('Look at the map'),
+});
+document.querySelector('.resource-bar__scroll')?.prepend(createMenuButton(() => gameMenu.open()));
+
+addControl('Start menu', () => startMenu.show());
+addControl('Start menu: no saves', () => {
+  startMenu.setSaves([]);
+  startMenu.show();
+});
+addControl('Game menu', () => gameMenu.open());
+addControl('Scores', () => scores.open(game, 0));
+addControl('End: victory', () => {
+  const s = createGameState('preview', { settings: { aiCount: 3 } });
+  s.result = { winner: 0, reason: 'wonder', turn: 64 };
+  endScreen.show(s);
+});
+addControl('End: defeat', () => {
+  const s = structuredClone(game);
+  s.result = { winner: 1, reason: 'points', turn: 120 };
+  endScreen.show(s);
+});
+addControl('End: last city fell', () => {
+  const s = structuredClone(game);
+  s.result = { winner: null, reason: 'eliminated', turn: 47 };
+  endScreen.show(s);
+});
+addControl('Turn summary: rivals', () => {
+  const lines = eventLines({ ...game, events: sampleEvents }, 0);
+  lines.forEach((line, i) => window.setTimeout(() => toast.show(line.text, line.kind), i * 3200));
+});

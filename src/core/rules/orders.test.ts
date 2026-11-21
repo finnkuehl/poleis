@@ -24,13 +24,20 @@ function richState(rows: string[]): GameState {
   return s;
 }
 
-const addPlayer1 = (s: GameState) =>
+/** Adds player 1 with a far-away city (a player without a city would be out of the game). */
+const addPlayer1 = (s: GameState) => {
   s.players.push({
     id: 1,
     isHuman: false,
+    civ: null,
+    name: '',
+    color: 1,
+    alive: true,
     goods: { ...s.players[0].goods },
     explored: s.map.tiles.map(() => true),
   });
+  addCity(s, at(s.map.width - 1, s.map.height - 1), { owner: 1, radius: 0 });
+};
 
 const unitOf = (s: GameState, id: number) => s.units.find((u) => u.id === id)!;
 

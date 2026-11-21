@@ -13,6 +13,10 @@ function world(type: 'spearman' | 'settler' = 'spearman') {
   s.players.push({
     id: 1,
     isHuman: false,
+    civ: null,
+    name: '',
+    color: 1,
+    alive: true,
     goods: { ...s.players[0].goods },
     explored: s.map.tiles.map(() => false),
   });

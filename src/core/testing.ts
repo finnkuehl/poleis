@@ -4,6 +4,7 @@ import {
   BUILDINGS,
   GOOD_IDS,
   UNITS,
+  gameConfig,
   populationConfig,
   type BuildingId,
   type CityLevel,
@@ -53,11 +54,23 @@ export function makeTestState(
   return {
     version: 1,
     seedText: 'test',
+    settings: { ...gameConfig.defaultSettings },
     map: { width, height: rows.length, tiles },
     rng: createRng(1),
     turn: 1,
     currentPlayer: 0,
-    players: [{ id: 0, isHuman: true, goods, explored: tiles.map(() => opts.explored ?? true) }],
+    players: [
+      {
+        id: 0,
+        isHuman: true,
+        civ: null,
+        name: '',
+        color: 0,
+        alive: true,
+        goods,
+        explored: tiles.map(() => opts.explored ?? true),
+      },
+    ],
     buildings: [],
     roads: tiles.map(() => false),
     territory: tiles.map(() => ((opts.ownAll ?? true) ? 0 : -1)),
@@ -67,6 +80,8 @@ export function makeTestState(
     training: [],
     nextId: 1,
     lastReport: null,
+    events: [],
+    result: null,
   };
 }
 

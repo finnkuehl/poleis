@@ -7,6 +7,7 @@ import type { GameState } from '../core/state';
 import { BUILDINGS } from '../data';
 import { hexSize } from './config';
 import { roadGeometry, territoryEdges } from './geometry';
+import { playerColorOf } from './playerColor';
 import { badgeKind, cityRingStyle } from './style';
 import { theme } from './theme';
 
@@ -16,11 +17,6 @@ export interface EconomyLayers {
   update(state: GameState, statuses: Record<number, BuildingStatus>): void;
   setHighlights(hexes: readonly Hex[]): void;
   setPathPreview(path: readonly Hex[] | null, newTiles: readonly Hex[]): void;
-}
-
-function playerColor(player: number): number {
-  const colors = theme.playerColors;
-  return colors[((player % colors.length) + colors.length) % colors.length];
 }
 
 function flatCorners(c: Point): number[] {
@@ -48,7 +44,7 @@ export function createEconomyLayers(): EconomyLayers {
     const players = new Set<number>();
     for (const o of state.territory) if (o >= 0) players.add(o);
     for (const player of players) {
-      const color = playerColor(player);
+      const color = playerColorOf(state, player);
       for (let i = 0; i < state.territory.length; i++) {
         if (state.territory[i] !== player) continue;
         tint.poly(flatCorners(hexToPixel(hexAtIndex(state.map, i), hexSize)));
@@ -101,7 +97,7 @@ export function createEconomyLayers(): EconomyLayers {
     for (const b of state.buildings) {
       seen.add(b.id);
       const p = hexToPixel(b.hex, hexSize);
-      plates.circle(p.x, p.y, radius).fill(playerColor(b.owner)).stroke({
+      plates.circle(p.x, p.y, radius).fill(playerColorOf(state, b.owner)).stroke({
         color: theme.plateRimColor,
         width: theme.plateRimWidth,
         alpha: 0.85,

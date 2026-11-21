@@ -12,6 +12,8 @@ export function createBottomBar(
   setMode(m: BottomBarMode): void;
   setTurn(n: number): void;
   setEnabled(enabled: boolean): void;
+  /** Game over: Build, Road and Units are disabled; End turn looks disabled but still reports taps. */
+  setGameOver(over: boolean): void;
   /** Enables or disables only the Units button (e.g. no units yet). */
   setUnitsEnabled(enabled: boolean): void;
 } {
@@ -35,6 +37,7 @@ export function createBottomBar(
 
   let barEnabled = true;
   let unitsAllowed = true;
+  let gameOver = false;
 
   return {
     setMode(m) {
@@ -52,12 +55,20 @@ export function createBottomBar(
       buildBtn.disabled = !enabled;
       roadBtn.disabled = !enabled;
       endBtn.disabled = !enabled;
-      unitsBtn.disabled = !enabled || !unitsAllowed;
+      unitsBtn.disabled = !enabled || gameOver || !unitsAllowed;
       barEnabled = enabled;
+    },
+    setGameOver(over) {
+      buildBtn.disabled = over;
+      roadBtn.disabled = over;
+      gameOver = over;
+      unitsBtn.disabled = !barEnabled || over || !unitsAllowed;
+      endBtn.classList.toggle('is-disabled', over);
+      endBtn.setAttribute('aria-disabled', String(over));
     },
     setUnitsEnabled(enabled) {
       unitsAllowed = enabled;
-      unitsBtn.disabled = !barEnabled || !enabled;
+      unitsBtn.disabled = !barEnabled || gameOver || !enabled;
     },
   };
 }

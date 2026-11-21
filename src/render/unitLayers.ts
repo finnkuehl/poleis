@@ -7,6 +7,7 @@ import type { GameState, PlayerId } from '../core/state';
 import { UNITS } from '../data';
 import { hexSize } from './config';
 import { fogSignature, fogState, hpBarColor, unitTokenOffset } from './fog';
+import { playerColorOf } from './playerColor';
 import { theme } from './theme';
 
 export interface UnitLayers {
@@ -17,14 +18,11 @@ export interface UnitLayers {
   /** Drag ghost, to be added on top of everything. */
   ghost: Container;
   update(state: GameState, viewer: PlayerId): void;
+  /** Test option: no fog, enemy units drawn everywhere. Takes effect on the next update. */
+  setRevealAll(value: boolean): void;
   setAttackTargets(hexes: readonly Hex[]): void;
   /** Semi-transparent ghost token at world position (x, y); null hides it. */
   setGhost(unit: { type: string; owner: number } | null, x?: number, y?: number): void;
-}
-
-function playerColor(player: number): number {
-  const colors = theme.playerColors;
-  return colors[((player % colors.length) + colors.length) % colors.length];
 }
 
 function flatCorners(h: Hex): number[] {
@@ -41,6 +39,10 @@ export function createUnitLayers(): UnitLayers {
   /** One Text per unit id, created/destroyed only when units appear/disappear. */
   const iconTexts = new Map<number, { text: Text; type: string }>();
   let fogSig = '';
+  /** Test option: show the whole map (no fog, enemy units everywhere). */
+  let revealAll = false;
+  /** Latest state, for the colors of the drag ghost. */
+  let lastState: GameState | null = null;
 
   function drawUnits(state: GameState, viewer: PlayerId, visible: readonly boolean[]): void {
     tokens.clear();
@@ -64,7 +66,7 @@ export function createUnitLayers(): UnitLayers {
 
       tokens
         .circle(cx, cy, radius)
-        .fill({ color: playerColor(u.owner), alpha })
+        .fill({ color: playerColorOf(state, u.owner), alpha })
         .stroke({ color: theme.unitRimColor, width: theme.unitRimWidth, alpha });
       // HP bar under the token
       const share = Math.max(0, Math.min(1, u.hp / def.hp));
@@ -145,14 +147,15 @@ export function createUnitLayers(): UnitLayers {
         ghost.visible = false;
         return;
       }
-      const key = `${unit.type}:${unit.owner}`;
+      const color = lastState ? playerColorOf(lastState, unit.owner) : theme.playerColors[0];
+      const key = `${unit.type}:${unit.owner}:${color}`;
       if (key !== ghostKey) {
         ghostKey = key;
         const radius = hexSize * theme.unitRadiusFactor;
         ghostBody.clear();
         ghostBody
           .circle(0, 0, radius)
-          .fill({ color: playerColor(unit.owner) })
+          .fill({ color })
           .stroke({ color: theme.unitRimColor, width: theme.unitRimWidth });
         ghostText?.destroy();
         ghostText = new Text({
@@ -166,7 +169,22 @@ export function createUnitLayers(): UnitLayers {
       ghost.position.set(x, y);
       ghost.visible = true;
     },
+    setRevealAll(value) {
+      revealAll = value;
+      fogSig = '';
+    },
     update(state, viewer) {
+      lastState = state;
+      if (revealAll) {
+        drawUnits(
+          state,
+          viewer,
+          state.map.tiles.map(() => true),
+        );
+        fog.clear();
+        fogSig = '';
+        return;
+      }
       const visible = visibleTiles(state, viewer);
       drawUnits(state, viewer, visible);
       drawFog(state, viewer, visible);

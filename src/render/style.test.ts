@@ -21,6 +21,8 @@ describe('badgeKind', () => {
     expect(badgeKind({ kind: 'working' })).toBeNull();
     expect(badgeKind({ kind: 'notConnected' })).toBe('problem');
     expect(badgeKind({ kind: 'missingWorkers' } as never)).toBe('problem');
+    expect(badgeKind({ kind: 'wonderBuilding', progress: 1, total: 5 })).toBeNull();
+    expect(badgeKind({ kind: 'wonderComplete' })).toBeNull();
     expect(badgeKind(undefined)).toBeNull();
   });
 });

@@ -56,7 +56,14 @@ export type StatusTone = 'ok' | 'problem' | 'neutral';
  * neutral, everything else = problem.
  */
 export function statusTone(status: BuildingStatus): StatusTone {
-  if (status.kind === 'producing' || status.kind === 'working') return 'ok';
+  if (
+    status.kind === 'producing' ||
+    status.kind === 'working' ||
+    status.kind === 'wonderBuilding' ||
+    status.kind === 'wonderComplete'
+  ) {
+    return 'ok';
+  }
   if (status.kind === 'noProduction' || status.kind === 'paused') return 'neutral';
   return 'problem';
 }
@@ -75,7 +82,10 @@ export function levelReached(have: CityLevel, need: CityLevel): boolean {
   return CITY_LEVELS.indexOf(have) >= CITY_LEVELS.indexOf(need);
 }
 
-/** Does the building show a Pause button? Only buildings with workers can be paused. */
-export function canPause(id: BuildingId): boolean {
-  return BUILDINGS[id].workers > 0;
+/**
+ * Does the building show a Pause button? Only buildings that currently need workers can be
+ * paused (`needed` = `workersNeeded(building)`; a completed wonder needs none).
+ */
+export function canPause(id: BuildingId, needed: number = BUILDINGS[id].workers): boolean {
+  return needed > 0;
 }

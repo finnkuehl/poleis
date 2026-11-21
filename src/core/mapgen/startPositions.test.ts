@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { startPositionConfig as cfg } from '../../data/startPosition';
 import { distance, hexKey, range } from '../hex';
 import { terrainAt } from '../map';
-import { createRng } from '../rng';
+import { createRng, seedFromText } from '../rng';
 import { findLandmasses, generateMap } from './index';
 import { findStartPositions } from './startPositions';
 
@@ -62,5 +62,26 @@ describe('findStartPositions', () => {
       const b = findStartPositions(map, 3, createRng(rng.state));
       expect(a).toEqual(b);
     }
+  });
+});
+
+describe('findStartPositions with 4 civilizations', () => {
+  it('seed 49 (normal map) keeps the starts far enough apart', () => {
+    const { map, rng } = generateMap(seedFromText('49'));
+    const positions = findStartPositions(map, 4, rng);
+    let minDist = Infinity;
+    for (let i = 0; i < 4; i++)
+      for (let j = i + 1; j < 4; j++)
+        minDist = Math.min(minDist, distance(positions[i], positions[j]));
+    expect(minDist).toBeGreaterThanOrEqual(cfg.minDistanceBetweenStarts);
+  });
+
+  it('count 1 is not affected by the relaxation (same RNG use as before)', () => {
+    const { map, rng } = generateMap(7);
+    const copy = createRng(rng.state);
+    const [a] = findStartPositions(map, 1, rng);
+    const [b] = findStartPositions(map, 1, copy);
+    expect(a).toEqual(b);
+    expect(rng.state).toBe(copy.state);
   });
 });

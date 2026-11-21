@@ -5,7 +5,7 @@ import { startPositionConfig as cfg } from '../../data/startPosition';
 import { TERRAIN } from '../../data/terrain';
 import { distance, range, type Hex } from '../hex';
 import { inBounds, terrainAt } from '../map';
-import { nextInt, type Rng } from '../rng';
+import { createRng, nextInt, type Rng } from '../rng';
 import type { MapState } from '../state';
 import { findLandmasses } from './landmass';
 
@@ -51,7 +51,9 @@ function evaluate(map: MapState, center: Hex): Candidate | null {
  *  2. fewer forest tiles required (minForest down to 0).
  * Hills/mountains are never relaxed. If still not enough candidates: Error.
  * Distance: further starts take the candidate with the largest distance to the chosen ones.
- * If no candidate reaches minDistanceBetweenStarts, the best available distance is used (relaxed).
+ * For several starts, if the result is closer than minDistanceBetweenStarts, the minimums
+ * above are relaxed further (bigger pool); the attempt with the largest minimum distance wins
+ * (ties: the earlier, stricter attempt).
  */
 export function findStartPositions(map: MapState, count: number, rng: Rng): Hex[] {
   const mainland = findLandmasses(map)[0];
@@ -65,20 +67,46 @@ export function findStartPositions(map: MapState, count: number, rng: Rng): Hex[
   }
   // `mainland` is in index order, so `base` is too: the index order is the tie-breaker everywhere below.
 
-  let pool: Candidate[] = [];
   const attempts: Array<[number, number]> = [];
   for (let p = cfg.minPlains; p >= 0; p--) attempts.push([p, cfg.minForest]);
   for (let f = cfg.minForest - 1; f >= 0; f--) attempts.push([0, f]);
+
+  let best: { chosen: Candidate[]; minDist: number; rngState: number } | null = null;
+  let biggestPool = 0;
   for (const [minPlains, minForest] of attempts) {
-    pool = base.filter((c) => c.plains >= minPlains && c.forest >= minForest);
-    if (pool.length >= count) break;
+    const pool = base.filter((c) => c.plains >= minPlains && c.forest >= minForest);
+    biggestPool = Math.max(biggestPool, pool.length);
+    if (pool.length < count) continue;
+    // Each attempt works on a copy of the RNG; only the kept attempt advances the real one.
+    const attemptRng = createRng(rng.state);
+    const chosen = choose(pool, count, attemptRng);
+    const minDist = minPairDistance(chosen);
+    if (!best || minDist > best.minDist) best = { chosen, minDist, rngState: attemptRng.state };
+    // One start: no distance to keep. Several: stop at the first attempt that is far enough.
+    if (count === 1 || minDist >= cfg.minDistanceBetweenStarts) break;
   }
-  if (pool.length < count) {
+  if (!best) {
     throw new Error(
-      `findStartPositions: only ${pool.length} suitable start positions on the mainland, ${count} requested`,
+      `findStartPositions: only ${biggestPool} suitable start positions on the mainland, ${count} requested`,
     );
   }
+  rng.state = best.rngState;
+  return best.chosen.map((c) => c.hex);
+}
 
+/** Smallest distance between any two of the candidates (Infinity for one). */
+function minPairDistance(chosen: Candidate[]): number {
+  let min = Infinity;
+  for (let i = 0; i < chosen.length; i++) {
+    for (let j = i + 1; j < chosen.length; j++) {
+      min = Math.min(min, distance(chosen[i].hex, chosen[j].hex));
+    }
+  }
+  return min;
+}
+
+/** Picks `count` candidates from the pool: the first at random among the best, the rest far apart. */
+function choose(pool: Candidate[], count: number, rng: Rng): Candidate[] {
   // First position: random among the best-scoring candidates.
   const ranked = pool
     .map((c, index) => ({ c, index }))
@@ -99,5 +127,5 @@ export function findStartPositions(map: MapState, count: number, rng: Rng): Hex[
     }
     chosen.push((best as { c: Candidate }).c);
   }
-  return chosen.map((c) => c.hex);
+  return chosen;
 }

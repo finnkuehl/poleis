@@ -233,6 +233,15 @@ Individually selectable at game start:
 | Temple | 15 |
 | World wonder | 150 |
 
+### Detailed rules (decided in M5)
+- **AI turns:** after "End turn" every AI civilization takes its turn, one after another, **instantly** (no animation – animations follow in M7). Then the player's next turn starts. The turn summary lists what the player could see (e.g. "Sparta attacked your scout", a city lost or captured, a civilization out of the game).
+- **Peace time:** no AI civilization attacks anyone before **turn 15**. After that its personality decides: Sparta attacks often, Athens rarely, Corinth only when it is clearly stronger.
+- **World wonder:** the whole cost is paid when it is placed. Every turn it has its 4 workers and a road connection, its progress goes up by 1 (shown as "2 of 5"); without workers or connection it pauses. At 5 of 5 it is complete: with the wonder victory switched on, the first civilization to complete it wins at once; otherwise it is worth its points. A world wonder can never be demolished (finished or not). An AI civilization places its wonder only **from turn 70** on (like the peace time, this is AI behavior; the player may build it whenever they can).
+- **Out of the game:** a civilization that loses its last city is out; its remaining units disappear. If this happens to the player, the defeat screen appears. **Conquest** = all other civilizations are out.
+- **Start menu:** the player picks a civilization name (free text) and one of 4 colors (Tyrian purple by default), the number of AI civilizations (1–3), the map size (small 24 × 24, normal 30 × 30, large 40 × 40), the seed (random unless typed in) and the victory types (three checkboxes, all on by default; turn limit 120). The AIs are Athens, Sparta and Corinth; with fewer than 3, the seed picks which.
+- **Saving:** the game saves itself every turn ("Continue" in the start menu). In addition the player can save to **3 slots** and load them again.
+- **Scores:** a "Scores" sheet lists every civilization with its points and its wonder progress – also civilizations the player has not met yet.
+
 ## 11. Controls (phone)
 
 - **Top:** resource bar (horizontally scrollable), turn X / limit.
