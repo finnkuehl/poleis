@@ -85,3 +85,10 @@ describe('canPause', () => {
     expect(canPause('temple')).toBe(false);
   });
 });
+
+describe('statusTone for the world wonder', () => {
+  it('is ok while building and when complete', () => {
+    expect(statusTone({ kind: 'wonderBuilding', progress: 2, total: 5 })).toBe('ok');
+    expect(statusTone({ kind: 'wonderComplete' })).toBe('ok');
+  });
+});

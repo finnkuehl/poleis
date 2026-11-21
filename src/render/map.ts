@@ -10,6 +10,7 @@ import type { Rect } from './camera';
 import { hexSize } from './config';
 import { createEconomyLayers } from './economyLayers';
 import { createOrderLayers, type OrderPath } from './orderLayers';
+import { playerColorOf } from './playerColor';
 import { createUnitLayers } from './unitLayers';
 import { theme } from './theme';
 
@@ -120,6 +121,7 @@ export function createMapView(map: MapState): MapView {
     bounds: mapWorldBounds(map, hexSize),
     update(state, statuses, viewer = 0) {
       economy.update(state, statuses);
+      orders.setColor(playerColorOf(state, viewer));
       unitLayers.update(state, viewer);
     },
     setAttackTargets: unitLayers.setAttackTargets,

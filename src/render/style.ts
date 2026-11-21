@@ -28,6 +28,10 @@ export function badgeKind(status: BuildingStatus | undefined): BadgeKind {
   switch (status?.kind) {
     case 'paused':
       return 'paused';
+    // A wonder under construction or complete is not a problem: no badge.
+    case 'wonderBuilding':
+    case 'wonderComplete':
+      return null;
     case 'notConnected':
     case 'missingWorkers':
     case 'missingInput':

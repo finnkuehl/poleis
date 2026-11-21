@@ -56,7 +56,14 @@ export type StatusTone = 'ok' | 'problem' | 'neutral';
  * neutral, everything else = problem.
  */
 export function statusTone(status: BuildingStatus): StatusTone {
-  if (status.kind === 'producing' || status.kind === 'working') return 'ok';
+  if (
+    status.kind === 'producing' ||
+    status.kind === 'working' ||
+    status.kind === 'wonderBuilding' ||
+    status.kind === 'wonderComplete'
+  ) {
+    return 'ok';
+  }
   if (status.kind === 'noProduction' || status.kind === 'paused') return 'neutral';
   return 'problem';
 }
