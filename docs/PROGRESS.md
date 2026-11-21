@@ -1,17 +1,18 @@
 # Progress
 
-## Current milestone: M2 – Economy (in progress, branch `m2-economy`)
+## Current milestone: M2 – Economy (implemented, pull request open – waiting for test and merge)
 
 - [x] Plan approved; project switched to English (chat, game texts, comments, docs, commits)
-- [ ] Goods and building data, rules: placement, territory, connection, workers, production
-- [ ] A* pathfinding and automatic start position
-- [ ] Game state with city, actions (build, road, demolish), end of turn
-- [ ] Rendering: territory border, roads, buildings with status, highlights, road preview
-- [ ] UI: resource bar, bottom bar, build menu, confirmation, building panel, error messages
-- [ ] Interaction modes wired up; camera starts at the city
-- [ ] Browser test desktop + phone, code-review, pull request
+- [x] Goods and building data, rules: placement, territory, connection, workers, production
+- [x] A* pathfinding and automatic start position
+- [x] Game state with city, actions (build, road, demolish), end of turn
+- [x] Rendering: territory border, roads, buildings with status, highlights, road preview
+- [x] UI: resource bar, bottom bar, build menu, confirmation, building panel, error messages
+- [x] Interaction modes wired up; camera starts at the city
+- [x] Browser test desktop + phone format, code-review (no issues), pull request
+- [ ] Merge
 
-**Design decisions M2** (in `docs/GAME_DESIGN.md` §5 "Detailed rules"): start with 20 wood + 10 stone, automatic start position, housing filled immediately until M3, demolish without refund.
+**Design decisions M2** (in `docs/GAME_DESIGN.md` §5 "Detailed rules"): start with 20 wood + 10 stone, automatic start position, housing filled immediately until M3, demolish without refund, workers only fill complete crews.
 
 ## Done
 
@@ -20,8 +21,11 @@
 
 ## Known limitations
 
-- No gameplay yet: no cities, buildings or units.
-- The start view shows the whole map – on a phone the tiles are small (zoom in). From M2 on, the camera starts at the player's own city.
+- No food consumption, growth, taxes or city levels yet (M3) – food piles up.
+- No saving yet (M5) – reloading the page starts a new game.
+- No units yet (M4).
+- With 4 civilizations, `findStartPositions` can place starts close together on a few seeds (e.g. seed 49). Fix when AI civilizations arrive (M5): relax plains/forest minimums before accepting a short distance.
+- A dev-only UI preview lives at `/ui-preview.html` (not part of the production build).
 
 ## Notes
 
