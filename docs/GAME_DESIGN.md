@@ -31,9 +31,9 @@
 | Ocean | ships only | – | no | – |
 | Coastal water | ships only | – | no | Fishery and harbor border it |
 | Plains | 1 | ×1.0 | yes | Standard for most buildings |
-| Forest | 2 | ×1.5 | no (woodcutter next to it) | Source of wood; can be cleared (later) |
-| Hills | 2 | ×1.5 | yes | Quarry, mine, vineyard |
-| Mountains | impassable | – | no | Mine/quarry next to it |
+| Forest | 2 | ×1.5 | only woodcutter | Source of wood (woodcutter on or next to it); can be cleared (later) |
+| Hills | 2 | ×1.5 | yes | Quarry, vineyard, olive grove |
+| Mountains | impassable | – | only mine/quarry | Mine on it; quarry on or next to it |
 
 - A road on a tile: movement cost for land units is halved (rounded down, at least 0.5).
 - Buildings and roads only inside **your own territory**.
@@ -84,19 +84,19 @@ Woodcutter ─Wood─┴► Smelter ──Bronze──► Units, wonder
 |---|---|---|---|---|---|
 | City center | Plains | (start / settler) | – | Storehouse, territory radius 2, +4 housing, +1 bread (no workers) | Start |
 | Storehouse | Plains | 4 wood, 2 stone | 0 | additional road connection point | Settlement |
-| House | Plains | 3 wood | 0 | +4 housing | Settlement |
-| Woodcutter | next to forest | 2 wood | 1 | +2 wood | Settlement |
-| Quarry | Hills or next to mountains | 3 wood | 1 | +2 stone | Settlement |
+| House | Plains | 3 wood | 0 | +6 housing | Settlement |
+| Woodcutter | on forest, or plains/hills next to forest | 2 wood | 1 | +2 wood | Settlement |
+| Quarry | on hills or mountains, or plains next to them | 3 wood | 1 | +2 stone | Settlement |
 | Farm | Plains | 3 wood | 2 | +3 grain | Settlement |
 | Fishery | Plains at coastal water | 3 wood | 1 | +2 fish | Settlement |
 | Sawmill | Plains | 4 wood, 2 stone | 1 | 2 wood → 2 planks | Settlement |
 | Bakery | Plains | 3 planks, 2 stone | 1 | 2 grain → 3 bread | Settlement |
 | Olive grove | Plains or hills | 4 planks | 1 | +2 olives | Settlement |
 | Oil press | Plains | 4 planks, 3 stone | 1 | 2 olives → 2 oil | Settlement |
-| Mine | Hills or next to mountains | 5 wood, 3 stone | 2 | +2 ore | Settlement |
+| Mine | on mountains | 5 wood, 3 stone | 2 | +2 ore | Settlement |
 | Smelter | Plains | 2 planks, 4 stone | 1 | 2 ore + 1 wood → 1 bronze | Settlement |
 | Barracks | Plains | 6 planks, 4 stone | 0 | trains land units | Settlement |
-| Border tower | Plains or hills | 2 wood, 4 stone | 0 | territory radius 2 around the tower | Settlement |
+| Border tower | Plains or hills, inside own territory | 2 wood, 4 stone | 0 | claims territory radius 2 around the tower (only unclaimed tiles); the new land belongs to the tower's city | Settlement |
 | Vineyard | Hills | 4 planks, 2 stone | 1 | +2 grapes | Polis |
 | Winery | Plains | 4 planks, 4 stone | 1 | 2 grapes → 2 wine | Polis |
 | Harbor | Plains at coastal water | 8 planks, 4 stone | 1 | builds ships, sea route connection | Polis |
@@ -113,7 +113,8 @@ Woodcutter ─Wood─┴► Smelter ──Bronze──► Units, wonder
 
 **Detailed rules (decided in M2)**
 - **Start:** stock of **20 wood and 10 stone**. The first city center is placed **automatically** on plains on the mainland; its territory (radius 2) is guaranteed to contain forest, hills or mountains and enough plains. The camera starts there.
-- **"next to X" placement:** the building stands on a buildable tile (plains or hills) next to X. Woodcutter: plains/hills next to forest. Quarry and mine: on hills, or on plains next to mountains. Fishery: plains next to coastal water.
+- **Resource placement (balance pass after M3):** resource buildings may stand on their resource. Woodcutter: on forest, or on plains/hills next to forest. Quarry: on hills or mountains, or on plains next to them. Mine: on mountains only (a city without mountains reaches them with a border tower). Fishery: plains next to coastal water.
+- **Territory grows with border towers** (moved forward from M4): a city claims radius 2; border towers claim radius 2 around themselves. Ordinary buildings do not expand territory – expanding stays a deliberate, paid choice.
 - **One thing per tile:** a tile holds either one building or one road.
 - **Roads** only on walkable land in the player's own territory (plains, forest, hills – not mountains, not water). A road may pass through the player's own buildings at no cost.
 - **Demolishing** buildings and roads is allowed, **without refund**. The city center cannot be demolished.
@@ -218,7 +219,8 @@ Individually selectable at game start:
 - **Top:** resource bar (horizontally scrollable), turn X / limit.
 - **Bottom:** bar with "Build", "Road", "Units"; large "End turn" button at the bottom right.
 - Tap a tile → info panel from below (terrain, building, status, actions).
-- Building: choose a building → valid tiles are highlighted → tap a tile → confirm.
+- **Tap an empty tile in your territory** → the panel lists every building that fits on that tile ("Build here"); **one tap builds it** right away. Unaffordable ones are muted with what is missing, higher-level ones show "From Polis". A "Road from here" button starts a road on that tile.
+- Building via the "Build" button: choose a building → valid tiles are highlighted → tap a tile → confirm.
 - Road: tap the start tile, tap the target tile → preview of the path with cost → confirm.
 - Tap a unit → reachable tiles highlighted, attackable enemies marked red.
 
