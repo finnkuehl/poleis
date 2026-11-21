@@ -1,4 +1,5 @@
 // Game controller: holds the GameState and the interaction mode, wires renderer and UI together.
+import { playAiTurns } from '../ai';
 import { applyAction, type Action } from '../core/actions';
 import { hexEquals, type Hex } from '../core/hex';
 import { terrainAt, tileIndex } from '../core/map';
@@ -206,6 +207,9 @@ export async function createGame(
     const readyBefore = readyCities(state);
     const unitsBefore = new Set(ownUnits().map((u) => u.id));
     if (!commit({ type: 'endTurn' })) return;
+    // The AI civilizations take their turns (instantly) until it is the player's turn again.
+    state = playAiTurns(state);
+    refresh();
     const report = state.lastReport;
     if (!report) return;
     const canAdvance: Record<number, CityLevel> = {};
@@ -283,7 +287,7 @@ export async function createGame(
       stockOf(state),
       state.lastReport?.delta ?? null,
       state.turn,
-      economyConfig.turnLimit,
+      state.settings.turnLimit,
       people(),
       overview.workers,
     );

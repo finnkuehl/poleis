@@ -2,14 +2,19 @@
 
 import {
   BUILDINGS,
+  CIV_IDS,
   economyConfig,
+  gameConfig,
   GOOD_IDS,
+  MAP_SIZES,
   militaryConfig,
   populationConfig,
   TERRAIN,
   UNITS,
   type BuildingId,
   type CityLevel,
+  type CivId,
+  type GameSettingsData,
   type Stock,
   type TerrainId,
   type UnitId,
@@ -21,7 +26,7 @@ import { createCity } from './rules/found';
 import { claimTerritory } from './rules/territory';
 import { updateAllExplored } from './rules/vision';
 import type { TurnReport } from './rules/production';
-import { createRng, nextInt, seedFromText, type Rng } from './rng';
+import { createRng, nextInt, seedFromText, shuffle, type Rng } from './rng';
 
 export interface MapState {
   width: number;
@@ -32,13 +37,29 @@ export interface MapState {
 
 export type PlayerId = number;
 
+/** The settings of one game (chosen in the start menu). */
+export type GameSettings = GameSettingsData;
+
 export interface PlayerState {
   id: PlayerId;
   isHuman: boolean;
+  /** AI civilization, null = the human or the passive test-mode enemy. */
+  civ: CivId | null;
+  /** Human: the typed name ('' = default name); AIs: ''. */
+  name: string;
+  /** Index into the player colors (0-3). */
+  color: number;
+  /** false = out of the game (lost its last city). */
+  alive: boolean;
   /** Shared stock of the civilization. */
   goods: Stock;
   /** Per tile index: has the player ever seen this tile (fog of war)? */
   explored: boolean[];
+}
+
+/** The passive enemy of test mode: not human, no civilization, never takes a turn. */
+export function isPassive(p: PlayerState): boolean {
+  return !p.isHuman && p.civ === null;
 }
 
 export interface Building {
@@ -97,9 +118,49 @@ export interface TrainingOrder {
   owner: PlayerId;
 }
 
+/**
+ * What happened (for the turn summary). `seenBy` = the involved players plus every alive
+ * player who sees `hex` at that moment (ascending, no duplicates).
+ */
+export type GameEvent =
+  | {
+      type: 'attack';
+      turn: number;
+      attacker: PlayerId;
+      defender: PlayerId;
+      attackerUnit: UnitId;
+      defenderUnit: UnitId;
+      /** The defender's tile. */
+      hex: Hex;
+      damage: number;
+      counter: number;
+      defenderKilled: boolean;
+      attackerKilled: boolean;
+      seenBy: PlayerId[];
+    }
+  | {
+      type: 'cityCaptured';
+      turn: number;
+      by: PlayerId;
+      from: PlayerId;
+      cityId: number;
+      hex: Hex;
+      seenBy: PlayerId[];
+    }
+  | {
+      type: 'cityFounded';
+      turn: number;
+      by: PlayerId;
+      cityId: number;
+      hex: Hex;
+      seenBy: PlayerId[];
+    }
+  | { type: 'eliminated'; turn: number; player: PlayerId; seenBy: PlayerId[] };
+
 export interface GameState {
   version: 1;
   seedText: string;
+  settings: GameSettings;
   map: MapState;
   rng: Rng;
   /** Current turn, starts at 1. */
@@ -125,13 +186,35 @@ export interface GameState {
   nextId: number;
   /** Result of the latest production (for the UI). */
   lastReport: TurnReport | null;
+  /** Events since the human last ended a turn (cleared when the human ends the turn). */
+  events: GameEvent[];
 }
 
-/** New game: seed text -> map; the RNG state is the one after generation. */
-export function createGameState(seedText: string, options: { sandbox?: boolean } = {}): GameState {
-  const { map, rng } = generateMap(seedFromText(seedText));
+function emptyStock(): Stock {
   const goods = {} as Stock;
   for (const id of GOOD_IDS) goods[id] = 0;
+  return goods;
+}
+
+/**
+ * New game: seed text -> map; the RNG state is the one after generation.
+ * `settings` are merged over `gameConfig.defaultSettings`. Test mode (`sandbox`) ignores
+ * `aiCount` and adds the passive enemy instead.
+ */
+export function createGameState(
+  seedText: string,
+  options: { sandbox?: boolean; settings?: Partial<GameSettings> } = {},
+): GameState {
+  const settings: GameSettings = {
+    ...gameConfig.defaultSettings,
+    ...options.settings,
+    victory: { ...gameConfig.defaultSettings.victory, ...options.settings?.victory },
+  };
+  const aiCount = options.sandbox
+    ? 0
+    : Math.max(0, Math.min(gameConfig.maxAiCount, Math.floor(settings.aiCount)));
+  const { map, rng } = generateMap(seedFromText(seedText), MAP_SIZES[settings.mapSize]);
+  const goods = emptyStock();
   for (const [id, amount] of Object.entries(
     options.sandbox ? economyConfig.sandboxGoods : economyConfig.startGoods,
   )) {
@@ -139,16 +222,29 @@ export function createGameState(seedText: string, options: { sandbox?: boolean }
   }
   // Starting city: same RNG as the map generation, so everything depends on the seed only.
   const gameRng = createRng(rng.state);
-  const start = findStartPositions(map, 1, gameRng)[0];
+  const starts = findStartPositions(map, 1 + aiCount, gameRng);
+  const start = starts[0];
   const territory = map.tiles.map(() => -1);
   const state: GameState = {
     version: 1,
     seedText,
+    settings,
     map,
     rng: gameRng,
     turn: 1,
     currentPlayer: 0,
-    players: [{ id: 0, isHuman: true, goods, explored: map.tiles.map(() => false) }],
+    players: [
+      {
+        id: 0,
+        isHuman: true,
+        civ: null,
+        name: settings.playerName,
+        color: settings.playerColor,
+        alive: true,
+        goods,
+        explored: map.tiles.map(() => false),
+      },
+    ],
     buildings: [{ id: 1, type: 'cityCenter', owner: 0, hex: start, paused: false }],
     roads: map.tiles.map(() => false),
     territory,
@@ -167,8 +263,31 @@ export function createGameState(seedText: string, options: { sandbox?: boolean }
     training: [],
     nextId: 2,
     lastReport: null,
+    events: [],
   };
   claimTerritory(state, start, BUILDINGS.cityCenter.territoryRadius, 0, 1);
+  if (aiCount > 0) {
+    // Which civilizations play: a deterministic shuffle with the state RNG.
+    const civs = shuffle(gameRng, [...CIV_IDS]).slice(0, aiCount);
+    // Colors: the ones the human did not take, in ascending order.
+    const colors = Array.from({ length: gameConfig.playerColorCount }, (_, i) => i).filter(
+      (c) => c !== settings.playerColor,
+    );
+    civs.forEach((civ, i) => {
+      const id = i + 1;
+      state.players.push({
+        id,
+        isHuman: false,
+        civ,
+        name: '',
+        color: colors[i],
+        alive: true,
+        goods: { ...emptyStock(), ...economyConfig.startGoods },
+        explored: map.tiles.map(() => false),
+      });
+      createCity(state, id, starts[id], populationConfig.startResidents);
+    });
+  }
   if (options.sandbox) addPassiveEnemy(state, start);
   updateAllExplored(state);
   return state;
@@ -206,12 +325,15 @@ function addPassiveEnemy(state: GameState, humanCenter: Hex): void {
   }
   if (pool.length === 0) return;
   const center = pool[nextInt(state.rng, 0, pool.length - 1)];
-  const goods = {} as Stock;
-  for (const id of GOOD_IDS) goods[id] = 0;
+  const humanColor = state.players[0].color;
   state.players.push({
     id: 1,
     isHuman: false,
-    goods,
+    civ: null,
+    name: '',
+    color: [0, 1, 2, 3].find((c) => c !== humanColor) ?? 0,
+    alive: true,
+    goods: emptyStock(),
     explored: state.map.tiles.map(() => false),
   });
   createCity(state, 1, center, populationConfig.startResidents);

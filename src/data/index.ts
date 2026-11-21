@@ -13,3 +13,5 @@ export * from './population';
 export * from './cityLevels';
 export * from './units';
 export * from './military';
+export * from './game';
+export * from './ai';

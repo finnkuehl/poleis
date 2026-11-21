@@ -32,6 +32,4 @@ export const economyConfig = {
     // Drachmas paid for 1 good when buying.
     buyPrice: 3,
   },
-  // Number of turns of a game, shown as "Turn X / 120" (victory rules come in M5).
-  turnLimit: 120,
 } as const;

@@ -21,3 +21,5 @@ export * from './capture';
 export * from './found';
 export * from './vision';
 export * from './economy';
+export * from './events';
+export * from './elimination';

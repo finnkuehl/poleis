@@ -18,7 +18,9 @@ import {
   advanceCheck,
   canTrade,
   checkFoundCity,
+  addEvent,
   combatPreview,
+  playersSeeing,
   foundCity,
   updateCapturing,
   canAfford,
@@ -194,6 +196,20 @@ function applyActionInner(state: GameState, action: Action): ActionResult {
       unit.hasMoved = true;
       unit.acted = true;
       unit.movesLeft = 0;
+      addEvent(next, {
+        type: 'attack',
+        turn: next.turn,
+        attacker: player,
+        defender: target.owner,
+        attackerUnit: unit.type,
+        defenderUnit: target.type,
+        hex: target.hex,
+        damage: result.damage,
+        counter: result.counter,
+        defenderKilled: target.hp <= 0,
+        attackerKilled: unit.hp <= 0,
+        seenBy: playersSeeing(next, target.hex, [player, target.owner]),
+      });
       next.units = next.units.filter((u) => u.hp > 0);
       return { ok: true, state: next };
     }

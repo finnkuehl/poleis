@@ -1,7 +1,8 @@
 // Entry point: reads the seed, starts the renderer and shows a message on errors.
 import './style.css';
 import './ui/ui.css';
-import { createGameState } from './core/state';
+import { createGameState, type GameSettings } from './core/state';
+import { gameConfig, MAP_SIZES, type MapSize } from './data/game';
 import { mapgenConfig } from './data/mapgen';
 import { en } from './i18n/en';
 import { createGame } from './ui/interaction';
@@ -30,9 +31,22 @@ function showError(ui: HTMLElement, error: unknown): void {
   ui.appendChild(message);
 }
 
+/** Dev settings from the URL: `&ai=N` (0-3) and `&size=small|normal|large`. */
+function readSettings(): Partial<GameSettings> {
+  const params = new URL(window.location.href).searchParams;
+  const settings: Partial<GameSettings> = {};
+  const ai = Number(params.get('ai'));
+  if (params.has('ai') && Number.isFinite(ai)) {
+    settings.aiCount = Math.max(0, Math.min(gameConfig.maxAiCount, Math.floor(ai)));
+  }
+  const size = params.get('size');
+  if (size !== null && Object.keys(MAP_SIZES).includes(size)) settings.mapSize = size as MapSize;
+  return settings;
+}
+
 function start(appContainer: HTMLElement, uiContainer: HTMLElement): void {
   const sandbox = new URL(window.location.href).searchParams.has('sandbox');
-  const state = createGameState(readSeed(), { sandbox });
+  const state = createGameState(readSeed(), { sandbox, settings: readSettings() });
   createGame(appContainer, uiContainer, state, sandbox).catch((error: unknown) =>
     showError(uiContainer, error),
   );
