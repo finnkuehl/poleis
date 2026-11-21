@@ -10,6 +10,13 @@ import {
   formatTerrains,
   formatTurnOf,
   formatRoadTiles,
+  formatAdvanceTo,
+  formatAdvanced,
+  formatBought,
+  formatDrachmas,
+  formatResidents,
+  formatSold,
+  formatTurns,
   formatWorkerCount,
 } from './format';
 
@@ -55,6 +62,21 @@ describe('i18n/format', () => {
   it('formats road tile counts with singular and plural', () => {
     expect(formatRoadTiles(1)).toBe('1 new road tile');
     expect(formatRoadTiles(2)).toBe('2 new road tiles');
+  });
+  it('formats plural forms', () => {
+    expect(formatResidents(1)).toBe('1 resident');
+    expect(formatResidents(0)).toBe('0 residents');
+    expect(formatResidents(6)).toBe('6 residents');
+    expect(formatDrachmas(1)).toBe('1 drachma');
+    expect(formatDrachmas(3)).toBe('3 drachmas');
+    expect(formatTurns(1)).toBe('1 turn');
+    expect(formatTurns(3)).toBe('3 turns');
+  });
+  it('formats the advance, trade and level texts', () => {
+    expect(formatAdvanceTo('polis')).toBe('Advance to Polis');
+    expect(formatAdvanced('polis')).toBe('Your city is now a Polis.');
+    expect(formatSold('wood', 2, 1)).toBe('Sold 2 Wood for 1 drachma.');
+    expect(formatBought('wood', 1, 3)).toBe('Bought 1 Wood for 3 drachmas.');
   });
   it('fills placeholders', () => {
     expect(fill('Build {building} here?', { building: 'House' })).toBe('Build House here?');

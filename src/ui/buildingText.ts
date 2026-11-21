@@ -1,5 +1,14 @@
 // Pure helpers for building texts (no DOM, easy to test).
-import { BUILDINGS, GOOD_IDS, type BuildingId, type Goods, type GoodId, type Stock } from '../data';
+import {
+  BUILDINGS,
+  CITY_LEVELS,
+  GOOD_IDS,
+  type BuildingId,
+  type CityLevel,
+  type Goods,
+  type GoodId,
+  type Stock,
+} from '../data';
 import type { BuildingStatus } from '../core/rules/production';
 import { en } from '../i18n/en';
 import { fill, formatConversion, formatSignedGoods, formatWorkerCount } from '../i18n/format';
@@ -42,9 +51,31 @@ export function costParts(cost: Goods, stock: Stock): CostPart[] {
 
 export type StatusTone = 'ok' | 'problem' | 'neutral';
 
-/** Color class of a status: producing = ok, no production = neutral, everything else = problem. */
+/**
+ * Color class of a status: producing and open for business = ok, no production and paused =
+ * neutral, everything else = problem.
+ */
 export function statusTone(status: BuildingStatus): StatusTone {
-  if (status.kind === 'producing') return 'ok';
-  if (status.kind === 'noProduction') return 'neutral';
+  if (status.kind === 'producing' || status.kind === 'working') return 'ok';
+  if (status.kind === 'noProduction' || status.kind === 'paused') return 'neutral';
   return 'problem';
+}
+
+/** Like `costParts`, but takes the already known missing goods (e.g. from an advance check). */
+export function costPartsFromMissing(cost: Goods, missing: Goods): CostPart[] {
+  return GOOD_IDS.filter((g) => (cost[g] ?? 0) > 0).map((good) => ({
+    good,
+    amount: cost[good] ?? 0,
+    missing: (missing[good] ?? 0) > 0,
+  }));
+}
+
+/** Can a city of level `have` use something that needs level `need`? */
+export function levelReached(have: CityLevel, need: CityLevel): boolean {
+  return CITY_LEVELS.indexOf(have) >= CITY_LEVELS.indexOf(need);
+}
+
+/** Does the building show a Pause button? Only buildings with workers can be paused. */
+export function canPause(id: BuildingId): boolean {
+  return BUILDINGS[id].workers > 0;
 }
