@@ -1,4 +1,4 @@
-// Hilfsfunktionen für die Karte (Index <-> Hex, Terrain-Abfrage).
+// Helper functions for the map (index <-> hex, terrain lookup).
 
 import type { TerrainId } from '../data/terrain';
 import { axialToOffset, offsetToAxial, type Hex } from './hex';
@@ -9,7 +9,7 @@ export function inBounds(map: MapState, h: Hex): boolean {
   return col >= 0 && col < map.width && row >= 0 && row < map.height;
 }
 
-/** Index in `map.tiles`; -1 wenn das Feld außerhalb der Karte liegt. */
+/** Index in `map.tiles`; -1 if the tile lies outside the map. */
 export function tileIndex(map: MapState, h: Hex): number {
   if (!inBounds(map, h)) return -1;
   const { col, row } = axialToOffset(h);
@@ -25,7 +25,7 @@ export function terrainAt(map: MapState, h: Hex): TerrainId | undefined {
   return i < 0 ? undefined : map.tiles[i];
 }
 
-/** Alle Felder in Index-Reihenfolge. */
+/** All tiles in index order. */
 export function allHexes(map: MapState): Hex[] {
   const result: Hex[] = [];
   for (let i = 0; i < map.tiles.length; i++) result.push(hexAtIndex(map, i));

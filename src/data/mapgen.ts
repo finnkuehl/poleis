@@ -1,56 +1,56 @@
-// Alle Zahlen der Kartengenerierung (siehe docs/GAME_DESIGN.md, Abschnitt 3).
-// Du kannst sie selbst ändern: Zahl anpassen, speichern, Spiel neu laden.
-// Wenn die Karte mit den Zahlen nicht aufgeht, versucht der Generator es bis zu
-// `maxAttempts` Mal neu und meldet dann einen Fehler.
+// All numbers of the map generation (see docs/GAME_DESIGN.md, section 3).
+// You can change them yourself: adjust a number, save, reload the game.
+// If the map does not work out with these numbers, the generator retries up to
+// `maxAttempts` times and then reports an error.
 
 export const mapgenConfig = {
-  /** Standard-Kartengröße in Feldern (Breite x Höhe). */
+  /** Default map size in tiles (width x height). */
   width: 30,
   height: 30,
 
-  /** Das Festland hält so viele Felder Abstand zum Kartenrand (der Rand selbst ist Ozean). */
+  /** The mainland keeps this many tiles of distance to the map edge (the edge itself is ocean). */
   edgeMargin: 2,
-  /** Anteil des Festlands an ALLEN Feldern (0.45 = 45 %). */
+  /** Share of the mainland among ALL tiles (0.45 = 45 %). */
   mainlandShare: 0.45,
 
-  /** Wie viele Inseln es gibt (zufällig zwischen min und max). */
+  /** How many islands there are (random between min and max). */
   islandCount: { min: 3, max: 6 },
-  /** Größe einer Insel in Feldern (zufällig zwischen min und max). */
+  /** Size of an island in tiles (random between min and max). */
   islandSize: { min: 8, max: 20 },
-  /** Mindestabstand einer Insel zu anderem Land (Felder dazwischen: Wert minus 1). */
+  /** Minimum distance of an island to other land (tiles in between: value minus 1). */
   islandMinDistance: 3,
-  /** Inseln dürfen näher an den Kartenrand als das Festland. */
+  /** Islands may come closer to the map edge than the mainland. */
   islandEdgeMargin: 1,
 
-  /** Terrain-Anteile auf dem Festland. Was übrig bleibt, ist Ebene. */
+  /** Terrain shares on the mainland. Whatever is left over is plains. */
   mainlandTerrain: { mountains: 0.1, hills: 0.17, forest: 0.25 },
-  /** Terrain-Anteile auf den Inseln: mehr Hügel und Wald (Anreiz zur Besiedlung per Schiff). */
+  /** Terrain shares on the islands: more hills and forest (an incentive to settle by ship). */
   islandTerrain: { mountains: 0.05, hills: 0.28, forest: 0.32 },
 
-  /** Länge einer Bergkette in Feldern (zufällig zwischen min und max). */
+  /** Length of a mountain chain in tiles (random between min and max). */
   mountainChainLength: { min: 3, max: 6 },
-  /** Hügel entstehen bevorzugt neben Bergen: so viel Bonus auf die Hügel-Punktzahl. */
+  /** Hills preferably appear next to mountains: this much bonus on the hills score. */
   hillsNearMountainsBonus: 0.15,
 
-  /** Größe der Rausch-Zellen in Feldern (ungefähr). Größer = großflächigere Formen. */
+  /** Size of the noise cells in tiles (approximately). Larger = bigger-scale shapes. */
   noiseCellSize: 6,
-  /** So oft wird die Karte neu erzeugt, bis alle Regeln erfüllt sind. */
+  /** How often the map is regenerated until all rules are met. */
   maxAttempts: 20,
 
-  /** Form des Festlands (Feinjustierung). */
+  /** Shape of the mainland (fine tuning). */
   mainlandShape: {
-    /** Länglichkeit der Ellipse (Verhältnis lange/kurze Achse), zufällig zwischen min und max. */
+    /** Elongation of the ellipse (ratio long/short axis), random between min and max. */
     elongation: { min: 1.3, max: 1.8 },
-    /** Verschiebung des Zentrums weg von der Kartenmitte (Anteil der Kartengröße), damit eine Meeresseite für Inseln frei bleibt. */
+    /** Shift of the center away from the middle of the map (share of the map size), so one side of the sea stays free for islands. */
     centerShift: 0.2,
-    /** Wie stark das Rauschen die Küstenlinie ausfranst (0 = glatte Ellipse). */
+    /** How strongly the noise frays the coastline (0 = smooth ellipse). */
     noiseWeight: 0.5,
-    /** Wie stark der Zufall einzelne Felder verändert. */
+    /** How strongly chance alters individual tiles. */
     jitter: 0.15,
   },
 
-  /** Seeds: höchstens so viele Zeichen werden aus `?seed=…` übernommen. */
+  /** Seeds: at most this many characters are taken from `?seed=...`. */
   seedMaxLength: 40,
-  /** Ohne Seed in der Adresse wird eine Zufallszahl von 0 bis unter diesem Wert gewürfelt. */
+  /** Without a seed in the address, a random number from 0 up to (not including) this value is rolled. */
   randomSeedRange: 1_000_000,
 } as const;

@@ -1,7 +1,11 @@
-// Hier stehen ALLE Balancing-Zahlen des Spiels (Terrain, Waren, Gebäude,
-// Einheiten, Stadtstufen, Punkte). Du kannst sie selbst ändern: Zahl anpassen,
-// speichern, Spiel neu laden – fertig. Jede Zahl bekommt hier einen Kommentar,
-// der erklärt, was sie bewirkt.
+// ALL balancing numbers of the game live here (terrain, goods, buildings,
+// units, city levels, points). You can change them yourself: adjust a number,
+// save, reload the game - done. Every number gets a comment here
+// that explains what it does.
 
 export * from './terrain';
 export * from './mapgen';
+export * from './goods';
+export * from './buildings';
+export * from './economy';
+export * from './startPosition';

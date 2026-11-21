@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { de } from './de';
+import { en } from './en';
 
-/** Sammelt alle Blätter (auch in verschachtelten Objekten) mit ihrem Pfad. */
+/** Collects all leaves (including those in nested objects) with their path. */
 function leaves(value: unknown, path: string): [string, unknown][] {
   if (typeof value === 'object' && value !== null) {
     return Object.entries(value).flatMap(([k, v]) => leaves(v, `${path}.${k}`));
@@ -9,9 +9,9 @@ function leaves(value: unknown, path: string): [string, unknown][] {
   return [[path, value]];
 }
 
-describe('i18n/de', () => {
-  it('enthält nur nicht-leere Texte', () => {
-    for (const [path, value] of leaves(de, 'de')) {
+describe('i18n/en', () => {
+  it('contains only non-empty texts', () => {
+    for (const [path, value] of leaves(en, 'en')) {
       expect(typeof value, path).toBe('string');
       expect((value as string).trim().length, path).toBeGreaterThan(0);
     }

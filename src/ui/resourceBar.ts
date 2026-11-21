@@ -1,0 +1,77 @@
+// Top strip: turn chip and one chip per good (icon + amount + change per turn).
+import { GOOD_IDS, GOODS, type Goods, type GoodId, type Stock } from '../data';
+import { en } from '../i18n/en';
+import { formatTurnOf } from '../i18n/format';
+import { el } from './dom';
+
+/** Goods that are always shown, even at 0. */
+const ALWAYS_SHOWN: readonly GoodId[] = ['wood', 'stone'];
+/** How long the name label stays after tapping a chip (ms). */
+const LABEL_MS = 2000;
+
+interface Chip {
+  root: HTMLButtonElement;
+  amount: HTMLElement;
+  delta: HTMLElement;
+}
+
+export function createResourceBar(root: HTMLElement): {
+  update(stock: Stock, delta: Goods | null, turn: number, turnLimit: number): void;
+} {
+  const bar = el('header', 'resource-bar');
+  const scroll = el('div', 'resource-bar__scroll');
+  scroll.setAttribute('role', 'list');
+  const turnChip = el('span', 'resource-bar__turn');
+  turnChip.setAttribute('role', 'listitem');
+  const label = el('div', 'resource-bar__label');
+  label.hidden = true;
+  label.setAttribute('role', 'status');
+  scroll.appendChild(turnChip);
+
+  const chips = new Map<GoodId, Chip>();
+  let labelTimer: number | undefined;
+  const showLabel = (id: GoodId): void => {
+    label.textContent = en.goods[id];
+    label.hidden = false;
+    window.clearTimeout(labelTimer);
+    labelTimer = window.setTimeout(() => {
+      label.hidden = true;
+    }, LABEL_MS);
+  };
+
+  for (const id of GOOD_IDS) {
+    const chip = el('button', 'resource-chip');
+    chip.type = 'button';
+    chip.setAttribute('role', 'listitem');
+    const icon = el('span', 'resource-chip__icon', GOODS[id].icon);
+    icon.setAttribute('aria-hidden', 'true');
+    const amount = el('span', 'resource-chip__amount');
+    const delta = el('span', 'resource-chip__delta');
+    chip.append(icon, amount, delta);
+    chip.addEventListener('click', () => showLabel(id));
+    scroll.appendChild(chip);
+    chips.set(id, { root: chip, amount, delta });
+  }
+  bar.append(scroll, label);
+  root.appendChild(bar);
+
+  return {
+    update(stock, delta, turn, turnLimit) {
+      turnChip.textContent = formatTurnOf(turn, turnLimit);
+      for (const id of GOOD_IDS) {
+        const chip = chips.get(id);
+        if (!chip) continue;
+        const d = delta?.[id] ?? 0;
+        const amount = stock[id];
+        chip.root.hidden = !(ALWAYS_SHOWN.includes(id) || amount > 0 || d !== 0);
+        chip.amount.textContent = String(amount);
+        chip.delta.textContent = d === 0 ? '' : d > 0 ? `+${d}` : `−${Math.abs(d)}`;
+        chip.delta.className = `resource-chip__delta${d > 0 ? ' is-plus' : d < 0 ? ' is-minus' : ''}`;
+        chip.root.setAttribute(
+          'aria-label',
+          `${en.goods[id]} ${amount}${d === 0 ? '' : `, ${d > 0 ? '+' : '−'}${Math.abs(d)}`}`,
+        );
+      }
+    },
+  };
+}

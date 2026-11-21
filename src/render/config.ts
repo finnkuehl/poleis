@@ -1,17 +1,20 @@
-// Einstellungen fürs Kamera-Gefühl (Verschieben, Zoomen, Tippen).
-// Alle Werte können frei angepasst werden; Pixel sind CSS-Pixel auf dem Bildschirm.
+// Settings for the camera feel (panning, zooming, tapping).
+// All values can be adjusted freely; pixels are CSS pixels on the screen.
 export const cameraConfig = {
-  /** Bewegung bis zu dieser Strecke zählt als Tippen, darüber als Ziehen */
+  /** Movement up to this distance counts as a tap, anything beyond as a drag */
   tapThresholdPx: 8,
-  /** Größter Zoom: ein Feld ist höchstens so groß (Radius in Bildschirmpixeln) */
+  /** Maximum zoom: a tile is at most this big (radius in screen pixels) */
   maxHexScreenRadiusPx: 90,
-  /** Kleinster Zoom: die ganze Karte passt hinein (0,9 = etwas Rand) */
+  /** Minimum zoom: the whole map fits in (0.9 = a bit of margin) */
   minZoomFitFactor: 0.9,
-  /** So viel Meer darf man über den Kartenrand hinausziehen */
+  /** How much sea you may pan beyond the map edge */
   panMarginPx: 80,
-  /** Mausrad-Empfindlichkeit (größer = schnelleres Zoomen) */
+  /** Mouse wheel sensitivity (larger = faster zooming) */
   wheelZoomSpeed: 0.0015,
 } as const;
 
-/** Größe der Hexfelder: Radius vom Mittelpunkt zur Ecke in Weltpixeln (bei Zoom 1) */
+/** Start zoom: a hex has this radius (center to corner) on the screen, in CSS pixels */
+export const startHexScreenRadiusPx = 26;
+
+/** Size of the hex tiles: radius from center to corner in world pixels (at zoom 1) */
 export const hexSize = 32;

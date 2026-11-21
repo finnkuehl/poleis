@@ -4,7 +4,7 @@ body {
   height: 100%;
   overflow: hidden;
   overscroll-behavior: none;
-  background: #1b3a4b; /* gleiche Farbe wie der Canvas (render/theme.ts) */
+  background: #1b3a4b; /* same color as the canvas (render/theme.ts) */
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
@@ -20,7 +20,7 @@ canvas {
   touch-action: none;
 }
 
-/* HTML-Overlay für spätere Leisten; Kinder setzen pointer-events: auto */
+/* HTML overlay for later bars; children set pointer-events: auto */
 #ui {
   position: fixed;
   inset: 0;

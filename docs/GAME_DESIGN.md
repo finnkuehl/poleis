@@ -1,210 +1,220 @@
-# Poleis – Spielkonzept (Game Design)
+# Poleis – Game Design
 
-> Lebendes Dokument. Alle Zahlen sind **Startwerte fürs Balancing** und gehören im Code nach `src/data/`.
+> Living document. All numbers are **starting values for balancing** and belong in the code under `src/data/`.
 
-## 1. Überblick
+## 1. Overview
 
 | | |
 |---|---|
-| Genre | Rundenbasiertes Aufbau-Strategiespiel |
-| Setting | Antike Mittelmeerwelt |
-| Plattform | Browser, Handy zuerst (Touch), Desktop ebenfalls |
-| Modus | Singleplayer gegen 1–3 KI-Völker |
-| Karte | Hex-Felder, 2D von oben, zufällig aus Seed generiert |
-| Partiedauer | 45–90 Minuten, ca. 100–150 Runden, speicherbar |
-| Schwerpunkt | Wirtschaft & Aufbau; Kampf ist wichtig, aber zweitrangig |
+| Genre | Turn-based city-building strategy |
+| Setting | Ancient Mediterranean world |
+| Platform | Browser, mobile first (touch), desktop as well |
+| Mode | Singleplayer against 1–3 AI civilizations |
+| Map | Hex tiles, 2D top-down, randomly generated from a seed |
+| Game length | 45–90 minutes, about 100–150 turns, can be saved |
+| Focus | Economy & building; combat matters, but is secondary |
 
-**Kernidee:** Du gründest eine Stadt, baust Warenketten auf, verbindest Gebäude mit Straßen und lässt deine Stadt von der Siedlung zur Metropole aufsteigen. Die Wirtschaft *ist* der Fortschritt – es gibt keinen separaten Technologiebaum.
+**Core idea:** You found a city, build goods chains, connect buildings with roads and let your city grow from a settlement into a metropolis. The economy *is* the progression – there is no separate tech tree.
 
-## 2. Ablauf einer Runde
+## 2. Flow of a turn
 
-1. **Produktion** (am Rundenbeginn des Spielers): Jedes Gebäude, das Arbeiter hat, per Straße mit einem Lager/Stadtzentrum verbunden ist und seine Eingangswaren bekommt, produziert.
-2. **Verbrauch:** Einwohner essen, Einheiten kosten Unterhalt, Bedarfe (Öl, Wein) werden abgezogen.
-3. **Wachstum/Steuern:** Bevölkerung wächst oder schrumpft, Drachmen werden eingenommen.
-4. **Aktionen des Spielers** (beliebig viele, solange Waren reichen): bauen, Straßen ziehen, Einheiten ausbilden/bewegen/angreifen, Stadt aufsteigen lassen.
-5. **Runde beenden** → die KI-Völker ziehen nacheinander.
+1. **Production** (at the start of the player's turn): Every building that has workers, is connected to a storehouse/city center by road and receives its input goods produces.
+2. **Consumption:** Residents eat, units cost upkeep, needs (oil, wine) are deducted.
+3. **Growth/taxes:** Population grows or shrinks, drachmas are collected.
+4. **Player actions** (any number, as long as goods suffice): build, lay roads, train/move/attack with units, level up the city.
+5. **End turn** → the AI civilizations move one after another.
 
 ## 3. Terrain
 
-| Terrain | Bewegungskosten | Verteidigungsbonus | Bebaubar | Besonderheit |
+| Terrain | Movement cost | Defense bonus | Buildable | Special |
 |---|---|---|---|---|
-| Ozean | nur Schiffe | – | nein | – |
-| Küstenwasser | nur Schiffe | – | nein | Fischer und Hafen grenzen daran |
-| Ebene | 1 | ×1,0 | ja | Standard für die meisten Gebäude |
-| Wald | 2 | ×1,5 | nein (Holzfäller daneben) | Holzquelle; kann gerodet werden (später) |
-| Hügel | 2 | ×1,5 | ja | Steinbruch, Mine, Weinberg |
-| Berg | unpassierbar | – | nein | Mine/Steinbruch daneben |
+| Ocean | ships only | – | no | – |
+| Coastal water | ships only | – | no | Fishery and harbor border it |
+| Plains | 1 | ×1.0 | yes | Standard for most buildings |
+| Forest | 2 | ×1.5 | no (woodcutter next to it) | Source of wood; can be cleared (later) |
+| Hills | 2 | ×1.5 | yes | Quarry, mine, vineyard |
+| Mountains | impassable | – | no | Mine/quarry next to it |
 
-- Straße auf einem Feld: Bewegungskosten für Landeinheiten halbiert (abgerundet, mindestens 0,5).
-- Gebäude und Straßen nur im **eigenen Territorium**.
+- A road on a tile: movement cost for land units is halved (rounded down, at least 0.5).
+- Buildings and roads only inside **your own territory**.
 
-### Kartengenerierung
-- Standardgröße 30 × 30 Felder, rechteckig; der Kartenrand ist Ozean.
-- **Festland:** ca. 45 % aller Felder, eine zusammenhängende Landmasse (Startgebiete der Völker).
-- **Inseln:** 3–6 kleinere Inseln mit Abstand zum Festland; **mehr Hügel und Wald** als das Festland (Anreiz zur Besiedlung per Schiff).
-- **Berge** bilden kurze Ketten (Pässe, Engstellen). Garantie: Jede Landmasse bleibt für Landeinheiten zusammenhängend – kein Berg schneidet ein Gebiet ab.
-- **Küstenwasser** = Wasserfelder direkt neben Land; alles weitere Wasser ist Ozean.
-- Gleicher Seed = gleiche Karte. Alle Zahlen dazu stehen in `src/data/mapgen.ts`.
+### Map generation
+- Default size 30 × 30 tiles, rectangular; the map edge is ocean.
+- **Mainland:** about 45 % of all tiles, one connected landmass (starting areas of the civilizations).
+- **Islands:** 3–6 smaller islands set apart from the mainland; **more hills and forest** than the mainland (an incentive to settle by ship).
+- **Mountains** form short chains (passes, chokepoints). Guarantee: every landmass stays connected for land units – no mountain cuts off an area.
+- **Coastal water** = water tiles directly next to land; all other water is ocean.
+- Same seed = same map. All numbers for this are in `src/data/mapgen.ts`.
 
-## 4. Waren (12 + Währung)
+## 4. Goods (12 + currency)
 
-| Ware | Typ | Herkunft |
+| Good | Type | Source |
 |---|---|---|
-| Holz | Rohstoff | Holzfäller |
-| Stein | Rohstoff | Steinbruch |
-| Getreide | Rohstoff | Bauernhof |
-| Fisch | Rohstoff | Fischer |
-| Oliven | Rohstoff | Olivenhain |
-| Trauben | Rohstoff | Weinberg |
-| Erz | Rohstoff | Mine |
-| Bretter | verarbeitet | Sägewerk (Holz) |
-| Brot | verarbeitet | Bäckerei (Getreide) |
-| Öl | verarbeitet | Ölpresse (Oliven) |
-| Wein | verarbeitet | Kelterei (Trauben) |
-| Bronze | verarbeitet | Schmelze (Erz + Holz) |
-| **Drachmen** | Währung | Steuern, später Marktplatz |
+| Wood | Raw material | Woodcutter |
+| Stone | Raw material | Quarry |
+| Grain | Raw material | Farm |
+| Fish | Raw material | Fishery |
+| Olives | Raw material | Olive grove |
+| Grapes | Raw material | Vineyard |
+| Ore | Raw material | Mine |
+| Planks | Processed | Sawmill (wood) |
+| Bread | Processed | Bakery (grain) |
+| Oil | Processed | Oil press (olives) |
+| Wine | Processed | Winery (grapes) |
+| Bronze | Processed | Smelter (ore + wood) |
+| **Drachmas** | Currency | Taxes, later marketplace |
 
-**Nahrung** = Brot oder Fisch (beides zählt gleich).
+**Food** = bread or fish (both count the same).
 
-### Warenketten
+### Goods chains
 ```
-Holzfäller ──Holz──► Sägewerk ──Bretter──► Bau, Schiffe
-Steinbruch ──Stein──► Bau, Mauern, Wunder
-Bauernhof ──Getreide──► Bäckerei ──Brot──► Einwohner, Unterhalt
-Fischer ──Fisch──► Einwohner, Unterhalt
-Olivenhain ──Oliven──► Ölpresse ──Öl──► Bedarf ab Polis
-Weinberg ──Trauben──► Kelterei ──Wein──► Bedarf ab Metropole
-Mine ──Erz──┐
-Holzfäller ─Holz─┴► Schmelze ──Bronze──► Einheiten, Wunder
+Woodcutter ──Wood──► Sawmill ──Planks──► Construction, ships
+Quarry ──Stone──► Construction, walls, wonder
+Farm ──Grain──► Bakery ──Bread──► Residents, upkeep
+Fishery ──Fish──► Residents, upkeep
+Olive grove ──Olives──► Oil press ──Oil──► Need from Polis
+Vineyard ──Grapes──► Winery ──Wine──► Need from Metropolis
+Mine ──Ore──┐
+Woodcutter ─Wood─┴► Smelter ──Bronze──► Units, wonder
 ```
 
-## 5. Gebäude
+## 5. Buildings
 
-| Gebäude | Platzierung | Kosten | Arbeiter | Pro Runde | Ab Stufe |
+| Building | Placement | Cost | Workers | Per turn | From level |
 |---|---|---|---|---|---|
-| Stadtzentrum | Ebene | (Start / Siedler) | – | Lager, Territorium Radius 2, +4 Wohnplätze | Start |
-| Lager | Ebene | 4 Holz, 2 Stein | 0 | weiterer Straßen-Anschlusspunkt | Siedlung |
-| Wohnhaus | Ebene | 3 Holz | 0 | +4 Wohnplätze | Siedlung |
-| Holzfäller | neben Wald | 2 Holz | 1 | +2 Holz | Siedlung |
-| Steinbruch | Hügel oder neben Berg | 3 Holz | 1 | +2 Stein | Siedlung |
-| Bauernhof | Ebene | 3 Holz | 2 | +3 Getreide | Siedlung |
-| Fischer | Ebene an Küstenwasser | 3 Holz | 1 | +2 Fisch | Siedlung |
-| Sägewerk | Ebene | 4 Holz, 2 Stein | 1 | 2 Holz → 2 Bretter | Siedlung |
-| Bäckerei | Ebene | 3 Bretter, 2 Stein | 1 | 2 Getreide → 3 Brot | Siedlung |
-| Olivenhain | Ebene oder Hügel | 4 Bretter | 1 | +2 Oliven | Siedlung |
-| Ölpresse | Ebene | 4 Bretter, 3 Stein | 1 | 2 Oliven → 2 Öl | Siedlung |
-| Mine | Hügel oder neben Berg | 5 Holz, 3 Stein | 2 | +2 Erz | Siedlung |
-| Schmelze | Ebene | 2 Bretter, 4 Stein | 1 | 2 Erz + 1 Holz → 1 Bronze | Siedlung |
-| Kaserne | Ebene | 6 Bretter, 4 Stein | 0 | bildet Landeinheiten aus | Siedlung |
-| Grenzturm | Ebene oder Hügel | 2 Holz, 4 Stein | 0 | Territorium Radius 2 um den Turm | Siedlung |
-| Weinberg | Hügel | 4 Bretter, 2 Stein | 1 | +2 Trauben | Polis |
-| Kelterei | Ebene | 4 Bretter, 4 Stein | 1 | 2 Trauben → 2 Wein | Polis |
-| Hafen | Ebene an Küstenwasser | 8 Bretter, 4 Stein | 1 | baut Schiffe, Seeweg-Anschluss | Polis |
-| Marktplatz | Ebene | 6 Bretter, 6 Stein | 1 | Waren ↔ Drachmen tauschen | Polis |
-| Tempel | Ebene oder Hügel | 10 Stein, 4 Öl | 0 | +Punkte; später Götter-Gunst | Polis |
-| Weltwunder | Ebene, 1 pro Volk | 40 Stein, 20 Bretter, 20 Bronze, 10 Wein | 4 | Bau über 5 Runden; siehe Sieg | Metropole |
+| City center | Plains | (start / settler) | – | Storehouse, territory radius 2, +4 housing | Start |
+| Storehouse | Plains | 4 wood, 2 stone | 0 | additional road connection point | Settlement |
+| House | Plains | 3 wood | 0 | +4 housing | Settlement |
+| Woodcutter | next to forest | 2 wood | 1 | +2 wood | Settlement |
+| Quarry | Hills or next to mountains | 3 wood | 1 | +2 stone | Settlement |
+| Farm | Plains | 3 wood | 2 | +3 grain | Settlement |
+| Fishery | Plains at coastal water | 3 wood | 1 | +2 fish | Settlement |
+| Sawmill | Plains | 4 wood, 2 stone | 1 | 2 wood → 2 planks | Settlement |
+| Bakery | Plains | 3 planks, 2 stone | 1 | 2 grain → 3 bread | Settlement |
+| Olive grove | Plains or hills | 4 planks | 1 | +2 olives | Settlement |
+| Oil press | Plains | 4 planks, 3 stone | 1 | 2 olives → 2 oil | Settlement |
+| Mine | Hills or next to mountains | 5 wood, 3 stone | 2 | +2 ore | Settlement |
+| Smelter | Plains | 2 planks, 4 stone | 1 | 2 ore + 1 wood → 1 bronze | Settlement |
+| Barracks | Plains | 6 planks, 4 stone | 0 | trains land units | Settlement |
+| Border tower | Plains or hills | 2 wood, 4 stone | 0 | territory radius 2 around the tower | Settlement |
+| Vineyard | Hills | 4 planks, 2 stone | 1 | +2 grapes | Polis |
+| Winery | Plains | 4 planks, 4 stone | 1 | 2 grapes → 2 wine | Polis |
+| Harbor | Plains at coastal water | 8 planks, 4 stone | 1 | builds ships, sea route connection | Polis |
+| Marketplace | Plains | 6 planks, 6 stone | 1 | trade goods ↔ drachmas | Polis |
+| Temple | Plains or hills | 10 stone, 4 oil | 0 | +points; later divine favor | Polis |
+| World wonder | Plains, 1 per civilization | 40 stone, 20 planks, 20 bronze, 10 wine | 4 | built over 5 turns; see victory | Metropolis |
 
-**Produktionsregeln**
-- Ein Gebäude produziert nur, wenn es (a) alle Arbeiter hat, (b) per Straße mit einem Lager/Stadtzentrum desselben Volkes verbunden ist und (c) die Eingangswaren im Vorrat liegen.
-- „Verbunden“ = es gibt eine Kette aus Straßenfeldern/Gebäudefeldern zwischen Gebäude und Lager (Nachbarschaft auf dem Hex-Gitter). Gebäude direkt neben einem Lager zählen als verbunden.
-- Alle Waren landen im gemeinsamen Vorrat des Volkes (keine Träger-Simulation in Version 1).
-- Fehlt etwas, zeigt das Gebäude ein Statussymbol und im Infopanel den Grund.
-- Straße bauen: 1 Holz pro Feld (ab Polis optional gepflasterte Straße: 1 Stein, später).
+**Production rules**
+- A building only produces if it (a) has all its workers, (b) is connected by road to a storehouse/city center of the same civilization and (c) has its input goods in stock.
+- "Connected" = there is a chain of road tiles/building tiles between the building and the storehouse (adjacency on the hex grid). Buildings directly next to a storehouse count as connected.
+- All goods go into the civilization's shared stock (no carrier simulation in version 1).
+- If something is missing, the building shows a status symbol and the info panel shows the reason.
+- Building a road: 1 wood per tile (from Polis on, optionally paved road: 1 stone, later).
 
-## 6. Bevölkerung & Stadtstufen
+**Detailed rules (decided in M2)**
+- **Start:** stock of **20 wood and 10 stone**. The first city center is placed **automatically** on plains on the mainland; its territory (radius 2) is guaranteed to contain forest, hills or mountains and enough plains. The camera starts there.
+- **"next to X" placement:** the building stands on a buildable tile (plains or hills) next to X. Woodcutter: plains/hills next to forest. Quarry and mine: on hills, or on plains next to mountains. Fishery: plains next to coastal water.
+- **One thing per tile:** a tile holds either one building or one road.
+- **Roads** only on walkable land in the player's own territory (plains, forest, hills – not mountains, not water). A road may pass through the player's own buildings at no cost.
+- **Demolishing** buildings and roads is allowed, **without refund**. The city center cannot be demolished.
+- **Production order:** raw-material buildings (no inputs) produce first, then processing buildings – so freshly cut wood can become planks in the same turn. If goods run short, older buildings go first.
+- **Workers** go only to connected buildings, in this order: food (farm, fishery, bakery), then raw materials, then processing; older buildings first within a group. A building only gets workers if its **whole crew** can be filled – otherwise it gets none and the workers go on to the next building, so no worker is wasted.
+- **Interim rule until M3:** housing is filled immediately (city center 4 residents, each house +4). No food consumption, growth or taxes yet – food simply piles up.
 
-- Einwohner wohnen in Stadtzentrum und Wohnhäusern (Wohnplätze) und arbeiten automatisch in Gebäuden (Reihenfolge: Nahrung zuerst, dann Rohstoffe, dann Verarbeitung).
-- **Verbrauch:** 1 Nahrung pro 2 Einwohner pro Runde (aufgerundet).
-- **Wachstum:** Ist die Nahrung gedeckt und es gibt freie Wohnplätze → +1 Einwohner pro Runde (ab Polis +2).
-- **Hunger:** Fehlt Nahrung → −1 Einwohner pro Runde.
-- **Steuern:** 1 Drachme pro 2 Einwohner; +50 %, wenn alle Bedarfe der aktuellen Stufe gedeckt sind.
+## 6. Population & city levels
 
-| Stufe | Bedarf pro Runde | Aufstieg erfordert | Schaltet frei |
+- Residents live in the city center and houses (housing) and work in buildings automatically (order: food first, then raw materials, then processing).
+- **Consumption:** 1 food per 2 residents per turn (rounded up).
+- **Growth:** If food is covered and there is free housing → +1 resident per turn (from Polis +2).
+- **Starvation:** If food is missing → −1 resident per turn.
+- **Taxes:** 1 drachma per 2 residents; +50 % if all needs of the current level are covered.
+
+| Level | Needs per turn | Level-up requires | Unlocks |
 |---|---|---|---|
-| Siedlung | Nahrung | – (Start) | Grundgebäude, Späher, Siedler, Speerträger, Bogenschütze |
-| Polis | Nahrung + 1 Öl je 10 Einw. | 20 Einwohner, 3 Runden Öl versorgt, 20 Bretter, 20 Stein, 30 Drachmen | Weinberg, Kelterei, Hafen, Marktplatz, Tempel, Hoplit, Transportschiff |
-| Metropole | wie Polis + 1 Wein je 10 Einw. | 50 Einwohner, 3 Runden Wein versorgt, 40 Bretter, 40 Stein, 10 Bronze, 80 Drachmen | Weltwunder, Reiter, Triere |
+| Settlement | Food | – (start) | Basic buildings, scout, settler, spearman, archer |
+| Polis | Food + 1 oil per 10 residents | 20 residents, 3 turns oil supplied, 20 planks, 20 stone, 30 drachmas | Vineyard, winery, harbor, marketplace, temple, hoplite, transport ship |
+| Metropolis | as Polis + 1 wine per 10 residents | 50 residents, 3 turns wine supplied, 40 planks, 40 stone, 10 bronze, 80 drachmas | World wonder, horseman, trireme |
 
-Jede Stadt eines Volkes hat ihre eigene Stufe; der Vorrat ist gemeinsam.
+Every city of a civilization has its own level; the stock is shared.
 
-## 7. Einheiten
+## 7. Units
 
-| Einheit | Angriff | Verteidigung | LP | Bewegung | Reichweite | Kosten | Ab |
+| Unit | Attack | Defense | HP | Movement | Range | Cost | From |
 |---|---|---|---|---|---|---|---|
-| Späher | 1 | 1 | 5 | 3 | 1 | 2 Bretter, 5 Drachmen | Siedlung |
-| Siedler | 0 | 1 | 5 | 1 | – | 4 Brot, 4 Bretter, 2 Einwohner | Siedlung |
-| Speerträger | 2 | 2 | 10 | 1 | 1 | 2 Bretter, 1 Bronze | Siedlung |
-| Bogenschütze | 2 | 1 | 8 | 1 | 2 | 3 Bretter, 1 Bronze | Siedlung |
-| Hoplit | 2 | 3 | 12 | 1 | 1 | 1 Bretter, 3 Bronze | Polis |
-| Reiter | 3 | 1 | 10 | 3 | 1 | 2 Bronze, 4 Getreide | Metropole |
-| Transportschiff | 0 | 1 | 8 | 3 | – | 6 Bretter | Polis (Hafen) |
-| Triere | 3 | 2 | 12 | 3 | 1 | 8 Bretter, 2 Bronze | Metropole (Hafen) |
+| Scout | 1 | 1 | 5 | 3 | 1 | 2 planks, 5 drachmas | Settlement |
+| Settler | 0 | 1 | 5 | 1 | – | 4 bread, 4 planks, 2 residents | Settlement |
+| Spearman | 2 | 2 | 10 | 1 | 1 | 2 planks, 1 bronze | Settlement |
+| Archer | 2 | 1 | 8 | 1 | 2 | 3 planks, 1 bronze | Settlement |
+| Hoplite | 2 | 3 | 12 | 1 | 1 | 1 planks, 3 bronze | Polis |
+| Horseman | 3 | 1 | 10 | 3 | 1 | 2 bronze, 4 grain | Metropolis |
+| Transport ship | 0 | 1 | 8 | 3 | – | 6 planks | Polis (harbor) |
+| Trireme | 3 | 2 | 12 | 3 | 1 | 8 planks, 2 bronze | Metropolis (harbor) |
 
-- Ausbildung: Landeinheiten in der Kaserne, Schiffe im Hafen. Die Einheit erscheint im nächsten Zug.
-- **Unterhalt:** 1 Nahrung pro Einheit pro Runde. Fehlt Nahrung, verliert jede Einheit 2 LP.
-- Pro Zug: bewegen und/oder angreifen (Angriff beendet den Zug der Einheit).
-- Heilung: +2 LP pro Runde ohne Aktion, +4 im eigenen Territorium.
-- **Siedler** gründen auf einer freien Ebene (mind. 4 Felder von anderen Stadtzentren entfernt) eine neue Stadt.
+- Training: land units in the barracks, ships in the harbor. The unit appears on the next turn.
+- **Upkeep:** 1 food per unit per turn. If food is missing, every unit loses 2 HP.
+- Per turn: move and/or attack (an attack ends the unit's turn).
+- Healing: +2 HP per turn without acting, +4 inside your own territory.
+- **Settlers** found a new city on a free plains tile (at least 4 tiles from other city centers).
 
-### Kampfformel (Startwert, nach Polytopia-Vorbild)
+### Combat formula (starting value, modeled on Polytopia)
 ```
-angriffsKraft   = Angriff_A    × (LP_A / maxLP_A)
-verteidKraft    = Verteidigung_V × (LP_V / maxLP_V) × Terrainbonus × (Mauer ? 1,5 : 1)
-gesamt          = angriffsKraft + verteidKraft
-schaden         = runden(angriffsKraft / gesamt × Angriff_A × 4,5)
-gegenschlag     = runden(verteidKraft / gesamt × Verteidigung_V × 4,5)   // nur wenn V überlebt und A in Reichweite von V
+attackPower   = Attack_A    × (HP_A / maxHP_A)
+defensePower  = Defense_D   × (HP_D / maxHP_D) × terrainBonus × (wall ? 1.5 : 1)
+total         = attackPower + defensePower
+damage        = round(attackPower / total × Attack_A × 4.5)
+counterattack = round(defensePower / total × Defense_D × 4.5)   // only if D survives and A is within D's range
 ```
 
-### Städte einnehmen
-Eine feindliche Landeinheit, die eine Runde lang unbehelligt auf einem Stadtzentrum steht, übernimmt die Stadt samt Gebäuden in ihrem Territorium.
+### Capturing cities
+An enemy land unit that stands on a city center undisturbed for one turn takes over the city, including the buildings in its territory.
 
-## 8. Territorium & Sicht
+## 8. Territory & vision
 
-- Stadtzentrum: Territorium Radius 2. Grenzturm: Radius 2 um den Turm (muss an eigenes Gebiet grenzen).
-- Felder gehören dem Volk, das sie zuerst beansprucht hat.
-- **Nebel des Krieges:** unerkundete Felder schwarz; erkundete, aber nicht sichtbare Felder abgedunkelt. Sichtweite: Einheiten 2, Stadtzentrum/Grenzturm 3.
+- City center: territory radius 2. Border tower: radius 2 around the tower (must border your own territory).
+- Tiles belong to the civilization that claimed them first.
+- **Fog of war:** unexplored tiles black; explored but currently not visible tiles darkened. Vision range: units 2, city center/border tower 3.
 
-## 9. KI-Völker
+## 9. AI civilizations
 
-| Volk | Persönlichkeit | Schwerpunkt |
+| Civilization | Personality | Focus |
 |---|---|---|
-| Athen | Händler | Wirtschaft, Hafen/Markt früh, wenig Militär |
-| Sparta | Krieger | früh Kaserne, Hopliten, greift Nachbarn an |
-| Korinth | Baumeister | schnelles Wachstum, Wunder-Rennen |
+| Athens | Merchant | Economy, harbor/market early, little military |
+| Sparta | Warrior | Barracks early, hoplites, attacks neighbors |
+| Corinth | Builder | Fast growth, wonder race |
 
-- Der Spieler wählt ein eigenes Volk (Name/Farbe frei), die KI nimmt die übrigen.
-- KI-Ansatz: **Nutzwert-basiert** – jede mögliche Aktion bekommt eine Punktzahl nach aktuellem Bedarf (z. B. Nahrung knapp → Bauernhof hoch bewertet), gewichtet mit der Persönlichkeit. Die KI benutzt nur reguläre Spieleraktionen und sieht nur, was ihre Sicht erlaubt.
-- Schwierigkeitsgrade später (z. B. Produktionsbonus für die KI).
+- The player chooses their own civilization (name/color free), the AI takes the rest.
+- AI approach: **utility-based** – every possible action gets a score based on current needs (e.g. food scarce → farm scores high), weighted by the personality. The AI only uses regular player actions and only sees what its vision allows.
+- Difficulty levels later (e.g. production bonus for the AI).
 
-## 10. Siegbedingungen
+## 10. Victory conditions
 
-Beim Spielstart einzeln an-/abwählbar:
-1. **Punkte** nach Rundenlimit (Standard: 120 Runden).
-2. **Weltwunder:** Wer es zuerst fertigstellt, gewinnt sofort.
-3. **Eroberung:** alle gegnerischen Stadtzentren eingenommen.
+Individually selectable at game start:
+1. **Points** after a turn limit (default: 120 turns).
+2. **World wonder:** whoever completes it first wins immediately.
+3. **Conquest:** all enemy city centers captured.
 
-| Punkte | Wert |
+| Points | Value |
 |---|---|
-| je Einwohner | 1 |
-| je Gebäude | 2 |
-| je Territoriumsfeld | 1 |
-| je Stadt auf Stufe Polis / Metropole | 20 / 50 |
-| Tempel | 15 |
-| Weltwunder | 150 |
+| per resident | 1 |
+| per building | 2 |
+| per territory tile | 1 |
+| per city at level Polis / Metropolis | 20 / 50 |
+| Temple | 15 |
+| World wonder | 150 |
 
-## 11. Bedienung (Handy)
+## 11. Controls (phone)
 
-- **Oben:** Ressourcenleiste (horizontal scrollbar), Runde X / Limit.
-- **Unten:** Leiste mit „Bauen“, „Straße“, „Einheiten“; rechts unten großer Knopf „Runde beenden“.
-- Feld antippen → Infopanel von unten (Terrain, Gebäude, Status, Aktionen).
-- Bauen: Gebäude wählen → gültige Felder werden hervorgehoben → Feld antippen → bestätigen.
-- Straße: Startfeld antippen, Zielfeld antippen → Vorschau des Weges mit Kosten → bestätigen.
-- Einheit antippen → erreichbare Felder hervorgehoben, angreifbare Gegner rot markiert.
+- **Top:** resource bar (horizontally scrollable), turn X / limit.
+- **Bottom:** bar with "Build", "Road", "Units"; large "End turn" button at the bottom right.
+- Tap a tile → info panel from below (terrain, building, status, actions).
+- Building: choose a building → valid tiles are highlighted → tap a tile → confirm.
+- Road: tap the start tile, tap the target tile → preview of the path with cost → confirm.
+- Tap a unit → reachable tiles highlighted, attackable enemies marked red.
 
-## 12. Später (nicht in Version 1)
+## 12. Later (not in version 1)
 
-- **Götter:** Tempel erzeugt Gunst; Zeus, Poseidon, Athene, Demeter mit eigenen Segen/Zaubern.
-- Handel und Diplomatie mit KI-Völkern (Frieden, Handelsverträge).
-- Träger-Simulation auf Straßen (optional, für Siedler-Feeling).
-- Multiplayer (die deterministische Logik in `core/` ist dafür vorbereitet).
-- App-Store-Version.
+- **Gods:** the temple generates favor; Zeus, Poseidon, Athena, Demeter with their own blessings/spells.
+- Trade and diplomacy with AI civilizations (peace, trade treaties).
+- Carrier simulation on roads (optional, for a Settlers feel).
+- Multiplayer (the deterministic logic in `core/` is prepared for it).
+- App store version.

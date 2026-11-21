@@ -10,10 +10,10 @@ const map: MapState = {
 };
 
 describe('map', () => {
-  it('Index und Hex sind umkehrbar', () => {
+  it('index and hex are reversible', () => {
     for (let i = 0; i < map.tiles.length; i++) expect(tileIndex(map, hexAtIndex(map, i))).toBe(i);
   });
-  it('Grenzen und Terrain-Abfrage', () => {
+  it('bounds and terrain lookup', () => {
     expect(inBounds(map, hex(0, 0))).toBe(true);
     expect(tileIndex(map, hex(-1, 0))).toBe(-1);
     expect(terrainAt(map, hex(-1, 0))).toBeUndefined();

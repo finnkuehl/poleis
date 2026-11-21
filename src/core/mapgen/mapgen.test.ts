@@ -20,31 +20,31 @@ const hasLandNeighbor = (map: MapState, h: Hex): boolean =>
 const share = (map: MapState, cells: Hex[], id: TerrainId): number =>
   cells.filter((c) => terrainAt(map, c) === id).length / cells.length;
 
-describe('Determinismus', () => {
-  it('gleicher Seed ergibt identische Karte und RNG', () => {
+describe('Determinism', () => {
+  it('same seed gives an identical map and RNG', () => {
     expect(generateMap(7)).toEqual(generateMap(7));
   });
-  it('verschiedene Seeds ergeben verschiedene Karten', () => {
+  it('different seeds give different maps', () => {
     expect(generateMap(1).map.tiles).not.toEqual(generateMap(2).map.tiles);
   });
-  it('GameState übersteht JSON-Roundtrip', () => {
-    const state = createGameState('hallo');
+  it('GameState survives a JSON round trip', () => {
+    const state = createGameState('hello');
     expect(JSON.parse(JSON.stringify(state))).toEqual(state);
-    expect(createGameState('hallo')).toEqual(state);
+    expect(createGameState('hello')).toEqual(state);
   });
 });
 
-describe('Karten 30x30, Seeds 1-50', () => {
+describe('Maps 30x30, seeds 1-50', () => {
   const maps = SEEDS.map((s) => generateMap(s).map);
 
-  it('Größe und gültige Terrain-Werte', () => {
+  it('size and valid terrain values', () => {
     for (const map of maps) {
       expect(map.tiles.length).toBe(map.width * map.height);
       for (const t of map.tiles) expect(TERRAIN_IDS).toContain(t);
     }
   });
 
-  it('äußerster Ring ist Wasser', () => {
+  it('outermost ring is water', () => {
     for (const map of maps) {
       allHexes(map).forEach((h, i) => {
         const col = i % map.width;
@@ -56,7 +56,7 @@ describe('Karten 30x30, Seeds 1-50', () => {
     }
   });
 
-  it('Küste genau dann, wenn Wasser mit Land-Nachbar', () => {
+  it('coast exactly when water has a land neighbor', () => {
     for (const map of maps) {
       map.tiles.forEach((t, i) => {
         if (!TERRAIN[t].isWater) return;
@@ -66,7 +66,7 @@ describe('Karten 30x30, Seeds 1-50', () => {
     }
   });
 
-  it('Festland 42-48 %, 3-6 Inseln in Größenbereich', () => {
+  it('mainland 42-48 %, 3-6 islands within the size range', () => {
     for (const map of maps) {
       const land = findLandmasses(map);
       const total = map.width * map.height;
@@ -81,13 +81,13 @@ describe('Karten 30x30, Seeds 1-50', () => {
     }
   });
 
-  it('jede Landmasse ist für Landeinheiten zusammenhängend', () => {
+  it('every landmass is connected for land units', () => {
     for (const map of maps) {
       for (const land of findLandmasses(map)) expect(isPassableConnected(map, land)).toBe(true);
     }
   });
 
-  it('Terrain-Anteile und Inseln mit mehr Hügel+Wald', () => {
+  it('terrain shares, and islands with more hills+forest', () => {
     for (const map of maps) {
       const [main, ...islands] = findLandmasses(map);
       expect(
@@ -105,7 +105,7 @@ describe('Karten 30x30, Seeds 1-50', () => {
     }
   });
 
-  it('Berge bilden Ketten', () => {
+  it('mountains form chains', () => {
     let mountains = 0;
     let chained = 0;
     for (const map of maps) {
@@ -119,8 +119,8 @@ describe('Karten 30x30, Seeds 1-50', () => {
   });
 });
 
-describe('Karten 40x40', () => {
-  it('gleiche Regeln, schnell genug', () => {
+describe('Maps 40x40', () => {
+  it('same rules, fast enough', () => {
     for (const seed of [1, 2, 3, 4, 5]) {
       const t0 = performance.now();
       const { map } = generateMap(seed, { width: 40, height: 40 });

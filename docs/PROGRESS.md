@@ -1,32 +1,35 @@
-# Arbeitsstand
+# Progress
 
-## Aktueller Meilenstein: M1 – Karte (umgesetzt, Pull Request offen – wartet auf Test und Merge)
+## Current milestone: M2 – Economy (implemented, pull request open – waiting for test and merge)
 
-- [x] Hex-Mathematik (axial, pointy-top) + Seed-Zufallsgenerator, mit Tests
-- [x] Kamera: ziehen, Pinch-Zoom, Mausrad, Zoom-Grenzen, Tipp-Schwelle 8 px
-- [x] Terrain-Daten (`src/data/terrain.ts`) und Kartengenerator (`src/core/mapgen/`), mit Determinismus-Tests
-- [x] Karte zeichnen (Farben + einfache Symbole), Feld antippen und markieren, Infopanel
-- [x] Seed per URL (`?seed=123`), Seed-Anzeige
-- [x] Browser-Test Desktop + Handy-Format (Pinch nur auf echtem Handy testbar)
-- [ ] code-review, Merge
+- [x] Plan approved; project switched to English (chat, game texts, comments, docs, commits)
+- [x] Goods and building data, rules: placement, territory, connection, workers, production
+- [x] A* pathfinding and automatic start position
+- [x] Game state with city, actions (build, road, demolish), end of turn
+- [x] Rendering: territory border, roads, buildings with status, highlights, road preview
+- [x] UI: resource bar, bottom bar, build menu, confirmation, building panel, error messages
+- [x] Interaction modes wired up; camera starts at the city
+- [x] Browser test desktop + phone format, code-review (no issues), pull request
+- [ ] Merge
 
-**Design-Entscheidungen M1** (auch in `docs/GAME_DESIGN.md` §3):
-- Festland ca. 45 % der Karte, zusammenhängend
-- Berge in kurzen Ketten; jede Landmasse bleibt zu Fuß verbunden
-- Inseln mit mehr Hügeln und Wald als das Festland
+**Design decisions M2** (in `docs/GAME_DESIGN.md` §5 "Detailed rules"): start with 20 wood + 10 stone, automatic start position, housing filled immediately until M3, demolish without refund, workers only fill complete crews.
 
-## Erledigt
+## Done
 
-- **M0 – Projekt-Setup** (`v0.0.0`): Vite, TypeScript, PixiJS, Vitest, ESLint/Prettier, CI, Pages-Deploy.
+- **M0 – Project setup** (`v0.0.0`): Vite, TypeScript, PixiJS, Vitest, ESLint/Prettier, CI, Pages deploy.
+- **M1 – Map** (`v0.1.0`): hex math, seeded map generator, camera (touch + mouse), tile selection with info panel, seed via URL.
 
-## Bekannte Einschränkungen
+## Known limitations
 
-- Noch kein Gameplay: keine Städte, Gebäude oder Einheiten.
-- Startansicht zeigt die ganze Karte – auf dem Handy sind die Felder dann klein (reinzoomen). Ab M2 startet die Kamera bei der eigenen Stadt.
+- No food consumption, growth, taxes or city levels yet (M3) – food piles up.
+- No saving yet (M5) – reloading the page starts a new game.
+- No units yet (M4).
+- With 4 civilizations, `findStartPositions` can place starts close together on a few seeds (e.g. seed 49). Fix when AI civilizations arrive (M5): relax plains/forest minimums before accepting a short distance.
+- A dev-only UI preview lives at `/ui-preview.html` (not part of the production build).
 
-## Notizen
+## Notes
 
-- Online: https://finnkuehl.github.io/poleis/ (wird bei jedem Merge auf `main` aktualisiert)
-- Pro Meilenstein ein Branch (z. B. `m1-karte`), am Ende ein Pull Request; vor dem Merge läuft `code-review`.
-- Opus plant und prüft, Sonnet (`umsetzer`) schreibt den Code.
-- Projektordner: `~/Projects/poleis`. **Nicht** in iCloud-synchronisierte Ordner (Dokumente, Schreibtisch) legen – iCloud erzeugt Doppel-Dateien und kann das Git-Repository beschädigen.
+- Online: https://finnkuehl.github.io/poleis/ (updated on every merge into `main`)
+- One branch per milestone (e.g. `m1-map`), a pull request at the end; `code-review` runs before the merge.
+- Opus plans and reviews, Sonnet (`implementer`) writes the code.
+- Project folder: `~/Projects/poleis`. **Do not** put it in iCloud-synced folders (Documents, Desktop) – iCloud creates duplicate files and can corrupt the Git repository.

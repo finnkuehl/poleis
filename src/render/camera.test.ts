@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  centeredCamera,
   clampCamera,
   fitCamera,
   screenToWorld,
@@ -17,7 +18,7 @@ const smallWorld: Rect = { x: 0, y: 0, width: 100, height: 100 };
 const hexSize = 30;
 
 describe('screenToWorld / worldToScreen', () => {
-  it('sind Umkehrungen', () => {
+  it('are inverses of each other', () => {
     const cam = { x: 37, y: -12, zoom: 1.7 };
     const s = worldToScreen(cam, 123, 456);
     const w = screenToWorld(cam, s.x, s.y);
@@ -27,7 +28,7 @@ describe('screenToWorld / worldToScreen', () => {
 });
 
 describe('zoomAt', () => {
-  it('hält den Weltpunkt unter dem Zeiger fest', () => {
+  it('keeps the world point under the pointer fixed', () => {
     let cam = { x: 20, y: 40, zoom: 1 };
     const before = screenToWorld(cam, 150, 220);
     for (const z of [0.5, 2, 3.3, 0.8]) {
@@ -41,13 +42,13 @@ describe('zoomAt', () => {
 });
 
 describe('zoomLimits', () => {
-  it('berechnet min und max', () => {
+  it('computes min and max', () => {
     const l = zoomLimits(bigWorld, viewport, hexSize);
     expect(l.min).toBeCloseTo(cameraConfig.minZoomFitFactor * Math.min(400 / 2000, 800 / 1500));
     expect(l.max).toBeCloseTo(cameraConfig.maxHexScreenRadiusPx / hexSize);
     expect(l.max).toBeGreaterThanOrEqual(l.min);
   });
-  it('max ist nie kleiner als min', () => {
+  it('max is never smaller than min', () => {
     const l = zoomLimits(smallWorld, { width: 4000, height: 4000 }, 1000);
     expect(l.max).toBe(l.min);
   });
@@ -56,14 +57,14 @@ describe('zoomLimits', () => {
 describe('clampCamera', () => {
   const limits = zoomLimits(bigWorld, viewport, hexSize);
 
-  it('begrenzt den Zoom', () => {
+  it('clamps the zoom', () => {
     expect(clampCamera({ x: 0, y: 0, zoom: 0.0001 }, bigWorld, viewport, limits).zoom).toBe(
       limits.min,
     );
     expect(clampCamera({ x: 0, y: 0, zoom: 99 }, bigWorld, viewport, limits).zoom).toBe(limits.max);
   });
 
-  it('zentriert eine kleine Karte', () => {
+  it('centers a small map', () => {
     const l = { min: 1, max: 1 };
     const c = clampCamera({ x: 500, y: -500, zoom: 1 }, smallWorld, viewport, l);
     const mid = worldToScreen(c, 50, 50);
@@ -71,7 +72,7 @@ describe('clampCamera', () => {
     expect(mid.y).toBeCloseTo(400);
   });
 
-  it('lässt eine große Karte höchstens panMarginPx über den Rand', () => {
+  it('lets a large map go at most panMarginPx past the edge', () => {
     const zoom = limits.max;
     const m = cameraConfig.panMarginPx;
     const edge = (c: { x: number; y: number; zoom: number }) => ({
@@ -89,12 +90,23 @@ describe('clampCamera', () => {
 });
 
 describe('fitCamera', () => {
-  it('zeigt die Karte zentriert bei kleinstem Zoom', () => {
+  it('shows the map centered at minimum zoom', () => {
     const limits = zoomLimits(bigWorld, viewport, hexSize);
     const c = fitCamera(bigWorld, viewport, limits);
     expect(c.zoom).toBe(limits.min);
     const mid = worldToScreen(c, bigWorld.x + bigWorld.width / 2, bigWorld.y + bigWorld.height / 2);
     expect(mid.x).toBeCloseTo(viewport.width / 2);
     expect(mid.y).toBeCloseTo(viewport.height / 2);
+  });
+});
+
+describe('centeredCamera', () => {
+  it('puts the world point in the viewport center and clamps the zoom', () => {
+    const limits = zoomLimits(bigWorld, viewport, hexSize);
+    const c = centeredCamera(300, 400, 99, viewport, limits);
+    expect(c.zoom).toBe(limits.max);
+    const s = worldToScreen(c, 300, 400);
+    expect(s.x).toBeCloseTo(viewport.width / 2);
+    expect(s.y).toBeCloseTo(viewport.height / 2);
   });
 });

@@ -1,11 +1,11 @@
-// Landmassen finden und prüfen.
+// Finding and checking landmasses.
 
 import { TERRAIN } from '../../data/terrain';
 import { hexKey, neighbors, type Hex } from '../hex';
 import { hexAtIndex, tileIndex } from '../map';
 import type { MapState } from '../state';
 
-/** Zusammenhängende Nicht-Wasser-Flächen, größte zuerst (Gleichstand: kleinster Index zuerst). */
+/** Connected non-water areas, largest first (tie: smallest index first). */
 export function findLandmasses(map: MapState): Hex[][] {
   const seen = new Array<boolean>(map.tiles.length).fill(false);
   const result: Hex[][] = [];
@@ -26,11 +26,11 @@ export function findLandmasses(map: MapState): Hex[][] {
     }
     result.push(group);
   }
-  // Array.sort ist stabil: gleich große Flächen bleiben in Index-Reihenfolge.
+  // Array.sort is stable: areas of equal size stay in index order.
   return result.sort((a, b) => b.length - a.length);
 }
 
-/** Sind alle Nicht-Berg-Felder der Liste untereinander (über Felder der Liste) verbunden? */
+/** Are all non-mountain tiles of the list connected to each other (via tiles of the list)? */
 export function isPassableConnected(map: MapState, cells: readonly Hex[]): boolean {
   const passable = new Map<string, Hex>();
   for (const c of cells) {

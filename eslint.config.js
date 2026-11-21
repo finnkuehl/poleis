@@ -15,7 +15,7 @@ export default tseslint.config(
     files: ['*.config.js', '*.config.ts'],
     languageOptions: { globals: globals.node },
   },
-  // Architektur-Wächter: core/ und ai/ sind reine Logik
+  // Architecture guard: core/ and ai/ are pure logic
   {
     files: ['src/core/**/*.ts', 'src/ai/**/*.ts'],
     rules: {
@@ -25,13 +25,13 @@ export default tseslint.config(
           patterns: [
             {
               group: ['**/render', '**/render/**', '**/ui', '**/ui/**', '**/save', '**/save/**'],
-              message: 'core/ und ai/ dürfen nicht aus render/, ui/ oder save/ importieren.',
+              message: 'core/ and ai/ must not import from render/, ui/ or save/.',
             },
           ],
           paths: [
             {
               name: 'pixi.js',
-              message: 'core/ und ai/ dürfen kein PixiJS benutzen (reine Logik, kein Rendering).',
+              message: 'core/ and ai/ must not use PixiJS (pure logic, no rendering).',
             },
           ],
         },
@@ -42,13 +42,13 @@ export default tseslint.config(
           object: 'Math',
           property: 'random',
           message:
-            'Nur den Seed-RNG aus dem GameState benutzen – sonst ist das Spiel nicht deterministisch.',
+            'Only use the seeded RNG from the GameState - otherwise the game is not deterministic.',
         },
       ],
       'no-restricted-globals': [
         'error',
-        { name: 'window', message: 'core/ und ai/ dürfen nicht auf das DOM zugreifen.' },
-        { name: 'document', message: 'core/ und ai/ dürfen nicht auf das DOM zugreifen.' },
+        { name: 'window', message: 'core/ and ai/ must not access the DOM.' },
+        { name: 'document', message: 'core/ and ai/ must not access the DOM.' },
       ],
     },
   },

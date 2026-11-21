@@ -1,51 +1,51 @@
 # Poleis
 
-Poleis ist ein rundenbasiertes Aufbau-Strategiespiel in der Antike auf einer Hex-Karte. Du baust Städte, Warenketten und Straßen und trittst gegen 1–3 KI-Völker an. Es läuft im Browser, zuerst für das Handy, aber auch am Desktop.
+Poleis is a turn-based city-building strategy game set in antiquity on a hex map. You build cities, goods chains and roads, and compete against 1–3 AI civilizations. It runs in the browser, mobile first, but also on desktop.
 
-**Online spielen:** https://finnkuehl.github.io/poleis/ (verfügbar nach dem ersten Merge auf `main`)
+**Play online:** https://finnkuehl.github.io/poleis/ (available after the first merge into `main`)
 
-## Voraussetzungen
+## Requirements
 
 - Node.js 22 (LTS)
 
-## Starten
+## Getting started
 
 ```
 npm install
 npm run dev
 ```
 
-Dann http://localhost:5173 im Browser öffnen.
+Then open http://localhost:5173 in your browser.
 
-## Handy-Test im WLAN
+## Testing on a phone over Wi-Fi
 
 ```
 npm run dev -- --host
 ```
 
-Die „Network“-Adresse aus dem Terminal auf dem Handy öffnen (Handy und Computer im selben WLAN).
+Open the "Network" address from the terminal on your phone (phone and computer on the same Wi-Fi).
 
-## Befehle
+## Commands
 
-| Befehl                  | Zweck                                          |
+| Command                 | Purpose                                        |
 | ----------------------- | ---------------------------------------------- |
-| `npm install`           | Abhängigkeiten installieren                    |
-| `npm run dev`           | Dev-Server starten (http://localhost:5173)     |
-| `npm run dev -- --host` | Dev-Server auch im WLAN erreichbar machen      |
-| `npm run build`         | Produktionsversion nach `dist/` bauen          |
-| `npm test`              | Tests ausführen                                |
-| `npm run lint`          | Codequalität prüfen                            |
-| `npm run typecheck`     | TypeScript-Typen prüfen                        |
+| `npm install`           | Install dependencies                           |
+| `npm run dev`           | Start the dev server (http://localhost:5173)   |
+| `npm run dev -- --host` | Make the dev server reachable over Wi-Fi       |
+| `npm run build`         | Build the production version into `dist/`      |
+| `npm test`              | Run tests                                      |
+| `npm run lint`          | Check code quality                             |
+| `npm run typecheck`     | Check TypeScript types                         |
 
-## Projektstruktur
+## Project structure
 
-- `src/core/` – reine Spiellogik (Hex-Mathe, Kartengenerierung, Regeln, Aktionen, Runden)
-- `src/data/` – alle Balancing-Zahlen
-- `src/ai/` – KI-Spieler
-- `src/render/` – Darstellung mit PixiJS
-- `src/ui/` – HTML/CSS-Oberfläche
-- `src/save/` – Speichern und Laden
-- `src/i18n/` – alle sichtbaren Texte
-- `docs/` – Spielkonzept und Arbeitsstand
+- `src/core/` – pure game logic (hex math, map generation, rules, actions, turns)
+- `src/data/` – all balancing numbers
+- `src/ai/` – AI players
+- `src/render/` – drawing with PixiJS
+- `src/ui/` – HTML/CSS user interface
+- `src/save/` – saving and loading
+- `src/i18n/` – all visible texts
+- `docs/` – game design and progress
 
-Die Balancing-Zahlen stehen in `src/data/`.
+The balancing numbers live in `src/data/`.

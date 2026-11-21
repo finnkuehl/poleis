@@ -1,4 +1,4 @@
-# Veröffentlicht das Spiel bei jedem Push auf main auf GitHub Pages.
+# Publishes the game to GitHub Pages on every push to main.
 name: Deploy Pages
 
 on:
@@ -6,13 +6,13 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Rechte, die Pages zum Veröffentlichen braucht
+# Permissions Pages needs to publish
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Immer nur ein Deploy gleichzeitig; laufende werden nicht abgebrochen
+# Only one deploy at a time; running ones are not cancelled
 concurrency:
   group: pages
   cancel-in-progress: false
@@ -21,20 +21,20 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      # Code holen
+      # Fetch the code
       - uses: actions/checkout@v5
-      # Node.js einrichten (Version aus .nvmrc)
+      # Set up Node.js (version from .nvmrc)
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
           cache: npm
-      # Abhängigkeiten installieren
+      # Install dependencies
       - run: npm ci
-      # Produktionsversion nach dist/ bauen
+      # Build the production version into dist/
       - run: npm run build
-      # Pages für den Upload vorbereiten
+      # Prepare Pages for the upload
       - uses: actions/configure-pages@v5
-      # dist/ als Pages-Artefakt hochladen
+      # Upload dist/ as a Pages artifact
       - uses: actions/upload-pages-artifact@v4
         with:
           path: dist
@@ -46,6 +46,6 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      # Artefakt auf GitHub Pages veröffentlichen
+      # Publish the artifact to GitHub Pages
       - id: deployment
         uses: actions/deploy-pages@v4
