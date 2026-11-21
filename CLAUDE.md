@@ -1,153 +1,153 @@
-# Poleis – Projektanweisungen für Claude Code
+# Poleis – Project Instructions for Claude Code
 
-Poleis ist ein rundenbasiertes Aufbau-Strategiespiel in der Antike auf einer Hex-Karte, gespielt im Browser (Handy zuerst, Desktop muss auch gehen). Singleplayer gegen 1–3 KI-Völker. Inspiration: Siedler (Warenketten, Straßen), Polytopia (Runden, Hex-Taktik), Grepolis (Antike, Inseln), Age of Empires (Aufstieg in Stufen).
+Poleis is a turn-based city-building strategy game set in antiquity on a hex map, played in the browser (mobile first, desktop must work too). Singleplayer against 1–3 AI civilizations. Inspiration: Settlers (goods chains, roads), Polytopia (turns, hex tactics), Grepolis (antiquity, islands), Age of Empires (advancing through levels).
 
-**Das vollständige Spielkonzept steht in `docs/GAME_DESIGN.md`. Lies es vor jeder Gameplay-Arbeit.**
-**Der aktuelle Arbeitsstand steht in `docs/PROGRESS.md`. Lies es zu Beginn jeder Sitzung und halte es aktuell.**
+**The full game concept is in `docs/GAME_DESIGN.md`. Read it before any gameplay work.**
+**The current state of work is in `docs/PROGRESS.md`. Read it at the start of every session and keep it up to date.**
 
 ---
 
-## Über den Nutzer – so kommunizierst du
+## About the user – how you communicate
 
-- Der Nutzer ist **Programmier-Anfänger**. Er gibt die Richtung vor, testet und entscheidet über das Spieldesign; du schreibst den Code.
-- Kommuniziere **auf Deutsch**, kurz und verständlich. Erkläre Fachbegriffe beim ersten Auftreten in einem Halbsatz.
-- Wenn du Terminal-Befehle ausführst, die der Nutzer später selbst brauchen könnte, sag in einem Satz, wofür sie sind.
-- **Technische Entscheidungen** (Bibliotheken, Dateistruktur, Algorithmen) triffst du selbst und begründest sie kurz.
-- **Gameplay-Entscheidungen**, die nicht in `docs/GAME_DESIGN.md` stehen, fragst du nach, statt zu raten. Biete 2–3 konkrete Optionen mit Empfehlung an.
-- Beende jede abgeschlossene Aufgabe mit einer **Testanleitung in 3–5 Schritten** (was starten, was antippen, was sollte passieren).
+- The user is a **programming beginner**. The user sets the direction, tests and decides on the game design; you write the code.
+- Communicate **in English**, short and understandable. Explain technical terms in a half-sentence on first use.
+- When you run terminal commands the user might need later, say in one sentence what they are for.
+- **Technical decisions** (libraries, file structure, algorithms) you make yourself and justify briefly.
+- **Gameplay decisions** that are not in `docs/GAME_DESIGN.md` you ask about instead of guessing. Offer 2–3 concrete options with a recommendation.
+- End every finished task with a **test guide in 3–5 steps** (what to start, what to tap, what should happen).
 
-## Arbeitsweise
+## Way of working
 
-1. **Zu Beginn jedes Meilensteins:** Lege einen Plan vor (Schritte, betroffene Dateien, offene Design-Fragen) und warte auf das OK des Nutzers.
-2. Arbeite in kleinen, lauffähigen Schritten. Nach jedem Schritt muss das Spiel noch starten.
-3. Vor jedem Commit müssen `npm run typecheck`, `npm run lint` und `npm test` fehlerfrei durchlaufen.
-4. Am Ende eines Meilensteins: `docs/PROGRESS.md` aktualisieren, Pull Request öffnen (siehe Git-Abschnitt), Testanleitung geben.
-5. Ändert sich das Spieldesign, aktualisiere `docs/GAME_DESIGN.md` im selben Commit.
+1. **At the start of every milestone:** present a plan (steps, affected files, open design questions) and wait for the user's OK.
+2. Work in small, runnable steps. After every step the game must still start.
+3. Before every commit, `npm run typecheck`, `npm run lint` and `npm test` must pass without errors.
+4. At the end of a milestone: update `docs/PROGRESS.md`, open a pull request (see the Git section), give a test guide.
+5. If the game design changes, update `docs/GAME_DESIGN.md` in the same commit.
 
-## Modelle: Opus plant, Sonnet setzt um
+## Models: Opus plans, Sonnet implements
 
-Ziel: gute Planung, günstige Umsetzung.
+Goal: good planning, cheap implementation.
 
-- **Die Hauptsitzung läuft auf Opus.** Sie liest die Dokumente, plant Meilensteine, trifft technische Entscheidungen, stellt dem Nutzer die Gameplay-Fragen, prüft Ergebnisse und macht Commits, Pushes und Pull Requests.
-- **Code schreibt der Subagent `umsetzer`** (`.claude/agents/umsetzer.md`, läuft auf Sonnet). Nach dem OK des Nutzers zerlegt Opus den Plan in kleine Schritte und gibt jeden Schritt per Agent-Tool an `umsetzer`.
-- **Jeder Auftrag an `umsetzer` enthält:** Ziel des Schritts, betroffene Dateien, die relevanten Regeln/Zahlen aus `docs/GAME_DESIGN.md` (Abschnitt nennen), Abnahmekriterien (welche Tests, was soll im Browser passieren).
-- Schritte, die verschiedene Dateien betreffen und unabhängig sind, dürfen parallel laufen. Schritte, die dieselben Dateien anfassen, nacheinander.
-- **Nach jedem Schritt prüft Opus:** `git diff` ansehen, `npm run typecheck`, `npm run lint`, `npm test` selbst laufen lassen. Mängel gehen als Nachbesserung an denselben `umsetzer` zurück, statt sie selbst neu zu schreiben. Nur Kleinkram (eine Zeile, Tippfehler) erledigt Opus direkt.
-- Meldet `umsetzer` eine offene Gameplay-Frage, stellt Opus sie dem Nutzer (2–3 Optionen mit Empfehlung).
-- Ist der Subagent `umsetzer` nicht verfügbar, nimm das Agent-Tool mit `model: sonnet` und gib die Regeln aus `umsetzer.md` im Auftrag mit.
+- **The main session runs on Opus.** It reads the documents, plans milestones, makes technical decisions, asks the user the gameplay questions, reviews results and does commits, pushes and pull requests.
+- **Code is written by the subagent `implementer`** (`.claude/agents/implementer.md`, runs on Sonnet). After the user's OK, Opus breaks the plan into small steps and hands each step to `implementer` via the Agent tool.
+- **Every brief to `implementer` contains:** goal of the step, affected files, the relevant rules/numbers from `docs/GAME_DESIGN.md` (name the section), acceptance criteria (which tests, what should happen in the browser).
+- Steps that touch different files and are independent may run in parallel. Steps that touch the same files run one after another.
+- **After every step Opus checks:** look at `git diff`, run `npm run typecheck`, `npm run lint`, `npm test` itself. Defects go back to the same `implementer` as rework instead of being rewritten by Opus. Only small stuff (one line, a typo) Opus does directly.
+- If `implementer` reports an open gameplay question, Opus asks the user (2–3 options with a recommendation).
+- If `implementer` is unavailable, use the Agent tool with `model: sonnet` and include the rules from `implementer.md` in the brief.
 
 ## Plugins
 
-- **code-review:** Vor jedem Merge eines Meilenstein-PRs auf den PR laufen lassen. Gefundene Fehler gehen als Nachbesserung an `umsetzer`; erst wenn alles behoben (oder mit dem Nutzer als „ok so“ abgestimmt) ist, wird gemergt.
-- **frontend-design:** Für Arbeit an `src/ui/` und am Aussehen (Menüs, Leisten, Panels, Grafikstil) laden – spätestens in M7. Die Vorgaben aus „Mobile first“ gelten weiter.
+- **code-review:** Run it on the pull request before every merge of a milestone PR. Bugs found go back to `implementer` as rework; only when everything is fixed (or agreed with the user as "fine as is") is it merged.
+- **frontend-design:** Load it for work on `src/ui/` and on the look (menus, bars, panels, graphics style) – by M7 at the latest. The "Mobile first" rules still apply.
 
 ---
 
-## Tech-Stack
+## Tech stack
 
-- **Sprache:** TypeScript im `strict`-Modus
-- **Build/Dev-Server:** Vite
-- **Rendering:** PixiJS (aktuelle stabile Hauptversion)
-- **UI (Menüs, Leisten, Dialoge):** reines HTML/CSS über dem Canvas, kein UI-Framework
+- **Language:** TypeScript in `strict` mode
+- **Build/dev server:** Vite
+- **Rendering:** PixiJS (current stable major version)
+- **UI (menus, bars, dialogs):** plain HTML/CSS above the canvas, no UI framework
 - **Tests:** Vitest
-- **Codequalität:** ESLint + Prettier
-- **Laufzeit:** aktuelle Node.js-LTS-Version
-- Keine weiteren Abhängigkeiten ohne kurze Begründung gegenüber dem Nutzer.
+- **Code quality:** ESLint + Prettier
+- **Runtime:** current Node.js LTS version
+- No further dependencies without a short justification to the user.
 
-## Architektur
+## Architecture
 
 ```
 src/
-  core/        Reine Spiellogik. KEIN DOM, KEIN PixiJS, keine Zufallsquellen außer dem Seed-RNG.
-    hex/       Axiale Hex-Koordinaten (q, r): Nachbarn, Distanz, Ringe, Linien, A*-Wegfindung
-    mapgen/    Kartengenerierung aus einem Seed
-    rules/     Produktion, Straßen-Verbindung, Bevölkerung, Kampf, Territorium, Sieg
-    state.ts   GameState-Typen
-    actions.ts Alle Spieleraktionen + applyAction(state, action) → neuer State oder Fehler
-    turn.ts    endTurn(state): Produktion, Verbrauch, Wachstum, nächster Spieler
-  data/        ALLE Balancing-Werte: Terrain, Waren, Gebäude, Einheiten, Stadtstufen, Punkte
-  ai/          KI-Spieler; benutzt ausschließlich dieselben Actions wie der Mensch
-  render/      PixiJS: zeichnet den State, Kamera (verschieben/zoomen), Tippen → Hex-Feld
-  ui/          HTML/CSS-Panels: Ressourcenleiste, Baumenü, Feldinfo, Rundenknopf, Menüs
-  save/        Speichern/Laden (localStorage bzw. IndexedDB), Save-Versionsnummer + Migration
-  i18n/de.ts   Alle sichtbaren Texte an einer Stelle
-  main.ts      Einstiegspunkt
+  core/        Pure game logic. NO DOM, NO PixiJS, no random sources except the seeded RNG.
+    hex/       Axial hex coordinates (q, r): neighbors, distance, rings, lines, A* pathfinding
+    mapgen/    Map generation from a seed
+    rules/     Production, road connection, population, combat, territory, victory
+    state.ts   GameState types
+    actions.ts All player actions + applyAction(state, action) → new state or error
+    turn.ts    endTurn(state): production, consumption, growth, next player
+  data/        ALL balancing values: terrain, goods, buildings, units, city levels, points
+  ai/          AI players; use exactly the same actions as the human
+  render/      PixiJS: draws the state, camera (pan/zoom), tap → hex tile
+  ui/          HTML/CSS panels: resource bar, build menu, tile info, end-turn button, menus
+  save/        Saving/loading (localStorage or IndexedDB), save version number + migration
+  i18n/en.ts   All visible texts in one place
+  main.ts      Entry point
 docs/
   GAME_DESIGN.md
   PROGRESS.md
 ```
 
-**Feste Regeln:**
-- `core/` importiert niemals aus `render/`, `ui/` oder `save/`.
-- Der `GameState` ist ein reines, JSON-serialisierbares Objekt (keine Klassen-Instanzen, keine Maps/Sets im State). So funktionieren Speichern, Tests und später Multiplayer.
-- Die Spiellogik ist **deterministisch**: gleicher Seed + gleiche Aktionen = gleiches Ergebnis. Der RNG-Zustand liegt im State.
-- Jede Aktion wird in `core/` geprüft (genug Waren? eigenes Gebiet? passendes Terrain?). Ungültige Aktionen liefern eine verständliche Fehlermeldung (deutsch, über i18n).
-- **Zahlen nur in `data/`.** Der Nutzer soll Balancing dort selbst anpassen können; kommentiere die Dateien so, dass er sie versteht.
-- Bezeichner im Code auf Englisch, **Kommentare auf Deutsch**, sichtbare Spieltexte auf Deutsch über `i18n/de.ts`.
-- Hex-Mathematik nach https://www.redblobgames.com/grids/hexagons/ (axiale Koordinaten, „pointy-top“).
-- Logik in `core/` und `ai/` bekommt Unit-Tests (Hex-Mathe, Mapgen-Determinismus, Produktion, Straßenverbindung, Kampf).
+**Fixed rules:**
+- `core/` never imports from `render/`, `ui/` or `save/`.
+- The `GameState` is a plain, JSON-serializable object (no class instances, no Maps/Sets in the state). This is how saving, tests and later multiplayer work.
+- The game logic is **deterministic**: same seed + same actions = same result. The RNG state lives in the state.
+- Every action is validated in `core/` (enough goods? own territory? suitable terrain?). Invalid actions return an understandable error message (English, via i18n).
+- **Numbers only in `data/`.** The user should be able to adjust balancing there; comment the files so the user understands them.
+- Identifiers in code in English, **comments in English**, visible game texts in **English via `i18n/en.ts`**.
+- Hex math according to https://www.redblobgames.com/grids/hexagons/ (axial coordinates, "pointy-top").
+- Logic in `core/` and `ai/` gets unit tests (hex math, mapgen determinism, production, road connection, combat).
 
 ## Mobile first
 
-- **Touch:** ein Finger ziehen = Karte verschieben, zwei Finger = zoomen, Tippen = auswählen. Ziehen darf nicht als Tippen zählen (Schwelle ~8 px).
-- **Maus/Desktop:** ziehen = verschieben, Mausrad = zoomen, Klick = auswählen.
-- Hochformat zuerst, Querformat muss ebenfalls nutzbar sein. Touch-Ziele mindestens 44 × 44 px. Keine Infos, die nur per Hover sichtbar sind.
-- Ziel: flüssige 60 fps auf einem Mittelklasse-Handy bei Karten bis 40 × 40 Felder.
-- Browser-Zoom und Scroll-Bounce auf der Spielseite unterbinden (viewport-Meta, `touch-action: none` auf dem Canvas).
-- **Grafik:** zunächst prozedural (Hex-Farben, einfache Formen/Symbole). Später Grafiken in `public/assets/`, nur mit freier Lizenz (z. B. CC0); Herkunft und Lizenz in `ASSETS.md` festhalten.
+- **Touch:** one finger drag = pan the map, two fingers = zoom, tap = select. Dragging must not count as tapping (threshold ~8 px).
+- **Mouse/desktop:** drag = pan, mouse wheel = zoom, click = select.
+- Portrait first, landscape must also be usable. Touch targets at least 44 × 44 px. No information that is only visible on hover.
+- Goal: smooth 60 fps on a mid-range phone with maps up to 40 × 40 tiles.
+- Prevent browser zoom and scroll bounce on the game page (viewport meta, `touch-action: none` on the canvas).
+- **Graphics:** procedural at first (hex colors, simple shapes/symbols). Later graphics in `public/assets/`, only with a free license (e.g. CC0); record origin and license in `ASSETS.md`.
 
-## Befehle
+## Commands
 
-| Befehl | Zweck |
+| Command | Purpose |
 |---|---|
-| `npm install` | Abhängigkeiten installieren (nach dem Klonen) |
-| `npm run dev` | Dev-Server starten (http://localhost:5173) |
-| `npm run dev -- --host` | Dev-Server auch im WLAN erreichbar machen (Handy-Test) |
-| `npm run build` | Produktionsversion nach `dist/` bauen |
-| `npm test` | Tests ausführen |
-| `npm run lint` | Codequalität prüfen |
-| `npm run typecheck` | TypeScript-Typen prüfen |
+| `npm install` | Install dependencies (after cloning) |
+| `npm run dev` | Start the dev server (http://localhost:5173) |
+| `npm run dev -- --host` | Make the dev server reachable over Wi-Fi (phone test) |
+| `npm run build` | Build the production version into `dist/` |
+| `npm test` | Run tests |
+| `npm run lint` | Check code quality |
+| `npm run typecheck` | Check TypeScript types |
 
 ## Git & GitHub
 
-- Repository `poleis` auf GitHub, Hauptbranch `main`. Die GitHub CLI (`gh`) ist installiert und angemeldet.
-- **Pro Meilenstein ein Branch**, z. B. `m1-karte`, `m2-wirtschaft`.
-- Kleine, thematische Commits mit klarer deutscher Nachricht im Imperativ (z. B. „Füge Straßenbau hinzu“).
-- Am Ende eines Meilensteins: Pull Request mit `gh pr create`. Beschreibung: was ist neu, Testanleitung, bekannte Einschränkungen. Der Nutzer testet und merged selbst (oder bittet dich darum). Nach dem Merge: Tag `v0.<Meilenstein>.0`.
+- Repository `poleis` on GitHub, main branch `main`. The GitHub CLI (`gh`) is installed and logged in.
+- **One branch per milestone**, e.g. `m1-map`, `m2-economy`.
+- Small, thematic commits with a clear English message in the imperative (e.g. "Add road building").
+- At the end of a milestone: pull request with `gh pr create`. Description: what is new, test guide, known limitations. The user tests and merges (or asks you to do it). After the merge: tag `v0.<milestone>.0`.
 - **GitHub Actions:**
-  - CI bei jedem Push/PR: typecheck, lint, test, build.
-  - Deploy nach GitHub Pages bei Push auf `main` (Vite-`base` auf `/poleis/` setzen). Nur möglich, wenn das Repo öffentlich ist oder der Nutzer GitHub Pro hat – sonst diesen Schritt weglassen und Handy-Test per `npm run dev -- --host` erklären.
-- Niemals Zugangsdaten oder Tokens committen. `.gitignore` enthält mindestens `node_modules/`, `dist/`, `.env*`.
+  - CI on every push/PR: typecheck, lint, test, build.
+  - Deploy to GitHub Pages on push to `main` (set Vite `base` to `/poleis/`). Only possible if the repo is public or the user has GitHub Pro – otherwise skip this step and explain the phone test via `npm run dev -- --host`.
+- Never commit credentials or tokens. `.gitignore` contains at least `node_modules/`, `dist/`, `.env*`.
 
 ---
 
-## Meilensteine
+## Milestones
 
-Jeder Meilenstein endet mit einem spielbaren Stand. Details zu Regeln und Zahlen: `docs/GAME_DESIGN.md`.
+Every milestone ends with a playable state. Details on rules and numbers: `docs/GAME_DESIGN.md`.
 
-### M0 – Projekt-Setup
-Vite + TypeScript + PixiJS + Vitest + ESLint/Prettier aufsetzen. Vollbild-Canvas mit Hintergrundfarbe und Text „Poleis“. Ordnerstruktur wie oben (leere Module mit kurzer Beschreibung). `README.md` auf Deutsch (was ist das, wie starten). `docs/PROGRESS.md` anlegen. GitHub-Repo erstellen, CI und (falls möglich) Pages-Deploy einrichten, pushen.
+### M0 – Project setup
+Set up Vite + TypeScript + PixiJS + Vitest + ESLint/Prettier. Fullscreen canvas with a background color and the text "Poleis". Folder structure as above (empty modules with a short description). `README.md` in English (what is it, how to start). Create `docs/PROGRESS.md`. Create the GitHub repo, set up CI and (if possible) the Pages deploy, push.
 
-### M1 – Karte
-Seed-basierte Kartengenerierung (Standard 30 × 30): Ozean, Küstenwasser, Ebene, Wald, Hügel, Berg. Ein großes Festland für die Startgebiete plus 3–6 Inseln. Kamera mit Touch- und Maussteuerung, Zoom-Grenzen. Tippen markiert ein Feld und zeigt Terrain-Info. Seed per URL wählbar (`?seed=123`). Tests für Hex-Mathe und Mapgen-Determinismus.
+### M1 – Map
+Seed-based map generation (default 30 × 30): ocean, coastal water, plains, forest, hills, mountains. One large mainland for the starting areas plus 3–6 islands. Camera with touch and mouse controls, zoom limits. Tapping highlights a tile and shows terrain info. Seed selectable via URL (`?seed=123`). Tests for hex math and mapgen determinism.
 
-### M2 – Wirtschaft
-Stadtzentrum beim Start, Territorium, Baumenü, Gebäude der Warenketten aus dem Design-Dokument, Platzierungsregeln nach Terrain, Straßenbau, Verbindungsprüfung (Gebäude ↔ Lager/Stadtzentrum per Straße, Breitensuche), Rundenende mit Produktion und Verarbeitung, Ressourcenleiste, Gebäude-Infopanel mit Status („nicht verbunden“, „fehlende Arbeiter“, „fehlender Rohstoff“).
+### M2 – Economy
+City center at the start, territory, build menu, buildings of the goods chains from the design document, placement rules by terrain, road building, connection check (building ↔ storehouse/city center via road, breadth-first search), end of turn with production and processing, resource bar, building info panel with status ("not connected", "missing workers", "missing raw material").
 
-### M3 – Bevölkerung & Stadtstufen
-Wohnhäuser, Einwohner als Arbeiter (automatische Zuteilung, Priorität einstellbar ist optional), Nahrungsverbrauch, Wachstum/Schrumpfen, Bedarfe Öl/Wein, Steuern in Drachmen, Aufstieg Siedlung → Polis → Metropole mit Freischaltungen.
+### M3 – Population & city levels
+Houses, residents as workers (automatic assignment, adjustable priority is optional), food consumption, growth/shrinking, needs for oil/wine, taxes in drachmas, level-up Settlement → Polis → Metropolis with unlocks.
 
-### M4 – Territorium & Militär
-Grenztürme, Nebel des Krieges, Kaserne, Landeinheiten, Bewegung mit Wegfindung und Bewegungskosten, Straßenbonus, Kampf nach der Formel im Design-Dokument, Einheiten-Unterhalt, Städte einnehmen, Siedler gründen neue Städte.
+### M4 – Territory & military
+Border towers, fog of war, barracks, land units, movement with pathfinding and movement costs, road bonus, combat per the formula in the design document, unit upkeep, capturing cities, settlers found new cities.
 
-### M5 – Erste komplette Partie
-KI-Völker (1–3, Persönlichkeiten aus dem Design-Dokument), Siegbedingungen und Punkteanzeige, Startmenü (Kartengröße, Anzahl KI, Seed), Speichern/Laden, Autosave jede Runde, Sieg-/Niederlage-Bildschirm.
+### M5 – First complete game
+AI civilizations (1–3, personalities from the design document), victory conditions and score display, start menu (map size, number of AIs, seed), saving/loading, autosave every turn, victory/defeat screen.
 
-### M6 – Seefahrt
-Hafen, Transportschiff, Triere, Seewege als Verbindung zwischen Lagern, Einheiten einschiffen, Inseln besiedeln.
+### M6 – Seafaring
+Harbor, transport ship, trireme, sea routes as a connection between storehouses, embarking units, settling islands.
 
-### M7 – Feinschliff
-Balancing-Durchgang, echte Grafiken, Sound, Animationen, Tutorial-Hinweise, PWA (installierbar, offline spielbar).
+### M7 – Polish
+Balancing pass, real graphics, sound, animations, tutorial hints, PWA (installable, playable offline).
 
-### Später (noch nicht umsetzen)
-Götter-System (Tempel erzeugt Gunst), Handel/Diplomatie mit KI-Völkern, Multiplayer, App-Store-Version (z. B. Capacitor).
+### Later (do not implement yet)
+Gods system (temple generates favor), trade/diplomacy with AI civilizations, multiplayer, app store version (e.g. Capacitor).

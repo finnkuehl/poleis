@@ -1,32 +1,22 @@
-# Arbeitsstand
+# Progress
 
-## Aktueller Meilenstein: M1 – Karte (umgesetzt, Pull Request offen – wartet auf Test und Merge)
+## Current milestone: M2 – Economy (in progress, branch `m2-economy`)
 
-- [x] Hex-Mathematik (axial, pointy-top) + Seed-Zufallsgenerator, mit Tests
-- [x] Kamera: ziehen, Pinch-Zoom, Mausrad, Zoom-Grenzen, Tipp-Schwelle 8 px
-- [x] Terrain-Daten (`src/data/terrain.ts`) und Kartengenerator (`src/core/mapgen/`), mit Determinismus-Tests
-- [x] Karte zeichnen (Farben + einfache Symbole), Feld antippen und markieren, Infopanel
-- [x] Seed per URL (`?seed=123`), Seed-Anzeige
-- [x] Browser-Test Desktop + Handy-Format (Pinch nur auf echtem Handy testbar)
-- [ ] code-review, Merge
+- [ ] Plan approved, implementation starting
 
-**Design-Entscheidungen M1** (auch in `docs/GAME_DESIGN.md` §3):
-- Festland ca. 45 % der Karte, zusammenhängend
-- Berge in kurzen Ketten; jede Landmasse bleibt zu Fuß verbunden
-- Inseln mit mehr Hügeln und Wald als das Festland
+## Done
 
-## Erledigt
+- **M0 – Project setup** (`v0.0.0`): Vite, TypeScript, PixiJS, Vitest, ESLint/Prettier, CI, Pages deploy.
+- **M1 – Map** (`v0.1.0`): hex math, seeded map generator, camera (touch + mouse), tile selection with info panel, seed via URL.
 
-- **M0 – Projekt-Setup** (`v0.0.0`): Vite, TypeScript, PixiJS, Vitest, ESLint/Prettier, CI, Pages-Deploy.
+## Known limitations
 
-## Bekannte Einschränkungen
+- No gameplay yet: no cities, buildings or units.
+- The start view shows the whole map – on a phone the tiles are small (zoom in). From M2 on, the camera starts at the player's own city.
 
-- Noch kein Gameplay: keine Städte, Gebäude oder Einheiten.
-- Startansicht zeigt die ganze Karte – auf dem Handy sind die Felder dann klein (reinzoomen). Ab M2 startet die Kamera bei der eigenen Stadt.
+## Notes
 
-## Notizen
-
-- Online: https://finnkuehl.github.io/poleis/ (wird bei jedem Merge auf `main` aktualisiert)
-- Pro Meilenstein ein Branch (z. B. `m1-karte`), am Ende ein Pull Request; vor dem Merge läuft `code-review`.
-- Opus plant und prüft, Sonnet (`umsetzer`) schreibt den Code.
-- Projektordner: `~/Projects/poleis`. **Nicht** in iCloud-synchronisierte Ordner (Dokumente, Schreibtisch) legen – iCloud erzeugt Doppel-Dateien und kann das Git-Repository beschädigen.
+- Online: https://finnkuehl.github.io/poleis/ (updated on every merge into `main`)
+- One branch per milestone (e.g. `m1-map`), a pull request at the end; `code-review` runs before the merge.
+- Opus plans and reviews, Sonnet (`implementer`) writes the code.
+- Project folder: `~/Projects/poleis`. **Do not** put it in iCloud-synced folders (Documents, Desktop) – iCloud creates duplicate files and can corrupt the Git repository.
