@@ -1,23 +1,11 @@
 # Progress
 
-## Current milestone: M4 – Territory & military (implemented, pull request open)
+## Next
 
-- [x] Plan approved; decisions in `docs/GAME_DESIGN.md` §7 "Detailed rules (decided in M4)"
-- [x] Units: barracks, training, appearing next turn, movement (costs, roads, 1-tile rule), upkeep, healing
-- [x] Combat (formula, range, counterattack, walled city centers), capturing, settlers found cities, passive enemy in test mode
-- [x] Fog of war (explored / visible per civilization)
-- [x] Map: units with health bars, reachable tiles, attack targets, fog
-- [x] Controls: Units button, barracks panel, unit panel, attack preview, found city, combat messages
-- [x] Everything wired together; UX fixes after the browser test (Units button cycles, compact unit panel, attack messages)
-- [x] Browser test: barracks, training, scout movement into the fog, attack preview + attack (scout lost). Founding and capturing only covered by automated tests.
-- [x] code-review: 5 findings fixed (attack ends turn, no moves into fog, no city on a road, Units button, panel ✕); new rule "units only move onto explored tiles"
-- [x] User requests: workers working/free in the top bar and city panel, "📊 Overview" economy sheet (made/used per good, runs-out warning), drag & drop for units
-- [ ] User's phone test on GitHub Pages, merge PR #6, tag `v0.4.0`
+1. **Multi-turn move orders** (user request) – rules to confirm, see `docs/HANDOVER.md` §5a.
+2. **M5 – First complete game** (AI civilizations, victory, start menu, saving).
 
 **Handover for a new session:** see `docs/HANDOVER.md`.
-- [ ] code-review, merge; phone test on GitHub Pages after the merge
-
-**Design decisions M4:** always 1 tile of movement, one unit per tile, passive enemy in test mode, city centers count as walled.
 
 ## Done
 
@@ -26,6 +14,7 @@
 - **M2 – Economy** (`v0.2.0`): project in English; starting city, 12 settlement buildings, terrain placement, roads (A*), connection check, workers, production, demolish, controls.
 - **M3 – Population & city levels** (`v0.3.0`): residents eat, grow, starve and pay taxes; city center +1 bread; oil/wine supply streak; advance to Polis/Metropolis; vineyard, winery, marketplace (trading), temple; pause button; city panel; turn summary; test mode `?sandbox`.
 - **Balance pass** (`v0.3.1`): resource buildings on their resource (woodcutter on forest, mine on mountains), border towers, houses hold 6, tap a tile → "Build here".
+- **M4 – Territory & military** (`v0.4.0`): barracks and units, movement (terrain costs, roads, 1-tile rule, explored tiles only), combat with preview (walled city centers), upkeep/healing, capturing, settlers founding cities, fog of war, passive enemy in test mode; workers working/free, "📊 Overview" economy sheet, drag & drop for units. Founding/capturing verified by automated tests only.
 
 ## Known limitations
 

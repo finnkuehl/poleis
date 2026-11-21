@@ -9,8 +9,8 @@ Read it together with `CLAUDE.md` (rules), `docs/GAME_DESIGN.md` (game design in
 - **Live game:** https://finnkuehl.github.io/poleis/ – updated ~2 min after every merge into `main` (Pages may show the old version for up to ~10 min).
 - **Test mode:** add `&sandbox` → big start stock + a passive red enemy city ~6–9 tiles away (for seed 1: 7 tiles **south** of the player's city). Example: `https://finnkuehl.github.io/poleis/?seed=1&sandbox`.
 - **Done and tagged:** M0 `v0.0.0`, M1 `v0.1.0`, M2 `v0.2.0`, M3 `v0.3.0`, balance pass `v0.3.1`.
-- **Current:** M4 – Territory & military on branch `m4-military`, **PR #6** (https://github.com/finnkuehl/poleis/pull/6). Implemented, code-reviewed (5 findings fixed), plus three overview features the user asked for (workers working/free, economy overview, drag & drop units). Waiting for the user's phone test → merge → tag `v0.4.0`.
-- **Next milestone:** M5 – First complete game (see §6).
+- **M4 – Territory & military is merged as `v0.4.0`** (PR #6): units, combat, capturing, settlers, fog of war, plus the user's overview requests (workers working/free, "📊 Overview" economy sheet, drag & drop for units). The user tested it on desktop: "looks good".
+- **First task in the new session: multi-turn move orders** (see §5a), then M5 – First complete game (see §6).
 
 ## 2. How we work (important – the user relies on it)
 
@@ -50,6 +50,16 @@ Start 20 wood + 10 stone, city placed automatically; housing/workers full crews 
 - Capturing and founding were verified by automated tests only, not yet in a real browser play-through.
 - Harbor, ships, sea routes (M6); world wonder + temple points (M5); graphics/sound/PWA (M7).
 
+## 5a. First task: multi-turn move orders (user request after M4)
+
+User's words: "would be nice if I could move units further than they can walk and they move the shortest way according to their movement in the next turns."
+Suggested rules – **confirm them with the user first** (AskUserQuestion, recommendation first), then record them in GAME_DESIGN §7:
+- Drag or tap a selected unit onto **any explored tile** reachable by a land path, even far away → path preview with turn markers ("arrives in 3 turns"); this turn the unit already walks as far as it can.
+- At the start of each of the player's turns (after heal/reset, before production) the unit automatically continues along the shortest path (same movement rules: explored tiles only, terrain costs, roads, 1-tile rule, one unit per tile) – re-plan the path each turn.
+- The order is cleared when the unit arrives, the path is blocked, an enemy unit comes into the unit's view, the unit is attacked, or the player gives it a new order / taps "Stop" in the unit panel.
+- Units with an active order are skipped by the "Units" button; the map shows their remaining path faintly; the turn summary says e.g. "Scout arrived" / "Scout stopped: enemy in sight".
+Implementation sketch: `Unit.destination: Hex | null` (JSON-plain) + a core action `{ type: 'setDestination'; unitId; to }`; auto-move in `turn.ts` via the existing pathfinding over explored tiles; UI in `interaction.ts` (drop/tap outside this turn's reach but on explored land → order), render path line in `unitLayers.ts`. Tests: auto-move over several turns, stop conditions, fog respected, determinism.
+
 ## 6. Next: M5 – First complete game (from CLAUDE.md)
 
 AI civilizations (1–3; personalities from GAME_DESIGN §9: Athens trader, Sparta warrior, Corinth builder; utility-based, only regular actions, only what their fog allows – use `isVisible`/`economyOverview`), victory conditions + score display (GAME_DESIGN §10), start menu (map size, number of AIs, seed), save/load (`src/save/`, versioned) + autosave every turn, victory/defeat screen. Start with questions for the gameplay gaps (e.g. AI turn order/animation, difficulty, what happens to the passive sandbox enemy, how the world wonder is built over 5 turns).
@@ -58,5 +68,5 @@ AI civilizations (1–3; personalities from GAME_DESIGN §9: Athens trader, Spar
 
 ```
 Read docs/HANDOVER.md, CLAUDE.md, docs/PROGRESS.md and docs/GAME_DESIGN.md.
-Then continue where we left off: if PR #6 (M4) is still open, ask me whether my phone test passed and merge + tag v0.4.0; otherwise present the plan for M5 with the open gameplay questions first.
+Then continue where we left off: first the multi-turn move orders from HANDOVER §5a (ask me the open rules, then plan, then build on a branch with a PR), afterwards the plan for M5 with the open gameplay questions first.
 ```
