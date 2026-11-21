@@ -146,6 +146,8 @@ function duel() {
 describe('elimination', () => {
   it('an AI that loses its only city is out, its units go, it is skipped', () => {
     const { s: start, enemyCity, hero } = duel();
+    // Conquest would end the game here; this test is about the elimination itself.
+    start.settings.victory = { ...start.settings.victory, conquest: false };
     let s = start;
     addUnit(s, 'spearman', at(7, 3), { owner: 1 });
     s.training.push({ barracksId: 999, unit: 'spearman', owner: 1 });

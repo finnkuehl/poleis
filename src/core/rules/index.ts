@@ -23,3 +23,5 @@ export * from './vision';
 export * from './economy';
 export * from './events';
 export * from './elimination';
+export * from './score';
+export * from './victory';

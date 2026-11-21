@@ -46,6 +46,8 @@ export function formatStatus(status: BuildingStatus): string {
   switch (status.kind) {
     case 'missingWorkers':
       return fill(en.status.missingWorkers, { assigned: status.assigned, needed: status.needed });
+    case 'wonderBuilding':
+      return fill(en.status.wonderBuilding, { progress: status.progress, total: status.total });
     case 'missingInput':
       return fill(en.status.missingInput, { goods: formatGoods(status.missing) });
     default:

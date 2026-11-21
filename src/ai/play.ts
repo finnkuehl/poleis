@@ -15,7 +15,7 @@ export function playAiTurns(
   let current = state;
   for (let turns = 0; turns < state.players.length; turns++) {
     const human = current.players.find((p) => p.isHuman);
-    if (!human || !human.alive || current.currentPlayer === human.id) break;
+    if (current.result || !human || !human.alive || current.currentPlayer === human.id) break;
     const player = current.currentPlayer;
     for (const action of decide(current, player)) {
       if (action.type === 'endTurn') continue;

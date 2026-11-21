@@ -35,7 +35,9 @@ export type RuleErrorCode =
   | 'notInRange'
   | 'notASettler'
   | 'foreignTerritory'
-  | 'tooCloseToCity';
+  | 'tooCloseToCity'
+  | 'wonderLimit'
+  | 'gameOver';
 
 export interface RuleError {
   code: RuleErrorCode;

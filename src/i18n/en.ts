@@ -254,6 +254,7 @@ export const en = {
     winery: 'Winery',
     marketplace: 'Marketplace',
     temple: 'Temple',
+    wonder: 'World wonder',
   },
   units: {
     scout: 'Scout',
@@ -300,6 +301,8 @@ export const en = {
     notInRange: 'That target is out of range.',
     notASettler: 'Only settlers can found cities.',
     foreignTerritory: "You can't found a city in foreign territory.",
+    wonderLimit: 'You already have a world wonder.',
+    gameOver: 'The game is over.',
     tooCloseToCity: 'Too close to another city – keep at least {distance} tiles away.',
   },
   status: {
@@ -310,5 +313,7 @@ export const en = {
     notConnected: 'Not connected to a storehouse or city center',
     missingWorkers: 'Missing workers ({assigned}/{needed})',
     missingInput: 'Missing input: {goods}',
+    wonderBuilding: 'Building: {progress} of {total} turns',
+    wonderComplete: 'Complete',
   },
 } as const;

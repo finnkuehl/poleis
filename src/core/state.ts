@@ -69,6 +69,8 @@ export interface Building {
   hex: Hex;
   /** Paused buildings get no workers and produce nothing. */
   paused: boolean;
+  /** Wonders only: working turns done so far (0 when placed). */
+  progress?: number;
 }
 
 export interface City {
@@ -155,7 +157,22 @@ export type GameEvent =
       hex: Hex;
       seenBy: PlayerId[];
     }
-  | { type: 'eliminated'; turn: number; player: PlayerId; seenBy: PlayerId[] };
+  | { type: 'eliminated'; turn: number; player: PlayerId; seenBy: PlayerId[] }
+  | {
+      type: 'wonderStarted' | 'wonderCompleted';
+      turn: number;
+      player: PlayerId;
+      hex: Hex;
+      /** All players. */
+      seenBy: PlayerId[];
+    };
+
+/** How a game ended. `eliminated` = the human is out of the game (no winner). */
+export interface GameResult {
+  winner: PlayerId | null;
+  reason: 'wonder' | 'conquest' | 'points' | 'eliminated';
+  turn: number;
+}
 
 export interface GameState {
   version: 1;
@@ -188,6 +205,8 @@ export interface GameState {
   lastReport: TurnReport | null;
   /** Events since the human last ended a turn (cleared when the human ends the turn). */
   events: GameEvent[];
+  /** Set once when the game is over; null while it runs. */
+  result: GameResult | null;
 }
 
 function emptyStock(): Stock {
@@ -264,6 +283,7 @@ export function createGameState(
     nextId: 2,
     lastReport: null,
     events: [],
+    result: null,
   };
   claimTerritory(state, start, BUILDINGS.cityCenter.territoryRadius, 0, 1);
   if (aiCount > 0) {

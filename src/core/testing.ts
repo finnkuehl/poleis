@@ -81,6 +81,7 @@ export function makeTestState(
     nextId: 1,
     lastReport: null,
     events: [],
+    result: null,
   };
 }
 

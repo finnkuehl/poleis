@@ -1,12 +1,13 @@
 // Production: what each building produces in one turn.
 
-import { BUILDINGS, GOOD_IDS, type Goods, type GoodId, type Stock } from '../../data';
+import { BUILDINGS, GOOD_IDS, wonderConfig, type Goods, type GoodId, type Stock } from '../../data';
 import type { GameState, PlayerId } from '../state';
 import { connectedBuildingIds } from './connection';
 import type { CityReport } from './population';
 import { addGoods, canAfford, missingGoods, pay } from './goods';
 import type { OrderReport } from './orders';
-import { assignWorkers } from './workers';
+import { addEvent } from './events';
+import { assignWorkers, isWonderComplete, workersNeeded } from './workers';
 
 export type BuildingStatus =
   | { kind: 'producing' }
@@ -17,7 +18,10 @@ export type BuildingStatus =
   | { kind: 'paused' }
   | { kind: 'notConnected' }
   | { kind: 'missingWorkers'; assigned: number; needed: number }
-  | { kind: 'missingInput'; missing: Goods };
+  | { kind: 'missingInput'; missing: Goods }
+  // Wonder staffed and connected: its work goes on (progress = working turns done).
+  | { kind: 'wonderBuilding'; progress: number; total: number }
+  | { kind: 'wonderComplete' };
 
 export interface BuildingReport {
   buildingId: number;
@@ -80,15 +84,29 @@ function simulate(state: GameState, player: PlayerId, stock: Stock): TurnReport 
       consumed: {},
     };
     reports.push(report);
-    const isService = !hasGoods(def.outputs) && def.workers > 0;
-    if (!hasGoods(def.outputs) && !isService) {
+    const needed = workersNeeded(b);
+    const isService = !hasGoods(def.outputs) && needed > 0 && b.type !== 'wonder';
+    if (b.type === 'wonder') {
+      if (isWonderComplete(b)) report.status = { kind: 'wonderComplete' };
+      else if (b.paused) report.status = { kind: 'paused' };
+      else if (!connected.has(b.id)) report.status = { kind: 'notConnected' };
+      else if ((workers[b.id] ?? 0) < needed) {
+        report.status = { kind: 'missingWorkers', assigned: workers[b.id] ?? 0, needed };
+      } else {
+        report.status = {
+          kind: 'wonderBuilding',
+          progress: b.progress ?? 0,
+          total: wonderConfig.buildTurns,
+        };
+      }
+    } else if (!hasGoods(def.outputs) && !isService) {
       report.status = { kind: 'noProduction' };
     } else if (b.paused) {
       report.status = { kind: 'paused' };
     } else if (!connected.has(b.id)) {
       report.status = { kind: 'notConnected' };
-    } else if ((workers[b.id] ?? 0) < def.workers) {
-      report.status = { kind: 'missingWorkers', assigned: workers[b.id] ?? 0, needed: def.workers };
+    } else if ((workers[b.id] ?? 0) < needed) {
+      report.status = { kind: 'missingWorkers', assigned: workers[b.id] ?? 0, needed };
     } else if (isService) {
       report.status = { kind: 'working' };
     } else if (!canAfford(stock, def.inputs)) {
@@ -126,7 +144,30 @@ function stockOf(state: GameState, player: PlayerId): Stock {
 
 /** Runs the production of one turn and changes the player's goods (mutates `state`). */
 export function runProduction(state: GameState, player: PlayerId): TurnReport {
-  return simulate(state, player, stockOf(state, player));
+  const report = simulate(state, player, stockOf(state, player));
+  // Wonders whose work goes on advance by one turn; the last one completes them.
+  for (const r of report.buildings) {
+    if (r.status.kind !== 'wonderBuilding') continue;
+    const wonder = state.buildings.find((b) => b.id === r.buildingId);
+    if (!wonder) continue;
+    wonder.progress = (wonder.progress ?? 0) + 1;
+    r.status = {
+      kind: 'wonderBuilding',
+      progress: wonder.progress,
+      total: wonderConfig.buildTurns,
+    };
+    if (isWonderComplete(wonder)) {
+      r.status = { kind: 'wonderComplete' };
+      addEvent(state, {
+        type: 'wonderCompleted',
+        turn: state.turn,
+        player,
+        hex: wonder.hex,
+        seenBy: state.players.map((p) => p.id),
+      });
+    }
+  }
+  return report;
 }
 
 /** Same result as `runProduction`, but changes nothing. */

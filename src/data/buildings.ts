@@ -23,7 +23,8 @@ export type BuildingId =
   | 'vineyard'
   | 'winery'
   | 'marketplace'
-  | 'temple';
+  | 'temple'
+  | 'wonder';
 
 /** City levels (see cityLevels.ts). */
 export type CityLevel = 'settlement' | 'polis' | 'metropolis';
@@ -86,6 +87,7 @@ export const BUILDING_IDS: readonly BuildingId[] = [
   'winery',
   'marketplace',
   'temple',
+  'wonder',
 ];
 
 const onPlains: readonly PlacementOption[] = [{ on: ['plains'] }];
@@ -376,5 +378,22 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     minLevel: 'polis',
     playerCanBuild: true,
     icon: '🔱',
+  },
+  // World wonder (victory rules in victory.ts): the whole cost is paid when placing. It is built
+  // over `wonderConfig.buildTurns` working turns and needs its full crew and a road connection
+  // for each of them. A completed wonder needs no workers any more.
+  wonder: {
+    category: 'city',
+    placement: onPlains,
+    cost: { stone: 40, planks: 20, bronze: 20, wine: 10 },
+    workers: 4,
+    inputs: {},
+    outputs: {},
+    housing: 0,
+    isStorage: false,
+    territoryRadius: 0,
+    minLevel: 'metropolis',
+    playerCanBuild: true,
+    icon: '🗿',
   },
 };

@@ -15,3 +15,4 @@ export * from './units';
 export * from './military';
 export * from './game';
 export * from './ai';
+export * from './victory';

@@ -35,6 +35,7 @@ import {
   scaleGoods,
   setMoveOrder,
   updateAllExplored,
+  workersNeeded,
   type RuleError,
 } from './rules';
 import type { GameState } from './state';
@@ -68,6 +69,7 @@ export function applyAction(state: GameState, action: Action): ActionResult {
 
 function applyActionInner(state: GameState, action: Action): ActionResult {
   const player = state.currentPlayer;
+  if (state.result) return fail({ code: 'gameOver' });
   if (action.type === 'endTurn') return { ok: true, state: endTurn(state) };
 
   const next = structuredClone(state);
@@ -86,7 +88,17 @@ function applyActionInner(state: GameState, action: Action): ActionResult {
         owner: player,
         hex: action.hex,
         paused: false,
+        ...(action.building === 'wonder' ? { progress: 0 } : {}),
       });
+      if (action.building === 'wonder') {
+        addEvent(next, {
+          type: 'wonderStarted',
+          turn: next.turn,
+          player,
+          hex: action.hex,
+          seenBy: next.players.map((p) => p.id),
+        });
+      }
       if (def.territoryRadius > 0) {
         const i = tileIndex(next.map, action.hex);
         claimTerritory(next, action.hex, def.territoryRadius, player, next.tileCity[i]);
@@ -108,7 +120,7 @@ function applyActionInner(state: GameState, action: Action): ActionResult {
       const building = next.buildings.find(
         (b) => b.owner === player && hexEquals(b.hex, action.hex),
       );
-      if (!building || BUILDINGS[building.type].workers <= 0) return fail({ code: 'cannotPause' });
+      if (!building || workersNeeded(building) <= 0) return fail({ code: 'cannotPause' });
       building.paused = !building.paused;
       return { ok: true, state: next };
     }

@@ -7,6 +7,12 @@ import { runProduction } from './rules/production';
 import { updateAllExplored } from './rules/vision';
 import { captureCities } from './rules/capture';
 import { eliminatePlayers } from './rules/elimination';
+import {
+  checkEliminationResult,
+  declarePointsVictory,
+  declareWonderVictory,
+  pastTurnLimit,
+} from './rules/victory';
 import { runMoveOrders } from './rules/orders';
 import { healAndResetUnits, runUpkeep, spawnUnits } from './rules/units';
 
@@ -19,7 +25,15 @@ import { healAndResetUnits, runUpkeep, spawnUnits } from './rules/units';
 export function endTurn(state: GameState): GameState {
   const next = structuredClone(state);
   if (next.players.find((p) => p.id === next.currentPlayer)?.isHuman) next.events = [];
+  const previous = { turn: next.turn, currentPlayer: next.currentPlayer };
   advanceToNextPlayer(next);
+  // The turn limit is over: the game ends on points and does not enter the next turn.
+  if (pastTurnLimit(next, next.turn)) {
+    next.turn = previous.turn;
+    next.currentPlayer = previous.currentPlayer;
+    declarePointsVictory(next, next.turn);
+    return next;
+  }
   const player = next.currentPlayer;
   const stock = next.players.find((p) => p.id === player)?.goods;
   if (!stock) throw new Error(`Unknown player ${player}`);
@@ -29,13 +43,18 @@ export function endTurn(state: GameState): GameState {
   const captured = captureCities(next, player);
   // Players without a city are out of the game.
   eliminatePlayers(next, player);
+  checkEliminationResult(next);
   // Units first: heal, reset, new units appear.
   healAndResetUnits(next, player);
   const spawned = spawnUnits(next, player);
   // Units with a move order continue walking.
   const orders = runMoveOrders(next, player);
   // Then production, consumption, growth and taxes; the units eat last (after the residents).
+  const eventsBefore = next.events.length;
   const report = runProduction(next, player);
+  if (next.events.slice(eventsBefore).some((e) => e.type === 'wonderCompleted')) {
+    declareWonderVictory(next, player);
+  }
   report.cities = runPopulation(next, player);
   report.units = { spawned, ...runUpkeep(next, player, stock) };
   // Combined net change of production, population and upkeep.
