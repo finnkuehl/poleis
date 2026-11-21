@@ -158,6 +158,7 @@ export const en = {
     cityCenter: 'City center',
     storehouse: 'Storehouse',
     borderTower: 'Border tower',
+    barracks: 'Barracks',
     house: 'House',
     woodcutter: 'Woodcutter',
     quarry: 'Quarry',
@@ -173,6 +174,14 @@ export const en = {
     winery: 'Winery',
     marketplace: 'Marketplace',
     temple: 'Temple',
+  },
+  units: {
+    scout: 'Scout',
+    settler: 'Settler',
+    spearman: 'Spearman',
+    archer: 'Archer',
+    hoplite: 'Hoplite',
+    horseman: 'Horseman',
   },
   levels: {
     settlement: 'Settlement',
@@ -200,6 +209,10 @@ export const en = {
     nothingToDemolish: 'There is nothing to demolish here.',
     cannotDemolishCityCenter: 'The city center cannot be demolished.',
     cannotPause: 'Only buildings with workers can be paused.',
+    notOwnUnit: 'That is not your unit.',
+    cannotReach: "This unit can't reach that tile this turn.",
+    notOwnBuilding: 'That is not your building.',
+    alreadyTraining: 'This barracks is already training a unit this turn.',
   },
   status: {
     producing: 'Producing',

@@ -7,6 +7,7 @@ import {
   type BuildingId,
   type GoodId,
   type Goods,
+  type UnitId,
 } from '../data';
 import type { Hex } from './hex';
 import { hexEquals } from './hex';
@@ -21,7 +22,9 @@ import {
   missingGoods,
   ownerAt,
   pay,
+  orderTraining,
   planRoad,
+  reachableTiles,
   scaleGoods,
   type RuleError,
 } from './rules';
@@ -35,6 +38,8 @@ export type Action =
   | { type: 'togglePause'; hex: Hex }
   | { type: 'advanceCity'; cityId: number }
   | { type: 'trade'; good: GoodId; direction: 'sell' | 'buy'; lots: number }
+  | { type: 'move'; unitId: number; to: Hex }
+  | { type: 'train'; barracksId: number; unit: UnitId }
   | { type: 'endTurn' };
 
 export type ActionResult = { ok: true; state: GameState } | { ok: false; error: RuleError };
@@ -123,6 +128,21 @@ export function applyAction(state: GameState, action: Action): ActionResult {
           : { [action.good]: action.lots },
       );
       return { ok: true, state: next };
+    }
+    case 'move': {
+      const unit = next.units.find((u) => u.id === action.unitId);
+      if (!unit || unit.owner !== player) return fail({ code: 'notOwnUnit' });
+      const target = reachableTiles(next, unit.id).find((r) => hexEquals(r.hex, action.to));
+      if (!target) return fail({ code: 'cannotReach' });
+      unit.hex = target.hex;
+      unit.movesLeft = Math.max(0, unit.movesLeft - target.cost);
+      unit.hasMoved = true;
+      unit.acted = true;
+      return { ok: true, state: next };
+    }
+    case 'train': {
+      const error = orderTraining(next, player, action.barracksId, action.unit);
+      return error ? fail(error) : { ok: true, state: next };
     }
     case 'demolish': {
       const building = next.buildings.find(

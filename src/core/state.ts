@@ -9,6 +9,7 @@ import {
   type CityLevel,
   type Stock,
   type TerrainId,
+  type UnitId,
 } from '../data';
 import type { Hex } from './hex';
 import { generateMap, findStartPositions } from './mapgen';
@@ -52,6 +53,28 @@ export interface City {
   supplyStreak: number;
 }
 
+export interface Unit {
+  /** From the shared `nextId` counter. */
+  id: number;
+  type: UnitId;
+  owner: PlayerId;
+  hex: Hex;
+  hp: number;
+  /** Movement points left this turn (may be fractional, e.g. 0.5). */
+  movesLeft: number;
+  /** Moved this turn (for the "first step is always allowed" rule). */
+  hasMoved: boolean;
+  /** Moved or attacked this turn (acting units do not heal). */
+  acted: boolean;
+}
+
+/** A unit ordered in a barracks; it appears at the start of the owner's next turn. */
+export interface TrainingOrder {
+  barracksId: number;
+  unit: UnitId;
+  owner: PlayerId;
+}
+
 export interface GameState {
   version: 1;
   seedText: string;
@@ -72,7 +95,11 @@ export interface GameState {
   cities: City[];
   /** Per tile index: id of the city whose territory it is, -1 = none. */
   tileCity: number[];
-  /** Id of the next building. */
+  /** All units (ids come from `nextId`). */
+  units: Unit[];
+  /** Units ordered this turn, waiting to appear. */
+  training: TrainingOrder[];
+  /** Id of the next building or unit. */
   nextId: number;
   /** Result of the latest production (for the UI). */
   lastReport: TurnReport | null;
@@ -114,6 +141,8 @@ export function createGameState(seedText: string, options: { sandbox?: boolean }
       },
     ],
     tileCity: map.tiles.map(() => -1),
+    units: [],
+    training: [],
     nextId: 2,
     lastReport: null,
   };

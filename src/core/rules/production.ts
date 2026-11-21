@@ -25,6 +25,17 @@ export interface BuildingReport {
   consumed: Goods;
 }
 
+export interface UnitsReport {
+  /** Units that appeared at the start of the turn. */
+  spawned: number;
+  /** Food eaten by the units. */
+  upkeepEaten: Goods;
+  /** Not enough food for all units: every unit took damage. */
+  starving: boolean;
+  /** Units that died of hunger. */
+  lost: number;
+}
+
 export interface TurnReport {
   turn: number;
   player: PlayerId;
@@ -33,6 +44,8 @@ export interface TurnReport {
   buildings: BuildingReport[];
   /** Population report per city (filled by endTurn; empty for a production-only run). */
   cities: CityReport[];
+  /** Unit report (filled by endTurn). */
+  units: UnitsReport;
 }
 
 function hasGoods(goods: Goods): boolean {
@@ -88,7 +101,14 @@ function simulate(state: GameState, player: PlayerId, stock: Stock): TurnReport 
     const d = stock[id] - before[id];
     if (d !== 0) delta[id] = d;
   }
-  return { turn: state.turn, player, delta, buildings: reports, cities: [] };
+  return {
+    turn: state.turn,
+    player,
+    delta,
+    buildings: reports,
+    cities: [],
+    units: { spawned: 0, upkeepEaten: {}, starving: false, lost: 0 },
+  };
 }
 
 function stockOf(state: GameState, player: PlayerId): Stock {

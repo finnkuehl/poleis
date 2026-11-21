@@ -23,7 +23,11 @@ export type RuleErrorCode =
   | 'roadNotAllowed'
   | 'nothingToDemolish'
   | 'cannotDemolishCityCenter'
-  | 'cannotPause';
+  | 'cannotPause'
+  | 'notOwnUnit'
+  | 'cannotReach'
+  | 'notOwnBuilding'
+  | 'alreadyTraining';
 
 export interface RuleError {
   code: RuleErrorCode;

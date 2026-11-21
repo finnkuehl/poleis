@@ -13,3 +13,5 @@ export * from './production';
 export * from './roads';
 export * from './advance';
 export * from './trade';
+export * from './movement';
+export * from './units';

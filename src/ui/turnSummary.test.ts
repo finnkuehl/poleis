@@ -21,7 +21,14 @@ function cityReport(over: Partial<CityReport>): CityReport {
 }
 
 function report(...cities: CityReport[]): TurnReport {
-  return { turn: 5, player: 0, delta: {}, buildings: [], cities };
+  return {
+    turn: 5,
+    player: 0,
+    delta: {},
+    buildings: [],
+    cities,
+    units: { spawned: 0, upkeepEaten: {}, starving: false, lost: 0 },
+  };
 }
 
 describe('turnSummary', () => {

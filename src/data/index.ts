@@ -11,3 +11,5 @@ export * from './economy';
 export * from './startPosition';
 export * from './population';
 export * from './cityLevels';
+export * from './units';
+export * from './military';
