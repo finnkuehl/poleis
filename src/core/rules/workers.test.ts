@@ -18,7 +18,7 @@ describe('workers', () => {
     addBuilding(s, 'house', at(1, 2));
     addBuilding(s, 'farm', at(2, 2));
     expect(population(s, 0)).toBe(4);
-    expect(housing(s, s.cities[0].id)).toBe(8);
+    expect(housing(s, s.cities[0].id)).toBe(10);
   });
   it('residents below housing: only the residents work', () => {
     const s = setup();

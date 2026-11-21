@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyAction } from '../actions';
-import { addBuilding, addRoad, at, makeTestState } from '../testing';
+import { addBuilding, addCity, addRoad, at, makeTestState } from '../testing';
+import { connectedBuildingIds } from './connection';
 import { tileIndex } from '../map';
 import { planRoad } from './roads';
 
@@ -65,6 +66,25 @@ describe('planRoad', () => {
     const s = makeTestState(OPEN);
     addBuilding(s, 'house', at(3, 1), 1);
     expect(planRoad(s, 0, at(0, 1), at(3, 1)).ok).toBe(false);
+  });
+
+  it('a road can end at an own mine on a mountain, which then connects', () => {
+    const s = makeTestState(['ppppm'], { goods: { wood: 10 } });
+    const center = addCity(s, at(0, 0));
+    const mine = addBuilding(s, 'mine', at(4, 0));
+    const r = planRoad(s, 0, at(0, 0), at(4, 0));
+    if (!r.ok) throw new Error('expected ok');
+    expect(r.plan.newTiles).toHaveLength(3);
+    const built = applyAction(s, { type: 'buildRoad', from: at(0, 0), to: at(4, 0) });
+    expect(built.ok).toBe(true);
+    if (!built.ok) return;
+    expect(connectedBuildingIds(built.state, 0).has(mine)).toBe(true);
+    expect(connectedBuildingIds(built.state, 0).has(center)).toBe(true);
+  });
+
+  it('a mountain without an own building is still not usable', () => {
+    const s = makeTestState(['ppppm']);
+    expect(planRoad(s, 0, at(0, 0), at(4, 0)).ok).toBe(false);
   });
 
   it('noPath when walled off', () => {

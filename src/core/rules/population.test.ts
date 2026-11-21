@@ -5,7 +5,7 @@ import { cityStats, runPopulation } from './population';
 
 const rows = ['ppppppp', 'ppppppp', 'ppppppp'];
 
-/** A city at (1,1) with `houses` extra houses (+4 housing each). */
+/** A city at (1,1) with `houses` extra houses (+6 housing each). */
 function setup(
   opts: { goods?: Goods; residents?: number; level?: CityLevel; houses?: number } = {},
 ) {
@@ -51,17 +51,17 @@ describe('growth', () => {
     const { s, city } = setup({ goods: { fish: 20 }, residents: 4, houses: 1 });
     runPopulation(s, 0);
     expect(city.residents).toBe(5);
-    city.residents = 8;
+    city.residents = 10;
     runPopulation(s, 0);
-    expect(city.residents).toBe(8);
+    expect(city.residents).toBe(10);
   });
   it('a polis grows +2 but not beyond the housing', () => {
     const { s, city } = setup({ goods: { fish: 20 }, residents: 4, houses: 1, level: 'polis' });
     runPopulation(s, 0);
     expect(city.residents).toBe(6);
-    city.residents = 7;
+    city.residents = 9;
     runPopulation(s, 0);
-    expect(city.residents).toBe(8);
+    expect(city.residents).toBe(10);
   });
   it('no growth without food', () => {
     const { s, city } = setup({ residents: 2, houses: 1 });
@@ -164,7 +164,7 @@ describe('cityStats', () => {
     const { s, id } = setup({ goods: { fish: 2, oil: 1 }, residents: 4, houses: 1 });
     const stats = cityStats(s, id);
     expect(stats.residents).toBe(4);
-    expect(stats.housing).toBe(8);
+    expect(stats.housing).toBe(10);
     expect(stats.foodPerTurn).toBe(2);
     expect(stats.needs).toEqual([]);
     expect(stats.supply).toEqual({

@@ -14,9 +14,9 @@ export const en = {
     ocean: 'Open sea – ships only',
     coast: 'Fishery and harbor are built next to it',
     plains: 'Standard for most buildings',
-    forest: 'Wood source – build a woodcutter next to it',
-    hills: 'For quarry, mine and vineyard',
-    mountains: 'Impassable – build a mine or quarry next to it',
+    forest: 'Wood source – a woodcutter can stand on it or next to it',
+    hills: 'For quarry, vineyard and olive grove',
+    mountains: 'Impassable – a mine stands on it, a quarry on or next to it',
   },
   tileInfo: {
     movement: 'Movement',
@@ -148,6 +148,7 @@ export const en = {
   buildings: {
     cityCenter: 'City center',
     storehouse: 'Storehouse',
+    borderTower: 'Border tower',
     house: 'House',
     woodcutter: 'Woodcutter',
     quarry: 'Quarry',

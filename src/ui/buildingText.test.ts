@@ -20,7 +20,7 @@ describe('perTurnText', () => {
     expect(perTurnText('smelter')).toBe('1 Wood, 2 Ore → 1 Bronze');
   });
   it('describes housing and storage', () => {
-    expect(perTurnText('house')).toBe('Houses 4 residents');
+    expect(perTurnText('house')).toBe('Houses 6 residents');
     expect(perTurnText('storehouse')).toBe('Connection point for roads');
     expect(perTurnText('cityCenter')).toBe(
       '+1 Bread. Houses 4 residents. Connection point for roads',

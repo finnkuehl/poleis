@@ -7,6 +7,7 @@ import type { TerrainId } from './terrain';
 export type BuildingId =
   | 'cityCenter'
   | 'storehouse'
+  | 'borderTower'
   | 'house'
   | 'woodcutter'
   | 'quarry'
@@ -67,6 +68,7 @@ export interface BuildingDef {
 export const BUILDING_IDS: readonly BuildingId[] = [
   'cityCenter',
   'storehouse',
+  'borderTower',
   'house',
   'woodcutter',
   'quarry',
@@ -85,11 +87,6 @@ export const BUILDING_IDS: readonly BuildingId[] = [
 ];
 
 const onPlains: readonly PlacementOption[] = [{ on: ['plains'] }];
-// Quarry and mine: on hills, or on plains next to mountains.
-const hillsOrNextToMountains: readonly PlacementOption[] = [
-  { on: ['hills'] },
-  { on: ['plains'], nextTo: ['mountains'] },
-];
 
 export const BUILDINGS: Record<BuildingId, BuildingDef> = {
   // Start building: storage, +4 housing, claims radius 2. Cannot be built by the player.
@@ -123,7 +120,22 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     playerCanBuild: true,
     icon: '📦',
   },
-  // +4 housing.
+  // Claims radius 2 around itself (only unclaimed tiles), so the city can grow outwards.
+  borderTower: {
+    category: 'city',
+    placement: [{ on: ['plains', 'hills'] }],
+    cost: { wood: 2, stone: 4 },
+    workers: 0,
+    inputs: {},
+    outputs: {},
+    housing: 0,
+    isStorage: false,
+    territoryRadius: 2,
+    minLevel: 'settlement',
+    playerCanBuild: true,
+    icon: '🗼',
+  },
+  // +6 housing.
   house: {
     category: 'city',
     placement: onPlains,
@@ -131,17 +143,17 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     workers: 0,
     inputs: {},
     outputs: {},
-    housing: 4,
+    housing: 6,
     isStorage: false,
     territoryRadius: 0,
     minLevel: 'settlement',
     playerCanBuild: true,
     icon: '🏠',
   },
-  // Plains or hills next to forest: +2 wood per turn.
+  // On forest, or on plains/hills next to forest: +2 wood per turn.
   woodcutter: {
     category: 'raw',
-    placement: [{ on: ['plains', 'hills'], nextTo: ['forest'] }],
+    placement: [{ on: ['forest'] }, { on: ['plains', 'hills'], nextTo: ['forest'] }],
     cost: { wood: 2 },
     workers: 1,
     inputs: {},
@@ -153,10 +165,10 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     playerCanBuild: true,
     icon: '🪓',
   },
-  // +2 stone per turn.
+  // On hills or mountains, or on plains next to hills/mountains: +2 stone per turn.
   quarry: {
     category: 'raw',
-    placement: hillsOrNextToMountains,
+    placement: [{ on: ['hills', 'mountains'] }, { on: ['plains'], nextTo: ['hills', 'mountains'] }],
     cost: { wood: 3 },
     workers: 1,
     inputs: {},
@@ -258,10 +270,10 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     playerCanBuild: true,
     icon: '⚙️',
   },
-  // +2 ore per turn, needs 2 workers.
+  // Only on mountains: +2 ore per turn, needs 2 workers.
   mine: {
     category: 'raw',
-    placement: hillsOrNextToMountains,
+    placement: [{ on: ['mountains'] }],
     cost: { wood: 5, stone: 3 },
     workers: 2,
     inputs: {},
