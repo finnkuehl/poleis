@@ -44,7 +44,8 @@ export function turnSummary(report: TurnReport, ctx: SummaryContext = {}): Summa
       });
     }
     const supply = ctx.supply?.[city.cityId];
-    if (city.supplied === true && supply) {
+    // Only report progress up to the goal ("3 of 3"); after that the count keeps running silently.
+    if (city.supplied === true && supply && city.supplyStreak <= supply.turnsNeeded) {
       lines.push({
         text: fill(en.turnSummary.supplied, {
           good: en.goods[supply.good],

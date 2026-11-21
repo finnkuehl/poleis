@@ -75,6 +75,10 @@ const check: AdvanceCheck = {
 };
 
 describe('advanceRows', () => {
+  it('caps the supply count at the goal', () => {
+    const long = { ...check, supply: { ...check.supply, streak: 16, ok: true } };
+    expect(advanceRows(long)[1]?.text).toBe('Oil supplied 3 of 3 turns in a row');
+  });
   it('lists residents, supply and cost', () => {
     const rows = advanceRows(check);
     expect(rows.map((r) => [r.kind, r.ok, r.text])).toEqual([

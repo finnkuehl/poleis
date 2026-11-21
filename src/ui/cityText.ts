@@ -67,7 +67,8 @@ export function advanceRows(check: AdvanceCheck): ChecklistRow[] {
       ok: check.supply.ok,
       text: fill(en.cityPanel.supplyReq, {
         good: en.goods[check.supply.good],
-        streak: check.supply.streak,
+        // Show at most the goal ("3 of 3"), even if the city has been supplied longer.
+        streak: Math.min(check.supply.streak, check.supply.turns),
         turns: formatTurns(check.supply.turns),
       }),
     },

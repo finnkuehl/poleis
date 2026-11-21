@@ -59,6 +59,13 @@ describe('turnSummary', () => {
     const missed = report(cityReport({ supplied: false }));
     expect(turnSummary(missed, { supply: { 1: { good: 'oil', turnsNeeded: 3 } } })).toEqual([]);
   });
+  it('stops reporting supply once the goal is reached', () => {
+    const ctx = { supply: { 1: { good: 'oil' as const, turnsNeeded: 3 } } };
+    expect(turnSummary(report(cityReport({ supplied: true, supplyStreak: 3 })), ctx)).toEqual([
+      { text: 'Oil supplied 3 of 3 turns', kind: 'info' },
+    ]);
+    expect(turnSummary(report(cityReport({ supplied: true, supplyStreak: 16 })), ctx)).toEqual([]);
+  });
   it('announces cities that are ready to advance', () => {
     const r = report(cityReport({ taxes: 3 }));
     expect(turnSummary(r, { canAdvance: { 1: 'polis' } })).toEqual([
