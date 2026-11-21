@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <title>Poleis UI preview</title>
+    <style>
+      body {
+        background: linear-gradient(160deg, #a9b665 0%, #3d8ea3 70%);
+      }
+      #preview-controls {
+        position: fixed;
+        top: 176px;
+        left: 0;
+        right: 0;
+        z-index: 1;
+        display: flex;
+        gap: 6px;
+        padding: 0 8px;
+        overflow-x: auto;
+      }
+      #preview-controls button {
+        flex: none;
+        min-height: 44px;
+        padding: 0 10px;
+        font:
+          14px system-ui,
+          sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="preview-controls"></div>
+    <div id="ui"></div>
+    <script type="module" src="/src/ui/preview.ts"></script>
+  </body>
+</html>

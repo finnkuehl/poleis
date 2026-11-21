@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { formatError, formatGoods, formatStatus, formatTerrains } from './format';
+import {
+  fill,
+  formatConversion,
+  formatError,
+  formatGoods,
+  formatMissing,
+  formatSignedGoods,
+  formatStatus,
+  formatTerrains,
+  formatTurnOf,
+  formatWorkerCount,
+} from './format';
 
 describe('i18n/format', () => {
   it('formats goods in display order and skips zeros', () => {
@@ -29,5 +40,18 @@ describe('i18n/format', () => {
     expect(formatStatus({ kind: 'missingInput', missing: { wood: 2 } })).toBe(
       'Missing input: 2 Wood',
     );
+  });
+  it('formats signed goods, conversions and missing goods', () => {
+    expect(formatSignedGoods({ stone: 1, wood: 2 })).toBe('+2 Wood, +1 Stone');
+    expect(formatConversion({ wood: 2 }, { planks: 2 })).toBe('2 Wood → 2 Planks');
+    expect(formatMissing({ wood: 2 })).toBe('Missing: 2 Wood');
+  });
+  it('formats worker counts and turns', () => {
+    expect(formatWorkerCount(1)).toBe('1 worker');
+    expect(formatWorkerCount(2)).toBe('2 workers');
+    expect(formatTurnOf(3, 120)).toBe('Turn 3 / 120');
+  });
+  it('fills placeholders', () => {
+    expect(fill('Build {building} here?', { building: 'House' })).toBe('Build House here?');
   });
 });
