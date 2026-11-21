@@ -1,14 +1,15 @@
 # Progress
 
-## Current milestone: M3 – Population & city levels (in progress, branch `m3-population`)
+## Current milestone: M3 – Population & city levels (implemented, pull request open)
 
 - [x] Plan approved; decisions recorded in `docs/GAME_DESIGN.md` §6 "Detailed rules (decided in M3)"
-- [ ] Cities with residents: eating, growth, hunger, taxes, oil/wine supply count, pause button
-- [ ] Advance action (Settlement → Polis → Metropolis), Polis buildings, marketplace trading
-- [ ] Map: city level on the city plate, paused marker
-- [ ] Controls: residents and drachmas in the resource bar, city panel with Advance, marketplace panel, pause button, end-of-turn summary
-- [ ] Everything wired together
-- [ ] Browser test, code-review, pull request; phone test on GitHub Pages after the merge
+- [x] Cities with residents: eating, growth, hunger, taxes, oil/wine supply count, pause button
+- [x] Advance action (Settlement → Polis → Metropolis), Polis buildings, marketplace trading
+- [x] Map: city level on the city plate, paused marker
+- [x] Controls: residents and drachmas in the resource bar, city panel with Advance, marketplace panel, pause button, end-of-turn summary
+- [x] Everything wired together; test mode `?sandbox` (large start stock)
+- [x] Browser test (settlement → polis in test mode, trading, pause)
+- [ ] code-review, merge; phone test on GitHub Pages after the merge
 
 **Design decisions M3:** start with 4 residents, oil/wine supplied beforehand (3 turns in a row), fixed marketplace prices (2 goods → 1 drachma, 1 good ← 3 drachmas), pause button per building, fish eaten before bread, no level loss.
 
