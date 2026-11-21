@@ -99,7 +99,7 @@ Woodcutter ─Wood─┴► Smelter ──Bronze──► Units, wonder
 | Border tower | Plains or hills, inside own territory | 2 wood, 4 stone | 0 | claims territory radius 2 around the tower (only unclaimed tiles); the new land belongs to the tower's city | Settlement |
 | Vineyard | Hills | 4 planks, 2 stone | 1 | +2 grapes | Polis |
 | Winery | Plains | 4 planks, 4 stone | 1 | 2 grapes → 2 wine | Polis |
-| Harbor | Plains at coastal water | 8 planks, 4 stone | 1 | builds ships, sea route connection | Polis |
+| Harbor | Plains at coastal water | 8 planks, 4 stone | 1 | builds ships; road connection point like a storehouse | Polis |
 | Marketplace | Plains | 6 planks, 6 stone | 1 | trade goods ↔ drachmas | Polis |
 | Temple | Plains or hills | 10 stone, 4 oil | 0 | +points; later divine favor | Polis |
 | World wonder | Plains, 1 per civilization | 40 stone, 20 planks, 20 bronze, 10 wine | 4 | built over 5 turns; see victory | Metropolis |
@@ -198,6 +198,12 @@ An enemy land unit that stands on a city center undisturbed for one turn takes o
 - A unit on its way moves every turn, so it does not heal.
 - **Display:** every own unit with an order shows a faint line to a small flag at its destination; the selected unit's path shows a turn number (1, 2, 3 …) where it will stop at the end of each coming turn. The turn summary says when a unit arrived or stopped (and why).
 - The **"Units" button** skips units with an order (they are busy); tapping such a unit still selects it.
+
+### Detailed rules (decided in M6: seafaring)
+- **Harbor = connection point:** a harbor works like a storehouse for road connections (buildings next to it or linked to it by road count as connected). There are no sea routes to draw – goods already go into one shared stock and an island city's center connects its own buildings.
+- **Transport ship:** a land unit steps from the coast onto an adjacent own transport ship; a transport carries **up to 2 units**; they step off onto an adjacent land tile. If the ship sinks, the units on board are lost. This is how settlers reach the islands.
+- **Trireme:** attacks ships and land units on tiles next to the water; land units with a ranged attack (archers, range 2) can shoot at ships near the coast. Ships never capture cities.
+- **AI and ships:** in M6 the AI civilizations do not build harbors or ships – they stay on the mainland. Seafaring AI comes later.
 
 ## 8. Territory & vision
 
