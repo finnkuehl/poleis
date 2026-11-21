@@ -5,12 +5,13 @@ import {
   GOODS,
   type BuildingCategory,
   type BuildingId,
+  type CityLevel,
   type Stock,
 } from '../data';
 import { canAfford, missingGoods } from '../core/rules/goods';
 import { en } from '../i18n/en';
-import { formatMissing } from '../i18n/format';
-import { costParts, perTurnText, workersText } from './buildingText';
+import { fill, formatMissing } from '../i18n/format';
+import { costParts, levelReached, perTurnText, workersText } from './buildingText';
 import { button, el } from './dom';
 
 const CATEGORY_ORDER: readonly BuildingCategory[] = ['city', 'food', 'raw', 'processing'];
@@ -18,7 +19,7 @@ const CATEGORY_ORDER: readonly BuildingCategory[] = ['city', 'food', 'raw', 'pro
 export function createBuildMenu(
   root: HTMLElement,
   h: { onPick(id: BuildingId): void; onClose(): void },
-): { open(stock: Stock): void; close(): void } {
+): { open(stock: Stock, cityLevel: CityLevel): void; close(): void } {
   const sheet = el('section', 'sheet build-menu');
   sheet.hidden = true;
   sheet.setAttribute('aria-label', en.ui.buildMenuTitle);
@@ -50,6 +51,23 @@ export function createBuildMenu(
     },
     true,
   );
+
+  /** A building the city level does not allow yet: muted, not pickable, says from which level. */
+  function lockedEntry(id: BuildingId): HTMLButtonElement {
+    const def = BUILDINGS[id];
+    const item = button('build-item is-muted is-locked', '');
+    item.disabled = true;
+    const icon = el('span', 'build-item__icon', def.icon);
+    icon.setAttribute('aria-hidden', 'true');
+    const body = el('span', 'build-item__body');
+    body.appendChild(el('span', 'build-item__name', en.buildings[id]));
+    body.appendChild(el('span', 'build-item__effect', perTurnText(id)));
+    body.appendChild(
+      el('span', 'build-item__level', fill(en.ui.fromLevel, { level: en.levels[def.minLevel] })),
+    );
+    item.append(icon, body);
+    return item;
+  }
 
   function entry(id: BuildingId, stock: Stock): HTMLButtonElement {
     const def = BUILDINGS[id];
@@ -87,7 +105,7 @@ export function createBuildMenu(
   }
 
   return {
-    open(stock) {
+    open(stock, cityLevel) {
       const scrollTop = list.scrollTop;
       list.replaceChildren();
       for (const category of CATEGORY_ORDER) {
@@ -97,7 +115,11 @@ export function createBuildMenu(
         if (ids.length === 0) continue;
         const group = el('div', 'build-menu__group');
         group.appendChild(el('h3', 'build-menu__heading', en.categories[category]));
-        for (const id of ids) group.appendChild(entry(id, stock));
+        for (const id of ids) {
+          group.appendChild(
+            levelReached(cityLevel, BUILDINGS[id].minLevel) ? entry(id, stock) : lockedEntry(id),
+          );
+        }
         list.appendChild(group);
       }
       sheet.hidden = false;

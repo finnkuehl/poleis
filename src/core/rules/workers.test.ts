@@ -1,23 +1,62 @@
 import { describe, expect, it } from 'vitest';
-import { at, addBuilding, makeTestState } from '../testing';
+import { at, addBuilding, addCity, addRoad, makeTestState } from '../testing';
 import { connectedBuildingIds } from './connection';
-import { assignWorkers, population } from './workers';
+import { assignWorkers, housing, population } from './workers';
 
 const rows = Array.from({ length: 5 }, () => 'ppppp');
 
 /** City center at (0,2), a row of buildings next to each other leading away from it. */
 function setup() {
   const s = makeTestState(rows);
-  addBuilding(s, 'cityCenter', at(0, 2));
+  addCity(s, at(0, 2), { radius: 6 });
   return s;
 }
 
 describe('workers', () => {
-  it('population sums housing', () => {
+  it('population sums residents, housing sums the housing of the city', () => {
     const s = setup();
     addBuilding(s, 'house', at(1, 2));
     addBuilding(s, 'farm', at(2, 2));
-    expect(population(s, 0)).toBe(8);
+    expect(population(s, 0)).toBe(4);
+    expect(housing(s, s.cities[0].id)).toBe(8);
+  });
+  it('residents below housing: only the residents work', () => {
+    const s = setup();
+    s.cities[0].residents = 2;
+    addBuilding(s, 'house', at(1, 2));
+    const farm = addBuilding(s, 'farm', at(2, 2));
+    const wc = addBuilding(s, 'woodcutter', at(3, 2));
+    const w = assignWorkers(s, 0, connectedBuildingIds(s, 0));
+    expect([w[farm], w[wc]]).toEqual([2, 0]);
+  });
+  it('each city staffs its own buildings', () => {
+    const s = makeTestState(['ppppppppppppp']);
+    const a = addCity(s, at(0, 0), { radius: 2, residents: 1 });
+    const b = addCity(s, at(10, 0), { radius: 2, residents: 4 });
+    const wcA = addBuilding(s, 'woodcutter', at(1, 0));
+    const farmB = addBuilding(s, 'farm', at(9, 0));
+    const outside = addBuilding(s, 'woodcutter', at(5, 0));
+    addRoad(s, at(2, 0));
+    addRoad(s, at(3, 0));
+    addRoad(s, at(4, 0));
+    addRoad(s, at(6, 0));
+    addRoad(s, at(7, 0));
+    addRoad(s, at(8, 0));
+    expect(a).not.toBe(b);
+    const w = assignWorkers(s, 0, connectedBuildingIds(s, 0));
+    expect(w[wcA]).toBe(1);
+    expect(w[farmB]).toBe(2);
+    expect(w[outside]).toBeUndefined();
+  });
+  it('a paused building gets no workers; they go to the next building', () => {
+    const s = setup();
+    const farm = addBuilding(s, 'farm', at(1, 2));
+    const farm2 = addBuilding(s, 'farm', at(2, 2));
+    const farm3 = addBuilding(s, 'farm', at(3, 2));
+    s.buildings.find((b) => b.id === farm)!.paused = true;
+    const w = assignWorkers(s, 0, connectedBuildingIds(s, 0));
+    expect(w[farm]).toBeUndefined();
+    expect([w[farm2], w[farm3]]).toEqual([2, 2]);
   });
   it('food before raw before processing, regardless of age', () => {
     const s = setup(); // 4 residents
@@ -60,5 +99,23 @@ describe('workers', () => {
     const lonely = addBuilding(s, 'farm', at(4, 4));
     const w = assignWorkers(s, 0, connectedBuildingIds(s, 0));
     expect(w[lonely]).toBeUndefined();
+  });
+});
+
+describe('city buildings and workers', () => {
+  it('a marketplace gets a worker only after the producers', () => {
+    const s = setup();
+    s.cities[0].residents = 2;
+    const market = addBuilding(s, 'marketplace', at(1, 2));
+    const wc = addBuilding(s, 'woodcutter', at(2, 2));
+    const farm = addBuilding(s, 'farm', at(3, 2));
+    const w = assignWorkers(s, 0, connectedBuildingIds(s, 0));
+    expect([w[farm], w[wc], w[market]]).toEqual([2, 0, 0]);
+    s.cities[0].residents = 3;
+    const w2 = assignWorkers(s, 0, connectedBuildingIds(s, 0));
+    expect([w2[farm], w2[wc], w2[market]]).toEqual([2, 1, 0]);
+    s.cities[0].residents = 4;
+    const w3 = assignWorkers(s, 0, connectedBuildingIds(s, 0));
+    expect([w3[farm], w3[wc], w3[market]]).toEqual([2, 1, 1]);
   });
 });

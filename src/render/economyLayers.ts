@@ -7,6 +7,7 @@ import type { GameState } from '../core/state';
 import { BUILDINGS } from '../data';
 import { hexSize } from './config';
 import { roadGeometry, territoryEdges } from './geometry';
+import { badgeKind, cityRingStyle } from './style';
 import { theme } from './theme';
 
 export interface EconomyLayers {
@@ -26,15 +27,6 @@ function flatCorners(c: Point): number[] {
   return hexCorners(c, hexSize).flatMap((p) => [p.x, p.y]);
 }
 
-/** Problems that get a badge (producing / noProduction get none). */
-function hasProblem(status: BuildingStatus | undefined): boolean {
-  return (
-    status?.kind === 'notConnected' ||
-    status?.kind === 'missingWorkers' ||
-    status?.kind === 'missingInput'
-  );
-}
-
 export function createEconomyLayers(): EconomyLayers {
   const tint = new Graphics();
   const border = new Graphics();
@@ -47,6 +39,8 @@ export function createEconomyLayers(): EconomyLayers {
 
   /** One Text per building id; created/destroyed only when buildings appear/disappear. */
   const iconTexts = new Map<number, { text: Text; type: string }>();
+  /** One resident-count Text per city id (same lifecycle as the icons). */
+  const residentTexts = new Map<number, Text>();
 
   function drawTerritory(state: GameState): void {
     tint.clear();
@@ -100,6 +94,8 @@ export function createEconomyLayers(): EconomyLayers {
     plates.clear();
     badges.clear();
     const seen = new Set<number>();
+    const seenCities = new Set<number>();
+    const cityById = new Map(state.cities.map((c) => [c.id, c]));
     const radius = hexSize * theme.plateRadiusFactor;
     const badgeR = hexSize * theme.badgeRadiusFactor;
     for (const b of state.buildings) {
@@ -126,13 +122,60 @@ export function createEconomyLayers(): EconomyLayers {
       }
       entry.text.position.set(p.x, p.y);
 
-      if (hasProblem(statuses[b.id])) {
+      const city = b.type === 'cityCenter' ? cityById.get(b.id) : undefined;
+      if (city) {
+        const ring = cityRingStyle(city.level);
+        if (ring.outerColor !== null) {
+          plates
+            .circle(p.x, p.y, radius + ring.outerWidth / 2 + 1)
+            .stroke({ color: ring.outerColor, width: ring.outerWidth });
+        }
+        if (ring.innerColor !== null) {
+          plates
+            .circle(p.x, p.y, radius - theme.cityInnerRingInset)
+            .stroke({ color: ring.innerColor, width: theme.cityInnerRingWidth });
+        }
+        seenCities.add(city.id);
+        let label = residentTexts.get(city.id);
+        if (!label) {
+          label = new Text({
+            text: String(city.residents),
+            style: {
+              fontSize: hexSize * theme.residentsSizeFactor,
+              fontFamily: theme.fontFamily,
+              fill: 0xffffff,
+              stroke: { color: theme.residentsStrokeColor, width: 3 },
+              fontWeight: 'bold',
+            },
+            resolution: 2,
+          });
+          label.anchor.set(0.5, 0);
+          icons.addChild(label);
+          residentTexts.set(city.id, label);
+        }
+        const str = String(city.residents);
+        if (label.text !== str) label.text = str;
+        label.position.set(p.x, p.y + radius + 2);
+      }
+
+      const kind = badgeKind(statuses[b.id]);
+      if (kind) {
         const bx = p.x + radius * 0.75;
         const by = p.y - radius * 0.75;
-        badges.circle(bx, by, badgeR).fill(theme.badgeColor).stroke({
-          color: theme.plateRimColor,
-          width: 1,
-        });
+        badges
+          .circle(bx, by, badgeR)
+          .fill(kind === 'paused' ? theme.pausedBadgeColor : theme.badgeColor)
+          .stroke({ color: theme.plateRimColor, width: 1 });
+        if (kind === 'paused') {
+          // pause sign: two small bars
+          const bw = badgeR * 0.26;
+          const bh = badgeR * 0.9;
+          badges
+            .rect(bx - bw * 1.4, by - bh / 2, bw, bh)
+            .rect(bx + bw * 0.4, by - bh / 2, bw, bh)
+            .fill(theme.badgeMarkColor);
+          continue;
+        }
         // "!" drawn from shapes: a bar and a dot
         const w = badgeR * 0.28;
         badges
@@ -145,6 +188,11 @@ export function createEconomyLayers(): EconomyLayers {
       if (seen.has(id)) continue;
       entry.text.destroy();
       iconTexts.delete(id);
+    }
+    for (const [id, label] of residentTexts) {
+      if (seenCities.has(id)) continue;
+      label.destroy();
+      residentTexts.delete(id);
     }
   }
 

@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { emptyStock } from '../core/rules/goods';
-import { costParts, perTurnText, statusTone, workersText } from './buildingText';
+import {
+  canPause,
+  costParts,
+  costPartsFromMissing,
+  levelReached,
+  perTurnText,
+  statusTone,
+  workersText,
+} from './buildingText';
 
 describe('perTurnText', () => {
   it('describes producers', () => {
@@ -14,7 +22,9 @@ describe('perTurnText', () => {
   it('describes housing and storage', () => {
     expect(perTurnText('house')).toBe('Houses 4 residents');
     expect(perTurnText('storehouse')).toBe('Connection point for roads');
-    expect(perTurnText('cityCenter')).toBe('Houses 4 residents. Connection point for roads');
+    expect(perTurnText('cityCenter')).toBe(
+      '+1 Bread. Houses 4 residents. Connection point for roads',
+    );
   });
 });
 
@@ -42,8 +52,36 @@ describe('costParts', () => {
 describe('statusTone', () => {
   it('maps statuses', () => {
     expect(statusTone({ kind: 'producing' })).toBe('ok');
+    expect(statusTone({ kind: 'working' })).toBe('ok');
+    expect(statusTone({ kind: 'paused' })).toBe('neutral');
     expect(statusTone({ kind: 'noProduction' })).toBe('neutral');
     expect(statusTone({ kind: 'notConnected' })).toBe('problem');
     expect(statusTone({ kind: 'missingInput', missing: { wood: 1 } })).toBe('problem');
+  });
+});
+
+describe('costPartsFromMissing', () => {
+  it('marks the goods listed as missing', () => {
+    expect(costPartsFromMissing({ planks: 20, stone: 20 }, { stone: 3 })).toEqual([
+      { good: 'stone', amount: 20, missing: true },
+      { good: 'planks', amount: 20, missing: false },
+    ]);
+  });
+});
+
+describe('levelReached', () => {
+  it('compares city levels', () => {
+    expect(levelReached('settlement', 'settlement')).toBe(true);
+    expect(levelReached('settlement', 'polis')).toBe(false);
+    expect(levelReached('metropolis', 'polis')).toBe(true);
+  });
+});
+
+describe('canPause', () => {
+  it('is true only for buildings with workers', () => {
+    expect(canPause('woodcutter')).toBe(true);
+    expect(canPause('marketplace')).toBe(true);
+    expect(canPause('house')).toBe(false);
+    expect(canPause('temple')).toBe(false);
   });
 });

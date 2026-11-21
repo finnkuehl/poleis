@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { at, addBuilding, makeTestState } from '../testing';
+import { at, addBuilding, addCity, makeTestState } from '../testing';
 import { previewProduction, runProduction } from './production';
 
 const rows = Array.from({ length: 5 }, () => 'ppppp');
@@ -7,7 +7,7 @@ const rows = Array.from({ length: 5 }, () => 'ppppp');
 /** City center (4 residents) at (0,2); buildings are added in a connected row. */
 function setup(goods = {}) {
   const s = makeTestState(rows, { goods });
-  addBuilding(s, 'cityCenter', at(0, 2));
+  addCity(s, at(0, 2), { radius: 6 });
   return s;
 }
 
@@ -17,7 +17,7 @@ describe('production', () => {
     const id = addBuilding(s, 'woodcutter', at(1, 2));
     const report = runProduction(s, 0);
     expect(s.players[0].goods.wood).toBe(2);
-    expect(report.delta).toEqual({ wood: 2 });
+    expect(report.delta).toEqual({ wood: 2, bread: 1 });
     expect(report.buildings.find((b) => b.buildingId === id)?.status).toEqual({
       kind: 'producing',
     });
@@ -29,7 +29,7 @@ describe('production', () => {
     const report = runProduction(s, 0);
     expect(s.players[0].goods.wood).toBe(0);
     expect(s.players[0].goods.planks).toBe(2);
-    expect(report.delta).toEqual({ planks: 2 });
+    expect(report.delta).toEqual({ planks: 2, bread: 1 });
   });
   it('sawmill without wood is missingInput', () => {
     const s = setup();
@@ -52,6 +52,14 @@ describe('production', () => {
       needed: 2,
     });
   });
+  it('a paused building does nothing and is reported as paused', () => {
+    const s = setup();
+    const id = addBuilding(s, 'woodcutter', at(1, 2));
+    s.buildings.find((b) => b.id === id)!.paused = true;
+    const report = runProduction(s, 0);
+    expect(report.buildings.find((b) => b.buildingId === id)?.status).toEqual({ kind: 'paused' });
+    expect(s.players[0].goods.wood).toBe(0);
+  });
   it('reports not connected', () => {
     const s = setup();
     const id = addBuilding(s, 'woodcutter', at(4, 4));
@@ -61,11 +69,22 @@ describe('production', () => {
     });
     expect(s.players[0].goods.wood).toBe(0);
   });
-  it('houses and storehouses have noProduction', () => {
+  it('houses have noProduction', () => {
     const s = setup();
-    addBuilding(s, 'house', at(1, 2));
+    const id = addBuilding(s, 'house', at(1, 2));
     const report = runProduction(s, 0);
-    expect(report.buildings.every((b) => b.status.kind === 'noProduction')).toBe(true);
+    expect(report.buildings.find((b) => b.buildingId === id)?.status.kind).toBe('noProduction');
+  });
+  it('city center produces 1 bread by itself, without workers', () => {
+    const s = setup();
+    s.cities[0].residents = 0;
+    const center = s.buildings[0].id;
+    const report = runProduction(s, 0);
+    expect(report.buildings.find((b) => b.buildingId === center)?.status).toEqual({
+      kind: 'producing',
+    });
+    expect(s.players[0].goods.bread).toBe(1);
+    expect(report.delta).toEqual({ bread: 1 });
   });
   it('smelter needs ore AND wood', () => {
     const s = setup({ ore: 2 });
@@ -79,7 +98,7 @@ describe('production', () => {
     expect(report.buildings.find((b) => b.buildingId === id)?.status.kind).toBe('producing');
     expect(s.players[0].goods.bronze).toBe(1);
     expect(s.players[0].goods.ore).toBe(0);
-    expect(report.delta).toEqual({ ore: -2, wood: -1, bronze: 1 });
+    expect(report.delta).toEqual({ ore: -2, wood: -1, bronze: 1, bread: 1 });
   });
   it('preview does not mutate and equals the run result', () => {
     const s = setup({ wood: 1 });
@@ -89,5 +108,29 @@ describe('production', () => {
     const preview = previewProduction(s, 0);
     expect(JSON.stringify(s)).toBe(before);
     expect(runProduction(s, 0)).toEqual(preview);
+  });
+});
+
+describe('service buildings', () => {
+  it('marketplace is working when connected and staffed; temple has no production', () => {
+    const s = setup();
+    const market = addBuilding(s, 'marketplace', at(1, 2));
+    const temple = addBuilding(s, 'temple', at(2, 2));
+    const statuses = previewProduction(s, 0).buildings;
+    expect(statuses.find((b) => b.buildingId === market)?.status).toEqual({ kind: 'working' });
+    expect(statuses.find((b) => b.buildingId === temple)?.status).toEqual({ kind: 'noProduction' });
+  });
+  it('marketplace can be paused, unconnected or unstaffed', () => {
+    const s = setup();
+    const market = addBuilding(s, 'marketplace', at(1, 2));
+    const far = addBuilding(s, 'marketplace', at(4, 0));
+    const kind = (id: number) =>
+      previewProduction(s, 0).buildings.find((b) => b.buildingId === id)?.status.kind;
+    expect(kind(far)).toBe('notConnected');
+    s.buildings.find((b) => b.id === market)!.paused = true;
+    expect(kind(market)).toBe('paused');
+    s.buildings.find((b) => b.id === market)!.paused = false;
+    s.cities[0].residents = 0;
+    expect(kind(market)).toBe('missingWorkers');
   });
 });

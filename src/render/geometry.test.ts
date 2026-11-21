@@ -79,9 +79,9 @@ describe('roadGeometry', () => {
     const ia = tileIndex(s.map, a);
     s.roads[ia] = true;
     s.territory[ia] = 0;
-    s.buildings = [{ id: 1, type: 'house', owner: 1, hex: bHex }];
+    s.buildings = [{ id: 1, type: 'house', owner: 1, hex: bHex, paused: false }];
     expect(roadGeometry(s).segments).toHaveLength(0);
-    s.buildings = [{ id: 1, type: 'house', owner: 0, hex: bHex }];
+    s.buildings = [{ id: 1, type: 'house', owner: 0, hex: bHex, paused: false }];
     const g = roadGeometry(s);
     expect(g.segments).toEqual([[ia, tileIndex(s.map, bHex)]]);
     expect(g.stubs).toEqual([]);

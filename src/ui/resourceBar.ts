@@ -1,4 +1,4 @@
-// Top strip: turn chip and one chip per good (icon + amount + change per turn).
+// Top strip: turn chip, residents chip and one chip per good (icon + amount + change per turn).
 import { GOOD_IDS, GOODS, type Goods, type GoodId, type Stock } from '../data';
 import { en } from '../i18n/en';
 import { formatTurnOf } from '../i18n/format';
@@ -16,7 +16,13 @@ interface Chip {
 }
 
 export function createResourceBar(root: HTMLElement): {
-  update(stock: Stock, delta: Goods | null, turn: number, turnLimit: number): void;
+  update(
+    stock: Stock,
+    delta: Goods | null,
+    turn: number,
+    turnLimit: number,
+    people: { residents: number; housing: number },
+  ): void;
 } {
   const bar = el('header', 'resource-bar');
   const scroll = el('div', 'resource-bar__scroll');
@@ -26,12 +32,19 @@ export function createResourceBar(root: HTMLElement): {
   const label = el('div', 'resource-bar__label');
   label.hidden = true;
   label.setAttribute('role', 'status');
-  scroll.appendChild(turnChip);
+  const residentsChip = el('button', 'resource-chip');
+  residentsChip.type = 'button';
+  residentsChip.setAttribute('role', 'listitem');
+  const residentsIcon = el('span', 'resource-chip__icon', '\u{1F465}');
+  residentsIcon.setAttribute('aria-hidden', 'true');
+  const residentsAmount = el('span', 'resource-chip__amount');
+  residentsChip.append(residentsIcon, residentsAmount);
+  scroll.append(turnChip, residentsChip);
 
   const chips = new Map<GoodId, Chip>();
   let labelTimer: number | undefined;
-  const showLabel = (id: GoodId): void => {
-    label.textContent = en.goods[id];
+  const showLabel = (text: string): void => {
+    label.textContent = text;
     label.hidden = false;
     window.clearTimeout(labelTimer);
     labelTimer = window.setTimeout(() => {
@@ -48,16 +61,22 @@ export function createResourceBar(root: HTMLElement): {
     const amount = el('span', 'resource-chip__amount');
     const delta = el('span', 'resource-chip__delta');
     chip.append(icon, amount, delta);
-    chip.addEventListener('click', () => showLabel(id));
+    chip.addEventListener('click', () => showLabel(en.goods[id]));
     scroll.appendChild(chip);
     chips.set(id, { root: chip, amount, delta });
   }
+  residentsChip.addEventListener('click', () => showLabel(en.ui.residentsHousing));
   bar.append(scroll, label);
   root.appendChild(bar);
 
   return {
-    update(stock, delta, turn, turnLimit) {
+    update(stock, delta, turn, turnLimit, people) {
       turnChip.textContent = formatTurnOf(turn, turnLimit);
+      residentsAmount.textContent = `${people.residents} / ${people.housing}`;
+      residentsChip.setAttribute(
+        'aria-label',
+        `${en.ui.residentsHousing} ${people.residents} / ${people.housing}`,
+      );
       for (const id of GOOD_IDS) {
         const chip = chips.get(id);
         if (!chip) continue;

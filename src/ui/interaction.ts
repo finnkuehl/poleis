@@ -3,20 +3,45 @@ import { applyAction, type Action } from '../core/actions';
 import { hexEquals, type Hex } from '../core/hex';
 import { terrainAt, tileIndex } from '../core/map';
 import {
+  advanceCheck,
   assignWorkers,
   canAfford,
+  canTrade,
+  cityIdOf,
+  cityStats,
+  housing,
   checkPlacement,
   connectedBuildingIds,
   missingGoods,
   planRoad,
   previewProduction,
+  runProduction,
   validPlacements,
   type BuildingStatus,
 } from '../core/rules';
 import type { GameState } from '../core/state';
-import { BUILDINGS, economyConfig, type BuildingId, type Stock } from '../data';
+import {
+  BUILDING_IDS,
+  BUILDINGS,
+  CITY_LEVELS,
+  economyConfig,
+  type BuildingId,
+  type CityLevel,
+  type GoodId,
+  type Stock,
+} from '../data';
 import { en } from '../i18n/en';
-import { fill, formatError, formatGoods, formatMissing, formatRoadTiles } from '../i18n/format';
+import {
+  fill,
+  formatAdvanced,
+  formatAdvanceTo,
+  formatBought,
+  formatError,
+  formatGoods,
+  formatMissing,
+  formatRoadTiles,
+  formatSold,
+} from '../i18n/format';
 import { createRenderer } from '../render/app';
 import {
   createBottomBar,
@@ -28,6 +53,7 @@ import {
   createTileInfoPanel,
   createToast,
   perTurnText,
+  turnSummary,
 } from './index';
 
 const PLAYER = 0;
@@ -43,6 +69,7 @@ export async function createGame(
   appContainer: HTMLElement,
   uiContainer: HTMLElement,
   initialState: GameState,
+  testMode = false,
 ): Promise<void> {
   let state = initialState;
   let mode: Mode = { kind: 'idle' };
@@ -51,7 +78,7 @@ export async function createGame(
   let menuOpen = false;
 
   // Seed label first: later elements stack above it.
-  createSeedLabel(uiContainer, state.seedText);
+  createSeedLabel(uiContainer, state.seedText, testMode);
 
   const renderer = await createRenderer(appContainer, state, (h) => onTileTap(h));
   const toast = createToast(uiContainer);
@@ -79,7 +106,7 @@ export async function createGame(
       panel.hide();
       menuOpen = true;
       bottomBar.setMode('build');
-      menu.open(stockOf(state));
+      menu.open(stockOf(state), highestLevel(state));
     },
     onRoad: () => {
       if (mode.kind === 'roadStart' || mode.kind === 'roadEnd') {
@@ -93,7 +120,7 @@ export async function createGame(
     },
     onEndTurn: () => {
       resetToIdle();
-      commit({ type: 'endTurn' });
+      endTurn();
     },
   });
 
@@ -105,6 +132,48 @@ export async function createGame(
     const player = s.players.find((p) => p.id === PLAYER);
     if (!player) throw new Error('Player 0 missing');
     return player.goods;
+  }
+
+  function highestLevel(s: GameState): CityLevel {
+    let best = 0;
+    for (const c of s.cities) {
+      if (c.owner === PLAYER) best = Math.max(best, CITY_LEVELS.indexOf(c.level));
+    }
+    return CITY_LEVELS[best];
+  }
+
+  /** Ids of the player's cities that can advance right now. */
+  function readyCities(s: GameState): Set<number> {
+    const ready = new Set<number>();
+    for (const c of s.cities) {
+      if (c.owner === PLAYER && advanceCheck(s, c.id)?.canAdvance) ready.add(c.id);
+    }
+    return ready;
+  }
+
+  /** Ends the turn and shows one toast with the news of the turn. */
+  function endTurn(): void {
+    const readyBefore = readyCities(state);
+    if (!commit({ type: 'endTurn' })) return;
+    const report = state.lastReport;
+    if (!report) return;
+    const canAdvance: Record<number, CityLevel> = {};
+    const supply: Record<number, { good: GoodId; turnsNeeded: number }> = {};
+    for (const c of state.cities) {
+      if (c.owner !== PLAYER) continue;
+      const check = advanceCheck(state, c.id);
+      if (!check) continue;
+      if (check.to && check.canAdvance && !readyBefore.has(c.id)) canAdvance[c.id] = check.to;
+      supply[c.id] = { good: check.supply.good, turnsNeeded: check.supply.turns };
+    }
+    const lines = turnSummary(report, { canAdvance, supply });
+    if (lines.length === 0) return;
+    const isError = lines.some((l) => l.kind === 'error');
+    toast.show(
+      lines.map((l) => l.text).join('\n'),
+      isError ? 'error' : 'info',
+      3000 + 1000 * (lines.length - 1),
+    );
   }
 
   /** Back to idle: no mode, highlights, preview, banner, sheets, menu or selection. */
@@ -122,6 +191,18 @@ export async function createGame(
     panel.hide();
   }
 
+  /** Residents and housing summed over the player's cities. */
+  function people(): { residents: number; housing: number } {
+    let residents = 0;
+    let housingSum = 0;
+    for (const c of state.cities) {
+      if (c.owner !== PLAYER) continue;
+      residents += c.residents;
+      housingSum += housing(state, c.id);
+    }
+    return { residents, housing: housingSum };
+  }
+
   function refresh(): void {
     statuses = {};
     for (const report of previewProduction(state, PLAYER).buildings) {
@@ -133,6 +214,7 @@ export async function createGame(
       state.lastReport?.delta ?? null,
       state.turn,
       economyConfig.turnLimit,
+      people(),
     );
     bottomBar.setTurn(state.turn);
     if (mode.kind === 'idle') showPanel();
@@ -172,6 +254,27 @@ export async function createGame(
       return;
     }
     const building = buildingAt(hex);
+    if (building?.type === 'cityCenter') {
+      const cityId = cityIdOf(state, building);
+      const city = state.cities.find((c) => c.id === cityId);
+      const check = advanceCheck(state, cityId);
+      if (city && check) {
+        // Residents eat after this turn's production, so judge food, needs and taxes
+        // against the stock as it will be after production (a copy – the real state stays).
+        const afterProduction = structuredClone(state);
+        runProduction(afterProduction, PLAYER);
+        panel.showCity({
+          hex,
+          terrain,
+          level: city.level,
+          stats: cityStats(afterProduction, cityId),
+          check,
+          stock: stockOf(afterProduction),
+          onAdvance: check.to ? () => askAdvance(cityId) : undefined,
+        });
+        return;
+      }
+    }
     if (building) {
       const def = BUILDINGS[building.type];
       const assigned = assignWorkers(state, PLAYER, connectedBuildingIds(state, PLAYER));
@@ -181,6 +284,33 @@ export async function createGame(
         type: building.type,
         status: statuses[building.id] ?? { kind: 'noProduction' },
         workers: { assigned: assigned[building.id] ?? 0, needed: def.workers },
+        paused: building.paused,
+        onTogglePause: () => {
+          const name = en.buildings[building.type];
+          if (commit({ type: 'togglePause', hex })) {
+            toast.show(
+              fill(building.paused ? en.flow.resumed : en.flow.paused, { building: name }),
+            );
+          }
+        },
+        trade:
+          building.type === 'marketplace'
+            ? {
+                enabled: canTrade(state, PLAYER),
+                stock: stockOf(state),
+                onSell: (good) => {
+                  const { sellAmount, sellPrice } = economyConfig.market;
+                  if (commit({ type: 'trade', good, direction: 'sell', lots: 1 })) {
+                    toast.show(formatSold(good, sellAmount, sellPrice));
+                  }
+                },
+                onBuy: (good) => {
+                  if (commit({ type: 'trade', good, direction: 'buy', lots: 1 })) {
+                    toast.show(formatBought(good, 1, economyConfig.market.buyPrice));
+                  }
+                },
+              }
+            : undefined,
         onDemolish:
           building.type === 'cityCenter'
             ? undefined
@@ -219,6 +349,32 @@ export async function createGame(
         } else {
           showPanel();
         }
+      },
+      onCancel: () => showPanel(),
+    });
+  }
+
+  function askAdvance(cityId: number): void {
+    const check = advanceCheck(state, cityId);
+    if (!check?.to) return;
+    const target = check.to;
+    const names = BUILDING_IDS.filter((id) => BUILDINGS[id].minLevel === target).map((id) =>
+      en.buildings[id].toLowerCase(),
+    );
+    const list =
+      names.length > 1
+        ? `${names.slice(0, -1).join(', ')} ${en.cityPanel.listAnd} ${names[names.length - 1]}`
+        : names.join('');
+    const lines = [`${en.ui.cost}: ${formatGoods(check.cost.cost) || '–'}`];
+    if (names.length > 0) lines.push(fill(en.cityPanel.advanceUnlocks, { list }));
+    panel.hide();
+    confirm.show({
+      title: `${formatAdvanceTo(target)}?`,
+      lines,
+      confirmLabel: en.cityPanel.advanceConfirm,
+      onConfirm: () => {
+        if (commit({ type: 'advanceCity', cityId })) toast.show(formatAdvanced(target));
+        else showPanel();
       },
       onCancel: () => showPanel(),
     });

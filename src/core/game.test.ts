@@ -1,11 +1,12 @@
 // Integration: whole economy flows, driven only through applyAction.
 
 import { describe, expect, it } from 'vitest';
+import type { Goods } from '../data';
 import { applyAction, type Action } from './actions';
-import { claimTerritory, validPlacements } from './rules';
+import { checkPlacement, validPlacements } from './rules';
 import type { BuildingStatus } from './rules';
 import { createGameState, type GameState } from './state';
-import { addBuilding, at, makeTestState } from './testing';
+import { addBuilding, addCity, at, makeTestState } from './testing';
 
 function run(state: GameState, ...actions: Action[]): GameState {
   let s = state;
@@ -21,11 +22,9 @@ function statusOf(s: GameState, id: number): BuildingStatus | undefined {
   return s.lastReport?.buildings.find((b) => b.buildingId === id)?.status;
 }
 
-function setup(rows: string[], wood = 20, stone = 10): GameState {
-  const s = makeTestState(rows, { goods: { wood, stone }, ownAll: false });
-  const center = at(1, 1);
-  addBuilding(s, 'cityCenter', center);
-  claimTerritory(s, center, 6, 0);
+function setup(rows: string[], wood = 20, stone = 10, extra: Goods = {}): GameState {
+  const s = makeTestState(rows, { goods: { wood, stone, ...extra }, ownAll: false });
+  addCity(s, at(1, 1), { radius: 6 });
   return s;
 }
 
@@ -47,9 +46,9 @@ describe('economy flow', () => {
     expect(t.players[0].goods.planks).toBe(2);
   });
 
-  it('workers: 4 housed, a 5th worker waits until a house is built', () => {
-    // City center at (1,1); all builds below are direct neighbors of it.
-    const s = setup(['phpp', 'pppf', 'pppp'], 40, 20);
+  it('workers: 4 residents, a 5th worker waits until a house is built and the city grew', () => {
+    // City center at (1,1); all builds below are direct neighbors of it. Bread feeds the city.
+    const s = setup(['phpp', 'pppf', 'pppp'], 40, 20, { bread: 20 });
     let t = run(
       s,
       { type: 'build', building: 'farm', hex: at(0, 1) },
@@ -61,7 +60,51 @@ describe('economy flow', () => {
     const sawmillId = t.buildings.find((b) => b.type === 'sawmill')!.id;
     expect(statusOf(t, sawmillId)).toMatchObject({ kind: 'missingWorkers' });
     t = run(t, { type: 'build', building: 'house', hex: at(2, 0) }, { type: 'endTurn' });
+    // The house gives room, but the 5th resident only moves in at the end of this turn.
+    expect(statusOf(t, sawmillId)).toMatchObject({ kind: 'missingWorkers' });
+    expect(t.cities[0].residents).toBe(5);
+    t = run(t, { type: 'endTurn' });
     expect(statusOf(t, sawmillId)).toEqual({ kind: 'producing' });
+  });
+});
+
+describe('turn order', () => {
+  it('bread baked in this turn can be eaten in the same turn; delta is combined', () => {
+    const s = makeTestState(['ppppp'], { goods: { grain: 2 } });
+    addCity(s, at(0, 0), { radius: 4 });
+    addBuilding(s, 'bakery', at(1, 0)); // 2 grain -> 3 bread, 1 worker
+    const t = run(s, { type: 'endTurn' });
+    // 3 bread baked + 1 from the city center, 2 eaten (4 residents), 2 kept; 4 -> 4 residents (no free housing).
+    expect(t.players[0].goods.bread).toBe(2);
+    expect(t.players[0].goods.drachmas).toBe(3);
+    expect(t.lastReport?.delta).toEqual({ grain: -2, bread: 2, drachmas: 3 });
+    expect(t.lastReport?.cities).toHaveLength(1);
+    expect(t.lastReport?.cities[0]).toMatchObject({ fed: true, foodEaten: { bread: 2 }, taxes: 3 });
+  });
+});
+
+describe('city center bread', () => {
+  it('a new game without other food never drops below 2 residents', () => {
+    let s = createGameState('bread-test');
+    const residents: number[] = [];
+    for (let i = 0; i < 6; i++) {
+      s = run(s, { type: 'endTurn' });
+      residents.push(s.cities[0].residents);
+    }
+    // Turn 1: 4 residents need 2 bread, only 1 -> 3 residents (starved by 1).
+    // Turn 2: 3 need 2, only 1 -> 2 residents. Then 2 residents eat the 1 bread and are fed;
+    // a fed city with free housing grows by 1, so it swings between 2 and 3 but never lower.
+    expect(residents.slice(0, 2)).toEqual([3, 2]);
+    expect(Math.min(...residents)).toBe(2);
+    expect(Math.max(...residents)).toBeLessThanOrEqual(3);
+  });
+  it('2 residents are fed by the city center bread alone', () => {
+    const s = makeTestState(['ppppp']);
+    addCity(s, at(0, 0), { radius: 2 });
+    s.cities[0].residents = 2;
+    const t = run(s, { type: 'endTurn' });
+    expect(t.lastReport?.cities[0]).toMatchObject({ fed: true, foodEaten: { bread: 1 } });
+    expect(t.players[0].goods.bread).toBe(0);
   });
 });
 
@@ -78,5 +121,26 @@ describe('determinism', () => {
       return s;
     };
     expect(play()).toEqual(play());
+  });
+});
+
+describe('advancing to polis', () => {
+  it('grow to 20 residents, supply oil 3 turns, advance, then build a vineyard on hills', () => {
+    const s = makeTestState(['hpppppp', 'pppppppp'.slice(0, 7), 'ppppppp'], {
+      goods: { bread: 200, oil: 60, planks: 40, stone: 40, drachmas: 30, wood: 30 },
+      ownAll: false,
+    });
+    addCity(s, at(3, 1), { radius: 4 });
+    for (const h of [at(2, 1), at(4, 1), at(2, 0), at(4, 0)]) addBuilding(s, 'house', h);
+    // 4 houses + city center = 20 housing; the city grows by 1 per turn from 4 to 20.
+    let t = s;
+    for (let i = 0; i < 16; i++) t = run(t, { type: 'endTurn' });
+    expect(t.cities[0].residents).toBe(20);
+    expect(t.cities[0].supplyStreak).toBeGreaterThanOrEqual(3);
+    t = run(t, { type: 'advanceCity', cityId: t.cities[0].id });
+    expect(t.cities[0].level).toBe('polis');
+    expect(checkPlacement(t, 0, 'vineyard', at(0, 0))).toBeNull();
+    t = run(t, { type: 'build', building: 'vineyard', hex: at(0, 0) });
+    expect(t.buildings.some((b) => b.type === 'vineyard')).toBe(true);
   });
 });

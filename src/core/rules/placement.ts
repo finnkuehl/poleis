@@ -1,6 +1,6 @@
 // Placement rules for buildings.
 
-import { BUILDINGS, type BuildingId, type TerrainId } from '../../data';
+import { BUILDINGS, CITY_LEVELS, type BuildingId, type TerrainId } from '../../data';
 import { hexEquals, neighbors, type Hex } from '../hex';
 import { allHexes, inBounds, tileIndex, terrainAt } from '../map';
 import type { GameState, PlayerId } from '../state';
@@ -31,8 +31,14 @@ export function checkPlacement(
   const def = BUILDINGS[type];
   if (!inBounds(state.map, h)) return { code: 'outOfBounds' };
   if (!def.playerCanBuild) return { code: 'cannotBuildType' };
-  if (def.minLevel !== 'settlement') return { code: 'levelTooLow' };
   if (ownerAt(state, h) !== player) return { code: 'notOwnTerritory' };
+  // The tile's city must have reached the building's level.
+  const city = state.cities.find((c) => c.id === state.tileCity[tileIndex(state.map, h)]);
+  // (A tile without a city counts as the lowest level.)
+  const level = city?.level ?? CITY_LEVELS[0];
+  if (CITY_LEVELS.indexOf(level) < CITY_LEVELS.indexOf(def.minLevel)) {
+    return { code: 'levelTooLow', level: def.minLevel };
+  }
   if (state.buildings.some((b) => hexEquals(b.hex, h)) || state.roads[tileIndex(state.map, h)]) {
     return { code: 'tileOccupied' };
   }

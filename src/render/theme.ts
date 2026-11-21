@@ -47,6 +47,14 @@ export const theme = {
   badgeColor: 0xc2902a,
   badgeMarkColor: 0xffffff,
   badgeRadiusFactor: 0.24,
+  /** Paused building: grey badge with a white pause sign */
+  pausedBadgeColor: 0x8a8f94,
+  /** City-level rings: inner gold ring (Metropolis) inset and width in px */
+  cityInnerRingInset: 4,
+  cityInnerRingWidth: 1.5,
+  /** Resident count label under the city center */
+  residentsSizeFactor: 0.42,
+  residentsStrokeColor: 0x1d2b36,
   /** Highlight of valid tiles: white fill + outline */
   highlightColor: 0xffffff,
   highlightFillAlpha: 0.28,

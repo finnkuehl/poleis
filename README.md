@@ -17,6 +17,10 @@ npm run dev
 
 Then open http://localhost:5173 in your browser.
 
+**Useful address options:**
+- `?seed=123` (or `?seed=athens`) – always the same map.
+- `&sandbox` – test mode: start with a large stock of goods, e.g. `?seed=1&sandbox`. Handy for trying out later stages such as advancing to Polis. The seed label shows "(test mode)".
+
 ## Testing on a phone over Wi-Fi
 
 ```

@@ -4,7 +4,9 @@ import {
   BUILDINGS,
   economyConfig,
   GOOD_IDS,
+  populationConfig,
   type BuildingId,
+  type CityLevel,
   type Stock,
   type TerrainId,
 } from '../data';
@@ -35,6 +37,19 @@ export interface Building {
   type: BuildingId;
   owner: PlayerId;
   hex: Hex;
+  /** Paused buildings get no workers and produce nothing. */
+  paused: boolean;
+}
+
+export interface City {
+  /** Id of its city-center building. */
+  id: number;
+  owner: PlayerId;
+  center: Hex;
+  level: CityLevel;
+  residents: number;
+  /** Turns in a row the next level's supply good was supplied. */
+  supplyStreak: number;
 }
 
 export interface GameState {
@@ -53,6 +68,10 @@ export interface GameState {
   roads: boolean[];
   /** Per tile index: owning PlayerId, -1 = nobody. */
   territory: number[];
+  /** All cities, in creation order (id = id of the city center). */
+  cities: City[];
+  /** Per tile index: id of the city whose territory it is, -1 = none. */
+  tileCity: number[];
   /** Id of the next building. */
   nextId: number;
   /** Result of the latest production (for the UI). */
@@ -60,11 +79,13 @@ export interface GameState {
 }
 
 /** New game: seed text -> map; the RNG state is the one after generation. */
-export function createGameState(seedText: string): GameState {
+export function createGameState(seedText: string, options: { sandbox?: boolean } = {}): GameState {
   const { map, rng } = generateMap(seedFromText(seedText));
   const goods = {} as Stock;
   for (const id of GOOD_IDS) goods[id] = 0;
-  for (const [id, amount] of Object.entries(economyConfig.startGoods)) {
+  for (const [id, amount] of Object.entries(
+    options.sandbox ? economyConfig.sandboxGoods : economyConfig.startGoods,
+  )) {
     goods[id as keyof Stock] = amount;
   }
   // Starting city: same RNG as the map generation, so everything depends on the seed only.
@@ -79,12 +100,23 @@ export function createGameState(seedText: string): GameState {
     turn: 1,
     currentPlayer: 0,
     players: [{ id: 0, isHuman: true, goods }],
-    buildings: [{ id: 1, type: 'cityCenter', owner: 0, hex: start }],
+    buildings: [{ id: 1, type: 'cityCenter', owner: 0, hex: start, paused: false }],
     roads: map.tiles.map(() => false),
     territory,
+    cities: [
+      {
+        id: 1,
+        owner: 0,
+        center: start,
+        level: 'settlement',
+        residents: populationConfig.startResidents,
+        supplyStreak: 0,
+      },
+    ],
+    tileCity: map.tiles.map(() => -1),
     nextId: 2,
     lastReport: null,
   };
-  claimTerritory(state, start, BUILDINGS.cityCenter.territoryRadius, 0);
+  claimTerritory(state, start, BUILDINGS.cityCenter.territoryRadius, 0, 1);
   return state;
 }

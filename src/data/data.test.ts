@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CITY_LEVEL_DEFS, CITY_LEVELS } from './cityLevels';
 import { BUILDING_IDS, BUILDINGS } from './buildings';
 import { economyConfig } from './economy';
 import { GOOD_IDS, GOODS } from './goods';
@@ -42,5 +43,53 @@ describe('data', () => {
       playerCanBuild: false,
     });
     expect(economyConfig.startGoods).toEqual({ wood: 20, stone: 10 });
+  });
+  it('every city level supplies a good that the next level needs', () => {
+    for (const level of CITY_LEVELS) {
+      const next = CITY_LEVEL_DEFS[level].next;
+      if (!next) continue;
+      expect(CITY_LEVEL_DEFS[next.to].needs.some((n) => n.good === next.supplyGood)).toBe(true);
+    }
+  });
+});
+
+describe('polis buildings', () => {
+  it('match the design table', () => {
+    expect(BUILDINGS.vineyard).toMatchObject({
+      category: 'raw',
+      placement: [{ on: ['hills'] }],
+      cost: { planks: 4, stone: 2 },
+      workers: 1,
+      outputs: { grapes: 2 },
+      minLevel: 'polis',
+    });
+    expect(BUILDINGS.winery).toMatchObject({
+      category: 'processing',
+      placement: [{ on: ['plains'] }],
+      cost: { planks: 4, stone: 4 },
+      workers: 1,
+      inputs: { grapes: 2 },
+      outputs: { wine: 2 },
+      minLevel: 'polis',
+    });
+    expect(BUILDINGS.marketplace).toMatchObject({
+      category: 'city',
+      placement: [{ on: ['plains'] }],
+      cost: { planks: 6, stone: 6 },
+      workers: 1,
+      outputs: {},
+      minLevel: 'polis',
+    });
+    expect(BUILDINGS.temple).toMatchObject({
+      category: 'city',
+      placement: [{ on: ['plains', 'hills'] }],
+      cost: { stone: 10, oil: 4 },
+      workers: 0,
+      minLevel: 'polis',
+    });
+    expect(economyConfig.market).toEqual({ sellAmount: 2, sellPrice: 1, buyPrice: 3 });
+  });
+  it('every building has a valid minLevel', () => {
+    for (const id of BUILDING_IDS) expect(CITY_LEVELS).toContain(BUILDINGS[id].minLevel);
   });
 });

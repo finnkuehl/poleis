@@ -1,11 +1,20 @@
 // All player actions and applyAction(state, action) -> new state or error.
 
-import { BUILDINGS, economyConfig, type BuildingId } from '../data';
+import {
+  BUILDINGS,
+  CITY_LEVEL_DEFS,
+  economyConfig,
+  type BuildingId,
+  type GoodId,
+  type Goods,
+} from '../data';
 import type { Hex } from './hex';
 import { hexEquals } from './hex';
 import { tileIndex } from './map';
 import {
   addGoods,
+  advanceCheck,
+  canTrade,
   canAfford,
   checkPlacement,
   claimTerritory,
@@ -23,6 +32,9 @@ export type Action =
   | { type: 'build'; building: BuildingId; hex: Hex }
   | { type: 'buildRoad'; from: Hex; to: Hex }
   | { type: 'demolish'; hex: Hex }
+  | { type: 'togglePause'; hex: Hex }
+  | { type: 'advanceCity'; cityId: number }
+  | { type: 'trade'; good: GoodId; direction: 'sell' | 'buy'; lots: number }
   | { type: 'endTurn' };
 
 export type ActionResult = { ok: true; state: GameState } | { ok: false; error: RuleError };
@@ -49,8 +61,12 @@ export function applyAction(state: GameState, action: Action): ActionResult {
         type: action.building,
         owner: player,
         hex: action.hex,
+        paused: false,
       });
-      if (def.territoryRadius > 0) claimTerritory(next, action.hex, def.territoryRadius, player);
+      if (def.territoryRadius > 0) {
+        const i = tileIndex(next.map, action.hex);
+        claimTerritory(next, action.hex, def.territoryRadius, player, next.tileCity[i]);
+      }
       return { ok: true, state: next };
     }
     case 'buildRoad': {
@@ -62,6 +78,50 @@ export function applyAction(state: GameState, action: Action): ActionResult {
       }
       pay(stock, plan.cost);
       for (const h of plan.newTiles) next.roads[tileIndex(next.map, h)] = true;
+      return { ok: true, state: next };
+    }
+    case 'togglePause': {
+      const building = next.buildings.find(
+        (b) => b.owner === player && hexEquals(b.hex, action.hex),
+      );
+      if (!building || BUILDINGS[building.type].workers <= 0) return fail({ code: 'cannotPause' });
+      building.paused = !building.paused;
+      return { ok: true, state: next };
+    }
+    case 'advanceCity': {
+      const city = next.cities.find((c) => c.id === action.cityId);
+      if (!city || city.owner !== player) return fail({ code: 'notOwnCity' });
+      const check = advanceCheck(next, city.id);
+      const def = CITY_LEVEL_DEFS[city.level].next;
+      if (!check || !def || check.to === null) return fail({ code: 'cityMaxLevel' });
+      if (!check.residents.ok) return fail({ code: 'notEnoughResidents' });
+      if (!check.supply.ok) {
+        return fail({ code: 'supplyNotReady', good: check.supply.good, turns: check.supply.turns });
+      }
+      if (!check.cost.ok) return fail({ code: 'notAffordable', missing: check.cost.missing });
+      pay(stock, def.cost);
+      city.level = def.to;
+      city.supplyStreak = 0;
+      return { ok: true, state: next };
+    }
+    case 'trade': {
+      if (!canTrade(next, player)) return fail({ code: 'noMarketplace' });
+      if (action.good === 'drachmas') return fail({ code: 'cannotTradeGood' });
+      if (!Number.isInteger(action.lots) || action.lots < 1) return fail({ code: 'invalidAmount' });
+      const { sellAmount, sellPrice, buyPrice } = economyConfig.market;
+      const cost: Goods =
+        action.direction === 'sell'
+          ? { [action.good]: action.lots * sellAmount }
+          : { drachmas: action.lots * buyPrice };
+      if (!canAfford(stock, cost))
+        return fail({ code: 'notAffordable', missing: missingGoods(stock, cost) });
+      pay(stock, cost);
+      addGoods(
+        stock,
+        action.direction === 'sell'
+          ? { drachmas: action.lots * sellPrice }
+          : { [action.good]: action.lots },
+      );
       return { ok: true, state: next };
     }
     case 'demolish': {
