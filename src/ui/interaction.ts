@@ -100,7 +100,14 @@ export async function createGame(
   // Seed label first: later elements stack above it.
   createSeedLabel(uiContainer, state.seedText, testMode);
 
-  const renderer = await createRenderer(appContainer, state, (h) => onTileTap(h));
+  // Unit drag & drop: the unit being dragged (null = no drag)
+  let dragUnitId: number | null = null;
+  const renderer = await createRenderer(appContainer, state, (h) => onTileTap(h), {
+    onStart: (h, sx, sy) => startUnitDrag(h, sx, sy),
+    onMove: (h, sx, sy) => moveUnitDrag(h, sx, sy),
+    onEnd: (h) => endUnitDrag(h),
+    onCancel: () => cancelUnitDrag(),
+  });
   const toast = createToast(uiContainer);
   const resourceBar = createResourceBar(uiContainer, {
     onOverview: () => {
@@ -503,7 +510,63 @@ export async function createGame(
     enterUnitMode(next);
   }
 
-  function enterUnitMode(unit: Unit): void {
+  /** A press on an own unit that can still act turns into a drag instead of a map pan. */
+  function startUnitDrag(hex: Hex | null, sx: number, sy: number): boolean {
+    if (!hex || (mode.kind !== 'idle' && mode.kind !== 'unit')) return false;
+    const unit = unitAt(state, hex);
+    if (!unit || unit.owner !== PLAYER || !canAct(unit)) return false;
+    // No re-centering: the map must stay under the finger.
+    enterUnitMode(unit, false);
+    if (mode.kind !== 'unit') return false;
+    dragUnitId = unit.id;
+    renderer.setDragGhost(unit.id, sx, sy);
+    return true;
+  }
+
+  function moveUnitDrag(hex: Hex | null, sx: number, sy: number): void {
+    if (dragUnitId === null) return;
+    renderer.setDragGhost(dragUnitId, sx, sy);
+    const unit = state.units.find((u) => u.id === dragUnitId);
+    renderer.selectTile(hex ?? unit?.hex ?? null);
+  }
+
+  function endUnitDrag(hex: Hex | null): void {
+    const id = dragUnitId;
+    if (id === null) return;
+    dragUnitId = null;
+    renderer.setDragGhost(null);
+    const unit = state.units.find((u) => u.id === id);
+    if (mode.kind !== 'unit' || mode.unitId !== id || !unit) {
+      renderer.selectTile(selected);
+      return;
+    }
+    if (hex && !hexEquals(hex, unit.hex)) {
+      const target = visibleTargets(unit).find((t) => hexEquals(t.hex, hex));
+      if (target) {
+        askAttack(unit, target);
+        return;
+      }
+      if (
+        reachableTiles(state, unit.id, { ignoreHiddenUnits: true }).some((r) =>
+          hexEquals(r.hex, hex),
+        )
+      ) {
+        commit({ type: 'move', unitId: unit.id, to: hex });
+        return;
+      }
+    }
+    // Dropped elsewhere: nothing happens, the unit stays selected.
+    refreshUnitMode();
+  }
+
+  function cancelUnitDrag(): void {
+    if (dragUnitId === null) return;
+    dragUnitId = null;
+    renderer.setDragGhost(null);
+    refreshUnitMode();
+  }
+
+  function enterUnitMode(unit: Unit, center = true): void {
     resetToIdle();
     mode = { kind: 'unit', unitId: unit.id };
     selected = unit.hex;
@@ -511,7 +574,7 @@ export async function createGame(
     renderer.selectTile(unit.hex);
     bottomBar.setMode('units');
     refreshUnitMode();
-    centerAbovePanel(unit.hex);
+    if (center) centerAbovePanel(unit.hex);
   }
 
   /** Pans the map so the unit sits in the free map area above (or, on wide screens, beside) the panel. */

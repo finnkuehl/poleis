@@ -72,6 +72,9 @@ export const theme = {
   unitRimColor: 0xf4e9d8,
   unitRimWidth: 1.5,
   unitIconSizeFactor: 0.62,
+  /** Ghost token while dragging a unit: opacity and size relative to the normal token */
+  dragGhostAlpha: 0.7,
+  dragGhostScale: 1.25,
   /** Unit that is done for the turn (own units only) */
   unitDoneAlpha: 0.6,
   /** HP bar under the token: size (fraction of hex size), background, colors by HP share */

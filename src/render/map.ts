@@ -22,6 +22,8 @@ export interface MapView {
   /** Red outlines on attack targets; [] clears. */
   setAttackTargets(hexes: readonly Hex[]): void;
   setSelection(h: Hex | null): void;
+  /** Ghost token at world position; null hides it. */
+  setGhost(unit: { type: string; owner: number } | null, x?: number, y?: number): void;
   /** Highlights valid tiles; [] clears. */
   setHighlights(hexes: readonly Hex[]): void;
   /** Road preview along `path`, dots on `newTiles`; null clears. */
@@ -105,6 +107,7 @@ export function createMapView(map: MapState): MapView {
     ...above,
     unitLayers.attack,
     selection,
+    unitLayers.ghost,
   );
 
   return {
@@ -115,6 +118,7 @@ export function createMapView(map: MapState): MapView {
       unitLayers.update(state, viewer);
     },
     setAttackTargets: unitLayers.setAttackTargets,
+    setGhost: unitLayers.setGhost,
     setHighlights: economy.setHighlights,
     setPathPreview: economy.setPathPreview,
     setSelection(h) {

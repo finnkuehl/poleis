@@ -102,6 +102,15 @@ export interface CameraOptions {
   hexSize: number;
   /** Tap/click at a screen position (relative to the canvas corner) */
   onTap: (sx: number, sy: number) => void;
+  /**
+   * Called once when a single pointer crosses the tap threshold, with the PRESS position.
+   * Return true to take over the gesture (no panning); then onDragMove/onDragEnd follow.
+   */
+  onDragStart?: (sx: number, sy: number) => boolean;
+  onDragMove?: (sx: number, sy: number) => void;
+  onDragEnd?: (sx: number, sy: number) => void;
+  /** A taken-over drag was aborted (second finger or pointercancel). */
+  onDragCancel?: () => void;
 }
 
 interface PointerInfo {
@@ -125,6 +134,8 @@ export class CameraController {
   private lastX = 0;
   private lastY = 0;
   private dragging = false;
+  /** The gesture was taken over by onDragStart (e.g. dragging a unit) */
+  private taken = false;
   /** Two fingers were involved in this gesture: no longer a tap */
   private multiTouch = false;
   private pinchDist = 0;
@@ -229,8 +240,10 @@ export class CameraController {
     if (this.pointers.size === 1) {
       this.multiTouch = false;
       this.dragging = false;
+      this.taken = false;
       this.resetSingle();
     } else if (this.pointers.size === 2) {
+      this.cancelTaken();
       this.multiTouch = true;
       const pinch = this.readPinch();
       this.pinchDist = pinch.dist;
@@ -249,6 +262,19 @@ export class CameraController {
         const moved = Math.hypot(p.x - this.startX, p.y - this.startY);
         if (moved <= cameraConfig.tapThresholdPx) return;
         this.dragging = true;
+        if (
+          !this.multiTouch &&
+          this.options.onDragStart &&
+          this.options.onDragStart(this.startX, this.startY)
+        ) {
+          this.taken = true;
+        }
+      }
+      if (this.taken) {
+        this.options.onDragMove?.(p.x, p.y);
+        this.lastX = p.x;
+        this.lastY = p.y;
+        return;
       }
       this.set({
         ...this.cam,
@@ -276,6 +302,12 @@ export class CameraController {
     }
   };
 
+  private cancelTaken(): void {
+    if (!this.taken) return;
+    this.taken = false;
+    this.options.onDragCancel?.();
+  }
+
   private release(e: PointerEvent): boolean {
     if (!this.pointers.has(e.pointerId)) return false;
     this.pointers.delete(e.pointerId);
@@ -301,7 +333,12 @@ export class CameraController {
   private readonly onPointerUp = (e: PointerEvent): void => {
     const p = this.local(e);
     const wasSingle = this.pointers.size === 1;
+    const wasTaken = this.taken && wasSingle && this.pointers.has(e.pointerId);
     if (!this.release(e)) return;
+    if (wasTaken) {
+      this.taken = false;
+      this.options.onDragEnd?.(p.x, p.y);
+    }
     if (wasSingle && !this.multiTouch && !this.dragging) {
       this.options.onTap(p.x, p.y);
     }
@@ -312,6 +349,7 @@ export class CameraController {
   };
 
   private readonly onPointerCancel = (e: PointerEvent): void => {
+    if (this.pointers.has(e.pointerId)) this.cancelTaken();
     this.release(e);
     if (this.pointers.size === 0) {
       this.dragging = false;

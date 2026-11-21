@@ -14,8 +14,12 @@ export interface UnitLayers {
   units: Container;
   fog: Graphics;
   attack: Graphics;
+  /** Drag ghost, to be added on top of everything. */
+  ghost: Container;
   update(state: GameState, viewer: PlayerId): void;
   setAttackTargets(hexes: readonly Hex[]): void;
+  /** Semi-transparent ghost token at world position (x, y); null hides it. */
+  setGhost(unit: { type: string; owner: number } | null, x?: number, y?: number): void;
 }
 
 function playerColor(player: number): number {
@@ -121,10 +125,47 @@ export function createUnitLayers(): UnitLayers {
     if (dim) fog.fill({ color: theme.fogDimColor, alpha: theme.fogDimAlpha });
   }
 
+  // Drag ghost: same look as a unit token, larger and see-through; drawn above everything.
+  const ghost = new Container();
+  const ghostBody = new Graphics();
+  let ghostText: Text | null = null;
+  let ghostKey = '';
+  ghost.addChild(ghostBody);
+  ghost.visible = false;
+  ghost.alpha = theme.dragGhostAlpha;
+  ghost.scale.set(theme.dragGhostScale);
+
   return {
     units,
     fog,
     attack,
+    ghost,
+    setGhost(unit, x = 0, y = 0) {
+      if (!unit) {
+        ghost.visible = false;
+        return;
+      }
+      const key = `${unit.type}:${unit.owner}`;
+      if (key !== ghostKey) {
+        ghostKey = key;
+        const radius = hexSize * theme.unitRadiusFactor;
+        ghostBody.clear();
+        ghostBody
+          .circle(0, 0, radius)
+          .fill({ color: playerColor(unit.owner) })
+          .stroke({ color: theme.unitRimColor, width: theme.unitRimWidth });
+        ghostText?.destroy();
+        ghostText = new Text({
+          text: UNITS[unit.type as keyof typeof UNITS].icon,
+          style: { fontSize: hexSize * theme.unitIconSizeFactor, fontFamily: theme.fontFamily },
+          resolution: 2,
+        });
+        ghostText.anchor.set(0.5);
+        ghost.addChild(ghostText);
+      }
+      ghost.position.set(x, y);
+      ghost.visible = true;
+    },
     update(state, viewer) {
       const visible = visibleTiles(state, viewer);
       drawUnits(state, viewer, visible);
