@@ -17,9 +17,12 @@ npm run dev
 
 Then open http://localhost:5173 in your browser.
 
-**Useful address options:**
-- `?seed=123` (or `?seed=athens`) – always the same map.
-- `&sandbox` – test mode: start with a large stock of goods, e.g. `?seed=1&sandbox`. Handy for trying out later stages such as advancing to Polis. The seed label shows "(test mode)".
+The game opens with the start menu: continue the autosaved game, load one of 3 saved games, or start a new one (name, color, 1–3 rival civilizations, map size, seed, victory types).
+
+**Useful address options (for testing):**
+- `?seed=123` (or `?seed=athens`) – pre-fills the seed in the start menu; the same seed always makes the same map.
+- `&sandbox` – test mode, skips the menu: a large stock of goods and a passive enemy city, e.g. `?seed=1&sandbox`. The seed label shows "(test mode)". Not autosaved.
+- `&ai=3` / `&size=small|normal|large` – skip the menu and start directly with that many AI rivals / that map size, e.g. `?seed=1&ai=3`.
 
 ## Testing on a phone over Wi-Fi
 
