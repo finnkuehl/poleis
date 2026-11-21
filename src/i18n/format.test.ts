@@ -9,6 +9,7 @@ import {
   formatStatus,
   formatTerrains,
   formatTurnOf,
+  formatRoadTiles,
   formatWorkerCount,
 } from './format';
 
@@ -50,6 +51,10 @@ describe('i18n/format', () => {
     expect(formatWorkerCount(1)).toBe('1 worker');
     expect(formatWorkerCount(2)).toBe('2 workers');
     expect(formatTurnOf(3, 120)).toBe('Turn 3 / 120');
+  });
+  it('formats road tile counts with singular and plural', () => {
+    expect(formatRoadTiles(1)).toBe('1 new road tile');
+    expect(formatRoadTiles(2)).toBe('2 new road tiles');
   });
   it('fills placeholders', () => {
     expect(fill('Build {building} here?', { building: 'House' })).toBe('Build House here?');

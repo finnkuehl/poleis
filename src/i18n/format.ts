@@ -62,6 +62,11 @@ export function formatWorkerCount(n: number): string {
   return fill(n === 1 ? en.buildingText.workerOne : en.buildingText.workerMany, { n });
 }
 
+/** "1 new road tile" / "2 new road tiles" */
+export function formatRoadTiles(n: number): string {
+  return fill(n === 1 ? en.flow.roadTileOne : en.flow.roadTileMany, { n });
+}
+
 /** "Turn 3 / 120" */
 export function formatTurnOf(turn: number, limit: number): string {
   return fill(en.ui.turnOf, { turn, limit });

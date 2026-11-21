@@ -16,7 +16,7 @@ import {
 import type { GameState } from '../core/state';
 import { BUILDINGS, economyConfig, type BuildingId, type Stock } from '../data';
 import { en } from '../i18n/en';
-import { fill, formatError, formatGoods, formatMissing } from '../i18n/format';
+import { fill, formatError, formatGoods, formatMissing, formatRoadTiles } from '../i18n/format';
 import { createRenderer } from '../render/app';
 import {
   createBottomBar,
@@ -235,7 +235,8 @@ export async function createGame(
 
   function onTileTap(hex: Hex | null): void {
     // A tap on the map closes any open sheet or menu and counts as a fresh tap.
-    confirm.hide();
+    // Cancel path: a build confirm sheet clears the selection marker on cancel.
+    confirm.cancel();
     renderer.setPathPreview(null);
     if (menuOpen) {
       menuOpen = false;
@@ -267,6 +268,8 @@ export async function createGame(
   function tapPlacing(id: BuildingId, hex: Hex): void {
     const error = checkPlacement(state, PLAYER, id, hex);
     if (error) {
+      selected = null;
+      renderer.selectTile(null);
       toast.show(formatError(error), 'error');
       return;
     }
@@ -324,7 +327,7 @@ export async function createGame(
     confirm.show({
       title: en.flow.roadConfirmTitle,
       lines: [
-        fill(en.flow.roadTiles, { n: plan.newTiles.length }),
+        formatRoadTiles(plan.newTiles.length),
         `${en.ui.cost}: ${formatGoods(plan.cost) || '–'}`,
       ],
       confirmLabel: en.ui.build,

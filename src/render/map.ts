@@ -104,6 +104,12 @@ export function createMapView(map: MapState): MapView {
       selection
         .poly(corners)
         .fill({ color: theme.selectionColor, alpha: theme.selectionFillAlpha })
+        .stroke({
+          color: theme.selectionOuterColor,
+          width: theme.selectionOuterWidth,
+          join: 'round',
+        })
+        .poly(corners)
         .stroke({ color: theme.selectionColor, width: theme.selectionWidth, join: 'round' });
     },
   };

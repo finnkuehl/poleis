@@ -17,6 +17,8 @@ export interface ConfirmOptions {
 /** The sheet hides itself before calling `onConfirm` or `onCancel`. */
 export function createConfirmSheet(root: HTMLElement): {
   show(o: ConfirmOptions): void;
+  /** Hides the sheet via the cancel path (runs onCancel) if it is open. */
+  cancel(): void;
   hide(): void;
 } {
   const sheet = el('section', 'sheet confirm-sheet');
@@ -46,13 +48,24 @@ export function createConfirmSheet(root: HTMLElement): {
     hide();
     c?.onConfirm();
   });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && current) {
-      const c = current;
-      hide();
-      c.onCancel();
-    }
-  });
+  const cancel = (): void => {
+    const c = current;
+    if (!c) return;
+    hide();
+    c.onCancel();
+  };
+  // Capture phase on window: the open sheet is topmost and consumes Escape,
+  // so no other component reacts to the same key press.
+  window.addEventListener(
+    'keydown',
+    (e) => {
+      if (e.key === 'Escape' && current) {
+        e.stopPropagation();
+        cancel();
+      }
+    },
+    true,
+  );
 
   return {
     show(o) {
@@ -71,6 +84,7 @@ export function createConfirmSheet(root: HTMLElement): {
       confirmBtn.disabled = Boolean(o.disabledReason);
       sheet.hidden = false;
     },
+    cancel,
     hide,
   };
 }

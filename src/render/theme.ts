@@ -23,9 +23,11 @@ export const theme = {
   outlineColor: 0x0b1f2a,
   outlineAlpha: 0.35,
   outlineWidth: 1,
-  /** Selection: white outline + light fill */
+  /** Selection: double outline (dark outer + white inner) so it stands out on any tile and on white highlights */
+  selectionOuterColor: 0x1d2b36,
+  selectionOuterWidth: 5,
   selectionColor: 0xffffff,
-  selectionWidth: 3,
+  selectionWidth: 2,
   selectionFillAlpha: 0.15,
   /** Player colors, index = PlayerId (0 = human, Tyrian purple) */
   playerColors: [0x6e3a8e, 0x2e6da4, 0xb23a30, 0xc9a227],

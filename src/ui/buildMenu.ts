@@ -38,12 +38,18 @@ export function createBuildMenu(
     close();
     h.onClose();
   });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !sheet.hidden) {
-      close();
-      h.onClose();
-    }
-  });
+  // Capture phase on window: the open menu consumes Escape exclusively.
+  window.addEventListener(
+    'keydown',
+    (e) => {
+      if (e.key === 'Escape' && !sheet.hidden) {
+        e.stopPropagation();
+        close();
+        h.onClose();
+      }
+    },
+    true,
+  );
 
   function entry(id: BuildingId, stock: Stock): HTMLButtonElement {
     const def = BUILDINGS[id];
