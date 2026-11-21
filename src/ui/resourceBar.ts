@@ -1,9 +1,10 @@
 // Top strip: turn chip, residents chip and one chip per good (icon + amount + change per turn).
 import { GOOD_IDS, GOODS, type Goods, type GoodId, type Stock } from '../data';
 import { en } from '../i18n/en';
-import { formatTurnOf } from '../i18n/format';
+import { fill, formatTurnOf } from '../i18n/format';
 import type { WorkerSummary } from '../core/rules/economy';
 import { button, el } from './dom';
+import { createMenuButton } from './gameMenu';
 
 /** Goods that are always shown, even at 0. */
 const ALWAYS_SHOWN: readonly GoodId[] = ['wood', 'stone'];
@@ -18,13 +19,14 @@ interface Chip {
 
 export function createResourceBar(
   root: HTMLElement,
-  h: { onOverview(): void },
+  h: { onMenu?(): void; onOverview(): void },
 ): {
   update(
     stock: Stock,
     delta: Goods | null,
     turn: number,
-    turnLimit: number,
+    /** Turn limit to show as "Turn X / limit"; null = no limit shown. */
+    turnLimit: number | null,
     people: { residents: number; housing: number },
     workers: WorkerSummary,
   ): void;
@@ -55,6 +57,7 @@ export function createResourceBar(
   workersChip.append(workersIcon, workersAmount, workersFree, workersMissing);
   const overviewBtn = button('resource-bar__overview', `\u{1F4CA} ${en.economy.button}`);
   overviewBtn.addEventListener('click', h.onOverview);
+  if (h.onMenu) scroll.appendChild(createMenuButton(h.onMenu));
   scroll.append(overviewBtn, turnChip, residentsChip, workersChip);
 
   const chips = new Map<GoodId, Chip>();
@@ -88,7 +91,8 @@ export function createResourceBar(
 
   return {
     update(stock, delta, turn, turnLimit, people, workers) {
-      turnChip.textContent = formatTurnOf(turn, turnLimit);
+      turnChip.textContent =
+        turnLimit === null ? fill(en.ui.turnShort, { turn }) : formatTurnOf(turn, turnLimit);
       residentsAmount.textContent = `${people.residents} / ${people.housing}`;
       residentsChip.setAttribute(
         'aria-label',

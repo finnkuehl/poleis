@@ -68,7 +68,8 @@ describe('eventLines', () => {
       { kind: 'error', text: `${civ(lost, 1)} captured your city` },
     ]);
     const won = stateWith({ ...base, by: 0, from: 1, seenBy: [0, 1] });
-    expect(eventLines(won, 0)[0].kind).toBe('info');
+    // The viewer's own capture is reported by the turn summary, not here.
+    expect(eventLines(won, 0)).toEqual([]);
     const other = stateWith({ ...base, by: 1, from: 2, seenBy: [0, 1, 2] });
     expect(eventLines(other, 0)[0].text).toBe(
       `${civ(other, 1)} captured a city from ${civ(other, 2)}`,

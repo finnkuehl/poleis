@@ -45,9 +45,8 @@ function eventToLines(state: GameState, viewer: PlayerId, e: GameEvent): Summary
       if (e.from === viewer) {
         return [line(fill(en.events.cityLost, { civ: civName(state, e.by) }), 'error')];
       }
-      if (e.by === viewer) {
-        return [line(fill(en.events.cityTaken, { civ: civName(state, e.from) }))];
-      }
+      // Capturing a city is already in the turn summary ("You captured a city!").
+      if (e.by === viewer) return [];
       return [
         line(
           fill(en.events.cityTakenOther, {

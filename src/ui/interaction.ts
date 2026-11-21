@@ -60,18 +60,25 @@ import {
   formatTerritoryGain,
 } from '../i18n/format';
 import { createRenderer, type OrderPath } from '../render/app';
+import { browserStorage, listSaves, saveGame } from '../save';
 import { buildOptionsFor } from './buildOptions';
 import {
   createBottomBar,
   createBuildMenu,
   createConfirmSheet,
   createEconomySheet,
+  createEndScreen,
+  createGameMenu,
   createModeBanner,
   createResourceBar,
+  createScoresSheet,
   createSeedLabel,
   createTileInfoPanel,
   createToast,
   attackPreviewLines,
+  civName,
+  eventLines,
+  formatSaveError,
   orderConfirm,
   perTurnText,
   trainOptions,
@@ -79,6 +86,9 @@ import {
 } from './index';
 
 const PLAYER = 0;
+
+/** sessionStorage key: the in-game Load asks the next page load to open this slot directly. */
+export const BOOT_INTENT_KEY = 'poleis.boot';
 
 type Mode =
   | { kind: 'idle' }
@@ -118,14 +128,47 @@ export async function createGame(
   });
   const toast = createToast(uiContainer);
   const resourceBar = createResourceBar(uiContainer, {
+    onMenu: () => {
+      resetToIdle();
+      gameMenu.open();
+    },
     onOverview: () => {
       resetToIdle();
       economySheet.open(economyOverview(state, PLAYER));
     },
   });
   const economySheet = createEconomySheet(uiContainer);
+  const scoresSheet = createScoresSheet(uiContainer);
   const banner = createModeBanner(uiContainer, () => resetToIdle());
   const confirm = createConfirmSheet(uiContainer);
+  const storage = browserStorage();
+  const goToMainMenu = (): void => window.location.assign(window.location.pathname);
+  const gameMenu = createGameMenu(uiContainer, {
+    confirm,
+    getSaves: () => listSaves(storage),
+    onScores: () => scoresSheet.open(state, PLAYER),
+    onSave: (slot) => {
+      const result = saveGame(storage, slot, state);
+      if (result.ok) toast.show(fill(en.gameMenu.saved, { n: slot }));
+      else toast.show(formatSaveError(result.error), 'error');
+    },
+    onLoad: (slot) => {
+      // Reloading the page is the simplest way to get a clean renderer and UI for the loaded game.
+      try {
+        window.sessionStorage.setItem(BOOT_INTENT_KEY, JSON.stringify({ load: slot }));
+      } catch {
+        toast.show(formatSaveError('unavailable'), 'error');
+        return;
+      }
+      window.location.reload();
+    },
+    onMainMenu: goToMainMenu,
+  });
+  let endScreenShown = false;
+  const endScreen = createEndScreen(uiContainer, {
+    onNewGame: goToMainMenu,
+    onLookAtMap: () => {},
+  });
   const panel = createTileInfoPanel(uiContainer, () => {
     if (mode.kind === 'unit') {
       resetToIdle();
@@ -171,6 +214,10 @@ export async function createGame(
     },
     onEndTurn: () => {
       resetToIdle();
+      if (state.result) {
+        endScreen.show(state, PLAYER);
+        return;
+      }
       endTurn();
     },
   });
@@ -210,21 +257,25 @@ export async function createGame(
     // The AI civilizations take their turns (instantly) until it is the player's turn again.
     state = playAiTurns(state);
     refresh();
-    const report = state.lastReport;
-    if (!report) return;
-    const canAdvance: Record<number, CityLevel> = {};
-    const supply: Record<number, { good: GoodId; turnsNeeded: number }> = {};
-    for (const c of state.cities) {
-      if (c.owner !== PLAYER) continue;
-      const check = advanceCheck(state, c.id);
-      if (!check) continue;
-      if (check.to && check.canAdvance && !readyBefore.has(c.id)) canAdvance[c.id] = check.to;
-      supply[c.id] = { good: check.supply.good, turnsNeeded: check.supply.turns };
+    autosave();
+    // News about the rivals first, then the player's own turn summary.
+    const lines = eventLines(state, PLAYER);
+    const report = state.result ? null : state.lastReport;
+    if (report) {
+      const canAdvance: Record<number, CityLevel> = {};
+      const supply: Record<number, { good: GoodId; turnsNeeded: number }> = {};
+      for (const c of state.cities) {
+        if (c.owner !== PLAYER) continue;
+        const check = advanceCheck(state, c.id);
+        if (!check) continue;
+        if (check.to && check.canAdvance && !readyBefore.has(c.id)) canAdvance[c.id] = check.to;
+        supply[c.id] = { good: check.supply.good, turnsNeeded: check.supply.turns };
+      }
+      const spawnedUnits = ownUnits()
+        .filter((u) => !unitsBefore.has(u.id))
+        .map((u) => u.type);
+      lines.push(...turnSummary(report, { canAdvance, supply, spawnedUnits }));
     }
-    const spawnedUnits = ownUnits()
-      .filter((u) => !unitsBefore.has(u.id))
-      .map((u) => u.type);
-    const lines = turnSummary(report, { canAdvance, supply, spawnedUnits });
     if (lines.length === 0) return;
     const isError = lines.some((l) => l.kind === 'error');
     toast.show(
@@ -232,6 +283,18 @@ export async function createGame(
       isError ? 'error' : 'info',
       3000 + 1000 * (lines.length - 1),
     );
+  }
+
+  let autosaveFailureShown = false;
+  /** Saves the game to the autosave slot; a failure is reported once per session and never blocks play. */
+  function autosave(): void {
+    // Test mode (sandbox) never touches the real autosave.
+    if (testMode) return;
+    const result = saveGame(storage, 'auto', state);
+    if (!result.ok && !autosaveFailureShown) {
+      autosaveFailureShown = true;
+      toast.show(formatSaveError(result.error), 'error');
+    }
   }
 
   /** Back to idle: no mode, highlights, preview, banner, sheets, menu or selection. */
@@ -287,12 +350,17 @@ export async function createGame(
       stockOf(state),
       state.lastReport?.delta ?? null,
       state.turn,
-      state.settings.turnLimit,
+      state.settings.victory.points ? state.settings.turnLimit : null,
       people(),
       overview.workers,
     );
     if (economySheet.isOpen()) economySheet.open(overview);
     bottomBar.setTurn(state.turn);
+    bottomBar.setGameOver(state.result !== null);
+    if (state.result && !endScreenShown) {
+      endScreenShown = true;
+      endScreen.show(state, PLAYER);
+    }
     bottomBar.setUnitsEnabled(ownUnits().length > 0);
     if (mode.kind === 'idle') showPanel();
     else if (mode.kind === 'unit') refreshUnitMode();
@@ -810,8 +878,15 @@ export async function createGame(
   /** Panel for a tile without building and road: build list in own territory, else a hint. */
   function showEmptyTile(hex: Hex, terrain: TerrainId): void {
     if (ownerAt(state, hex) !== PLAYER) {
+      const rival = state.buildings.find(
+        (b) => b.type === 'cityCenter' && b.owner !== PLAYER && hexEquals(b.hex, hex),
+      );
       panel.showTerrain(hex, terrain, {
-        note: TERRAIN[terrain].isWater ? undefined : en.tileInfo.outsideNote,
+        note: rival
+          ? fill(en.tileInfo.enemyCity, { civ: civName(state, rival.owner) })
+          : TERRAIN[terrain].isWater
+            ? undefined
+            : en.tileInfo.outsideNote,
       });
       return;
     }
@@ -1045,4 +1120,6 @@ export async function createGame(
   }
 
   refresh();
+  // A new or loaded game is saved right away, so Continue always has something to continue.
+  autosave();
 }

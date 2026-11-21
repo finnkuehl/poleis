@@ -32,3 +32,8 @@ export function findSave(
 ): SaveListEntry | undefined {
   return saves.find((s) => s.slot === slot);
 }
+
+/** Message for a failed save or load (`error` is the code from src/save). */
+export function formatSaveError(error: keyof typeof en.saveErrors): string {
+  return en.saveErrors[error];
+}
