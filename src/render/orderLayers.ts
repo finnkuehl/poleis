@@ -118,7 +118,10 @@ export function createOrderLayers(): OrderLayers {
           flag(dp.x, dp.y, 1);
           flagDrawn = true;
         } else {
-          g.circle(sp.x, sp.y, hexSize * theme.orderDotRadiusFactor).fill(theme.orderMarbleColor);
+          // Dark dot with a marble rim, so it stands out on the marble line
+          g.circle(sp.x, sp.y, hexSize * theme.orderDotRadiusFactor)
+            .fill(theme.orderDarkColor)
+            .stroke({ color: theme.orderMarbleColor, width: theme.orderBadgeRimWidth });
         }
         continue;
       }

@@ -110,7 +110,8 @@ export const theme = {
   orderBadgeRadiusFactor: 0.3,
   orderBadgeRimWidth: 1.5,
   orderBadgeTextColor: 0xffffff,
-  orderDotRadiusFactor: 0.09,
+  /** Dot where the unit gets to right now (turn 0): dark with a marble rim */
+  orderDotRadiusFactor: 0.12,
   /** Sideways shift of flag and badge on the destination tile so both stay visible */
   orderDestOffsetFactor: 0.3,
 } as const;
