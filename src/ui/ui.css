@@ -1,0 +1,129 @@
+/* Panels über dem Canvas (mobile first: Bottom Sheet, ab 700 px breite Karte) */
+.seed-label {
+  position: absolute;
+  top: calc(8px + env(safe-area-inset-top));
+  left: calc(8px + env(safe-area-inset-left));
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(244, 233, 216, 0.85);
+  color: #4a3320;
+  font:
+    14px Georgia,
+    'Times New Roman',
+    serif;
+  pointer-events: none;
+}
+
+.tile-info {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 16px 20px calc(16px + env(safe-area-inset-bottom));
+  background: rgba(244, 233, 216, 0.97);
+  color: #4a3320;
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.35);
+  font:
+    16px/1.4 system-ui,
+    sans-serif;
+  pointer-events: auto;
+  animation: tile-info-in 150ms ease-out;
+}
+.tile-info[hidden] {
+  display: none;
+}
+.tile-info__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.tile-info__swatch {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid rgba(74, 51, 32, 0.5);
+}
+.tile-info__titles {
+  flex: 1;
+  min-width: 0;
+}
+.tile-info__title {
+  margin: 0;
+  font:
+    bold 22px Georgia,
+    'Times New Roman',
+    serif;
+}
+.tile-info__coords {
+  margin: 0;
+  font-size: 14px;
+  opacity: 0.75;
+}
+.tile-info__close {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font-size: 20px;
+  cursor: pointer;
+}
+.tile-info__close:hover,
+.tile-info__close:focus-visible {
+  background: rgba(74, 51, 32, 0.12);
+}
+.tile-info__rows {
+  margin: 12px 0 0;
+}
+.tile-info__row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(74, 51, 32, 0.15);
+}
+.tile-info__row dt,
+.tile-info__row dd {
+  margin: 0;
+}
+.tile-info__row dd {
+  font-weight: bold;
+}
+.tile-info__note {
+  margin: 12px 0 0;
+}
+
+@media (min-width: 700px) {
+  .tile-info {
+    left: 16px;
+    right: auto;
+    bottom: 16px;
+    width: 340px;
+    margin: 0;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  }
+}
+
+@keyframes tile-info-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tile-info {
+    animation: none;
+  }
+}

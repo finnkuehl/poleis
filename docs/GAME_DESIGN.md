@@ -38,6 +38,14 @@
 - Straße auf einem Feld: Bewegungskosten für Landeinheiten halbiert (abgerundet, mindestens 0,5).
 - Gebäude und Straßen nur im **eigenen Territorium**.
 
+### Kartengenerierung
+- Standardgröße 30 × 30 Felder, rechteckig; der Kartenrand ist Ozean.
+- **Festland:** ca. 45 % aller Felder, eine zusammenhängende Landmasse (Startgebiete der Völker).
+- **Inseln:** 3–6 kleinere Inseln mit Abstand zum Festland; **mehr Hügel und Wald** als das Festland (Anreiz zur Besiedlung per Schiff).
+- **Berge** bilden kurze Ketten (Pässe, Engstellen). Garantie: Jede Landmasse bleibt für Landeinheiten zusammenhängend – kein Berg schneidet ein Gebiet ab.
+- **Küstenwasser** = Wasserfelder direkt neben Land; alles weitere Wasser ist Ozean.
+- Gleicher Seed = gleiche Karte. Alle Zahlen dazu stehen in `src/data/mapgen.ts`.
+
 ## 4. Waren (12 + Währung)
 
 | Ware | Typ | Herkunft |

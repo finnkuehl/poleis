@@ -36,6 +36,11 @@ Ziel: gute Planung, günstige Umsetzung.
 - Meldet `umsetzer` eine offene Gameplay-Frage, stellt Opus sie dem Nutzer (2–3 Optionen mit Empfehlung).
 - Ist der Subagent `umsetzer` nicht verfügbar, nimm das Agent-Tool mit `model: sonnet` und gib die Regeln aus `umsetzer.md` im Auftrag mit.
 
+## Plugins
+
+- **code-review:** Vor jedem Merge eines Meilenstein-PRs auf den PR laufen lassen. Gefundene Fehler gehen als Nachbesserung an `umsetzer`; erst wenn alles behoben (oder mit dem Nutzer als „ok so“ abgestimmt) ist, wird gemergt.
+- **frontend-design:** Für Arbeit an `src/ui/` und am Aussehen (Menüs, Leisten, Panels, Grafikstil) laden – spätestens in M7. Die Vorgaben aus „Mobile first“ gelten weiter.
+
 ---
 
 ## Tech-Stack

@@ -1,3 +1,4 @@
 // HTML/CSS-Panels: Ressourcenleiste, Baumenü, Feldinfo, Rundenknopf, Menüs.
 
-export {};
+export * from './tileInfo';
+export * from './seedLabel';
