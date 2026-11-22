@@ -53,26 +53,42 @@ Player colors are **not** baked into the art: buildings stand on a small base an
 token that the game draws in the player's color (Tyrian purple, cinnabar, Aegean blue, gold).
 Units may carry a neutral bronze shield; the colored token around them shows the owner.
 
-## Drawing rules (SVG)
+## Chosen direction: V1 isometric diorama (decided with the user after the keyframes)
 
-- **Files:** `public/assets/goods/<goodId>.svg`, `public/assets/buildings/<buildingId>.svg`,
-  `public/assets/units/<unitId>.svg` – ids exactly as in `src/data/` (e.g. `oliveGrove`,
-  `cityCenter`). Plain SVG 1.1, no scripts, no external references, no embedded raster images,
-  no text/fonts.
-- **Canvas:** goods icons `viewBox="0 0 64 64"`; buildings and units `viewBox="0 0 96 96"`.
-  Transparent background. Keep ~4 units of padding; buildings sit on an implied ground line
-  around y = 80 and are drawn in a slight three-quarter view (front face + roof/top visible).
-- **Outline:** one ink outline around each shape, `stroke="#1d2b36"`, width 2.5 (icons) / 3
-  (buildings, units), `stroke-linejoin="round"`, `stroke-linecap="round"`. Inner detail lines
-  thinner (1.5–2) or as darker fills.
-- **Shading:** flat two-tone: base color + shadow side (right/bottom) in the "shade" color, plus
-  at most one small light highlight (top/left). At most one simple linear gradient per object.
-- **Shadow:** buildings and units get a soft ground shadow: an ellipse in ink at 20–25 % opacity
-  offset to the lower right, under the object.
-- **Legibility:** goods icons must be recognisable at **20 px**; buildings at **40 px**; units at
-  **32 px**. One clear silhouette each – if two icons look alike at 20 px, change one.
-- **Consistency:** same outline width, same light direction, same palette across a set.
-  Differences between buildings come from silhouette and the one bold color, not from style.
+Three keyframes were made (V1 isometric diorama, V2 painterly storybook, V3 sculpted low-poly);
+the user chose **V1**. The flat "ink outline" rules of the first draft no longer apply to
+buildings and units. Reference keyframe: house and temple by `tools/art/` (see below).
+
+- **Geometry:** true **2:1 dimetric (isometric)** projection; every face drawn in its own face
+  coordinates and placed with one SVG `matrix()`. Light from the upper left: tops lit, left faces a
+  warm mid tone, right faces in cool shade with a warm-green bounce.
+- **No black outlines.** Edges come from value contrast and thin darker same-hue lines.
+- **Soft light:** gradients per face, ambient occlusion where walls meet the ground and under eaves,
+  a projected cast shadow on the base, a soft drop shadow under the base (modest `feGaussianBlur`).
+- **Materials:** whitewashed lime walls, barrel roof tiles in terracotta rows, marble with
+  fluting, bronze and gold accents, blue shutters/awnings, olive trees and cypresses as props.
+- **Base:** every building stands on a round diorama base: grass top (tufts, flowers), earth side
+  with strata, and a **rim band in the owner's color** (thick enough to read at 40 px).
+- **Owner color versions:** each building/unit comes as two layers with the same canvas:
+  `<id>.svg` (the art; color-neutral parts) and `<id>.accent.svg` (only the parts in the owner's
+  color – the base rim band plus a few per-building touches such as banners, shutters, awnings,
+  shields, crests or sails – drawn in **neutral greys with their light and shade**, so the game
+  can tint them with the player color: PixiJS `sprite.tint` on the map, a CSS mask in the UI).
+  This gives every civilization slightly different-looking cities and armies.
+- **Canvas and anchor (fixed, the game relies on it):**
+  - Buildings: `viewBox="0 0 256 256"`; the center of the base's top ellipse is at **(128, 176)**
+    and the base's top ellipse is **208 wide** (x 24 → 232). The game scales the image so this
+    width is 0.92 × the hex width and puts that center on the tile center; the building rises
+    above it and may overlap the tile above (the game sorts by row).
+  - Units: `viewBox="0 0 128 128"`; a small round base/token whose top ellipse center is at
+    **(64, 96)** and which is **88 wide**; the figure stands on it. The game scales it to 0.62 × the
+    hex width.
+- **Legibility:** buildings must read at **40 px** and units at **32 px** (silhouette + one bold
+  color). Keep file sizes reasonable (aim < 150 KB per SVG); the game rasterizes each SVG once.
+- **Goods icons** (`public/assets/goods/`, 64 × 64) stay **flat icons** (best for 20 px UI), with the
+  palette above; they are not part of the diorama style.
+- **Generator:** the art is produced by small Python 3 scripts (standard library only) in
+  `tools/art/` that print plain SVG – re-run them to regenerate an asset.
 
 ## Terrain (drawn in code, `src/render/`)
 
