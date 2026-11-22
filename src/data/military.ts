@@ -2,7 +2,7 @@
 // To rebalance: change the numbers below, save, reload the game.
 
 export const militaryConfig = {
-  // Food every unit eats per turn (after the residents; fish first, then bread).
+  // Food every unit eats per turn (after the residents; fish first, then grain).
   upkeepFood: 1,
   // HP every unit loses per turn if the food does not last for all units.
   starvationDamage: 2,

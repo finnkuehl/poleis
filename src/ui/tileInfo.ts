@@ -146,11 +146,13 @@ export interface TradeInfo {
 export interface CityInfo {
   hex: Hex;
   terrain: TerrainId;
+  /** The city's name (from i18n/cityNames). */
+  name: string;
   level: CityLevel;
+  /** The "Train settler" list (the city center trains settlers). */
+  train?: TrainInfo;
   stats: CityStats;
   check: AdvanceCheck;
-  /** Working and free residents of this city (optional). */
-  workers?: { working: number; free: number };
   /** Goods in stock (to tell whether the city is hungry and which needs are covered). */
   stock: Stock;
   /** If set, the Advance button is shown (enabled when `check.canAdvance`). */
@@ -326,10 +328,10 @@ export function createTileInfoPanel(root: HTMLElement, onClose: () => void): Til
     return wrap;
   }
 
-  /** Barracks: one row per unit type; ready rows train with one tap. */
-  function trainSection(t: TrainInfo): HTMLElement {
+  /** Barracks, harbor or city center: one row per unit type; ready rows train with one tap. */
+  function trainSection(t: TrainInfo, title: string = en.unitText.train): HTMLElement {
     const wrap = el('div', 'build-here');
-    wrap.appendChild(el('h3', 'build-here__title', en.unitText.train));
+    wrap.appendChild(el('h3', 'build-here__title', title));
     if (t.pending) {
       wrap.appendChild(
         el('p', 'tile-info__hint', fill(en.unitText.training, { unit: en.units[t.pending] })),
@@ -510,7 +512,12 @@ export function createTileInfoPanel(root: HTMLElement, onClose: () => void): Til
   }
 
   function showCity(o: CityInfo): void {
-    setHeader(o.hex, en.levels[o.level], buildingIcon('cityCenter'), o.terrain);
+    setHeader(
+      o.hex,
+      fill(en.cityPanel.title, { name: o.name, level: en.levels[o.level] }),
+      buildingIcon('cityCenter'),
+      o.terrain,
+    );
     const nodes: HTMLElement[] = [];
     const rows = el('dl', 'tile-info__rows');
     const row = el('div', 'tile-info__row');
@@ -520,7 +527,6 @@ export function createTileInfoPanel(root: HTMLElement, onClose: () => void): Til
     );
     rows.appendChild(row);
     nodes.push(rows);
-    if (o.workers) nodes.push(line(fill(en.cityPanel.workers, o.workers)));
 
     const growth = growthState(o.level, o.stats, o.stock);
     nodes.push(line(growthText(growth), growth.kind === 'growing' ? 'ok' : 'problem'));
@@ -569,6 +575,7 @@ export function createTileInfoPanel(root: HTMLElement, onClose: () => void): Til
       next.appendChild(el('p', 'city-next__top', en.cityPanel.topLevel));
     }
     nodes.push(next);
+    if (o.train) nodes.push(trainSection(o.train, en.cityPanel.trainSettler));
     content.replaceChildren(...nodes);
     panel.hidden = false;
   }

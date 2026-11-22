@@ -2,6 +2,7 @@
 import '../style.css';
 import './ui.css';
 import { emptyStock } from '../core/rules/goods';
+import { cityName } from '../i18n/cityNames';
 import { en } from '../i18n/en';
 import {
   createBottomBar,
@@ -31,7 +32,7 @@ import type { AdvanceCheck } from '../core/rules/advance';
 import type { CityReport, CityStats } from '../core/rules/population';
 import type { BuildingStatus, TurnReport } from '../core/rules/production';
 import type { BuildingId, CityLevel, Stock } from '../data';
-import { formatAdvanced, formatBought, formatSold } from '../i18n/format';
+import { fill, formatAdvanced, formatBought, formatSold } from '../i18n/format';
 import { turnSummary } from './turnSummary';
 import type { BuildOption } from './buildOptions';
 import type { Unit } from '../core/state';
@@ -95,7 +96,7 @@ const economy = createEconomySheet(ui, {
 const bar = createResourceBar(ui, { onOverview: () => economy.open(sampleOverview) });
 bar.update(
   { ...stock, drachmas: 7, grapes: 2, wine: 1 },
-  { wood: 2, stone: -1, grain: 3, planks: 0, bread: 1, drachmas: 3 },
+  { wood: 2, stone: -1, grain: 3, planks: 0, drachmas: 3 },
   3,
   120,
   { residents: 6, housing: 8 },
@@ -174,12 +175,13 @@ const cityStats: CityStats = {
   foodPerTurn: 6,
   needs: [],
   supply: null,
+  growthPerTurn: 1,
   taxPerTurn: 6,
 };
 const settlementCheck: AdvanceCheck = {
   to: 'polis',
   residents: { have: 12, need: 20, ok: false },
-  supply: { good: 'oil', streak: 2, turns: 3, ok: false },
+  supply: { good: 'oil', made: 1, needed: 2, ok: false },
   cost: {
     cost: { planks: 20, stone: 20, drachmas: 30 },
     missing: { stone: 19, drachmas: 30 },
@@ -187,17 +189,18 @@ const settlementCheck: AdvanceCheck = {
   },
   canAdvance: false,
 };
-const fed: Stock = { ...stock, fish: 8, bread: 2, oil: 3, drachmas: 40, planks: 30, stone: 30 };
+const fed: Stock = { ...stock, fish: 8, grain: 2, oil: 3, drachmas: 40, planks: 30, stone: 30 };
 
 function showCity(level: CityLevel, stats: CityStats, check: AdvanceCheck, goods: Stock): void {
   panel.showCity({
     hex,
     terrain: 'plains',
+    name: cityName(0),
     level,
     stats,
     check,
     stock: goods,
-    onAdvance: () => toast.show(formatAdvanced(check.to ?? level)),
+    onAdvance: () => toast.show(formatAdvanced(cityName(0), check.to ?? level)),
   });
 }
 addControl('City: settlement, not ready', () =>
@@ -210,7 +213,7 @@ addControl('City: settlement, ready', () =>
     {
       to: 'polis',
       residents: { have: 20, need: 20, ok: true },
-      supply: { good: 'oil', streak: 3, turns: 3, ok: true },
+      supply: { good: 'oil', made: 2, needed: 2, ok: true },
       cost: { cost: settlementCheck.cost.cost, missing: {}, ok: true },
       canAdvance: true,
     },
@@ -218,7 +221,7 @@ addControl('City: settlement, ready', () =>
   ),
 );
 addControl('City: hungry', () =>
-  showCity('settlement', cityStats, settlementCheck, { ...fed, fish: 1, bread: 0 }),
+  showCity('settlement', cityStats, settlementCheck, { ...fed, fish: 1, grain: 0 }),
 );
 addControl('City: polis, no oil', () =>
   showCity(
@@ -234,7 +237,7 @@ addControl('City: polis, no oil', () =>
     {
       to: 'metropolis',
       residents: { have: 30, need: 50, ok: false },
-      supply: { good: 'wine', streak: 0, turns: 3, ok: false },
+      supply: { good: 'wine', made: 0, needed: 3, ok: false },
       cost: {
         cost: { planks: 40, stone: 40, bronze: 10, drachmas: 80 },
         missing: { bronze: 10, drachmas: 40 },
@@ -262,7 +265,7 @@ addControl('City: metropolis', () =>
     {
       to: null,
       residents: { have: 60, need: 0, ok: true },
-      supply: { good: 'oil', streak: 0, turns: 0, ok: true },
+      supply: { good: 'oil', made: 0, needed: 0, ok: true },
       cost: { cost: {}, missing: {}, ok: true },
       canAdvance: false,
     },
@@ -350,8 +353,6 @@ function cityReport(over: Partial<CityReport>): CityReport {
     fed: true,
     needsMet: true,
     needsConsumed: {},
-    supplied: null,
-    supplyStreak: 0,
     taxes: 3,
     ...over,
   };
@@ -370,9 +371,6 @@ function turnReport(...cities: CityReport[]): TurnReport {
 }
 addControl('Turn summary toasts', () => {
   const sequence = [
-    ...turnSummary(turnReport(cityReport({ supplied: true, supplyStreak: 2 })), {
-      supply: { 1: { good: 'oil', turnsNeeded: 3 } },
-    }),
     ...turnSummary(turnReport(cityReport({ fed: false, residentsAfter: 5, taxes: 2 }))),
     ...turnSummary(turnReport(cityReport({ taxes: 0, residentsAfter: 6 })), {
       canAdvance: { 1: 'polis' },
@@ -513,7 +511,10 @@ addControl('Settler: can found', () =>
     terrain: 'plains',
     unit: sampleUnit('settler'),
     own: true,
-    found: { ok: true, onFound: () => toast.show(en.flow.cityFounded) },
+    found: {
+      ok: true,
+      onFound: () => toast.show(fill(en.flow.cityFounded, { city: cityName(1) })),
+    },
   }),
 );
 addControl('Settler: blocked', () =>
@@ -529,7 +530,7 @@ addControl('Settler: blocked', () =>
     },
   }),
 );
-const trainStock: Stock = { ...emptyStock(), planks: 5, bronze: 0, bread: 4, drachmas: 9 };
+const trainStock: Stock = { ...emptyStock(), planks: 5, bronze: 0, grain: 4, drachmas: 9 };
 function showBarracks(pending: UnitId | null): void {
   panel.showBuilding({
     hex,

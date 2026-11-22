@@ -13,7 +13,7 @@ import {
 describe('perTurnText', () => {
   it('describes producers', () => {
     expect(perTurnText('woodcutter')).toBe('+2 Wood');
-    expect(perTurnText('farm')).toBe('+3 Grain');
+    expect(perTurnText('farm')).toBe('+4 Grain');
   });
   it('describes processing', () => {
     expect(perTurnText('sawmill')).toBe('2 Wood → 2 Planks');
@@ -23,7 +23,7 @@ describe('perTurnText', () => {
     expect(perTurnText('house')).toBe('Houses 6 residents');
     expect(perTurnText('storehouse')).toBe('Connection point for roads');
     expect(perTurnText('cityCenter')).toBe(
-      '+1 Bread. Houses 4 residents. Connection point for roads',
+      '+2 Grain. Houses 4 residents. Connection point for roads',
     );
   });
 });

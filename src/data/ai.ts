@@ -53,7 +53,7 @@ export const aiConfig = {
     advance: 800,
     // Keeping the goods for an advance whose other requirements are met.
     advanceReserve: 700,
-    // Food buildings (fishery, farm, bakery); multiplied by how short food is.
+    // Food buildings (fishery, farm); multiplied by how short food is.
     food: 100,
     // A house when the city runs out of housing.
     house: 75,
@@ -87,9 +87,8 @@ export const aiConfig = {
   foodUrgencyDivisor: 2,
   // A food stock this big halves the food urgency.
   foodStockHalvesUrgency: 20,
-  // Farm / bakery wish strength relative to the base food utility.
+  // Farm wish strength relative to the base food utility.
   farmFactor: 0.9,
-  bakeryFactor: 1.1,
   // Housing buffer a Metropolis keeps (room for the wonder's crew).
   metropolisHouseBuffer: 4,
   // A city with at most this much free housing and no spare workers builds houses for workers.
@@ -99,9 +98,6 @@ export const aiConfig = {
   preparePolisFactor: 1.2,
   // House wish factor when the city lacks workers.
   workerShortHouseFactor: 1.3,
-  // Oil / wine stock below which the chain is started (also when the net is negative).
-  oilStartStock: 10,
-  wineStartStock: 12,
   // Second building of a chain (press, winery, smelter) is wished a bit more than the first.
   chainSecondFactor: 1.1,
   // Most mines the bronze chain builds.

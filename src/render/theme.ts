@@ -748,9 +748,45 @@ export const theme = {
   /** City-level rings: inner gold ring (Metropolis) inset and width in px */
   cityInnerRingInset: 4,
   cityInnerRingWidth: 1.5,
-  /** Resident count label under the city center */
-  residentsSizeFactor: 0.42,
-  residentsStrokeColor: 0x1d2b36,
+  /**
+   * Which land belongs to which city: a fine dashed line on edges between two cities of one
+   * owner, clearly quieter than the territory border (owner color mixed toward white by
+   * `lightMix`; width px, alpha), on a soft wider underlay of the owner color mixed toward ink
+   * (`softMix`, so it also reads on light ground). Dash and gap lengths and the margin kept off
+   * the hex corners are shares of the hex size.
+   */
+  cityBorder: {
+    lightMix: 0.4,
+    width: 1.4,
+    alpha: 0.85,
+    softMix: 0.35,
+    softWidth: 3,
+    softAlpha: 0.22,
+    dash: 0.14,
+    gap: 0.09,
+    endMargin: 0.07,
+  },
+  /**
+   * Name banner under each city center ("Argos · 12": name and residents): a parchment ribbon
+   * with swallow-tail ends in the owner color. Sizes are shares of the hex size (font, padding
+   * sideways / up-down, tail length, notch depth); how far below the tile center its top edge
+   * sits (below the art and the unit standing in front of it).
+   */
+  cityBanner: {
+    fontSizeFactor: 0.3,
+    textColor: 0x2b2118,
+    fill: 0xf4e9d8,
+    fillAlpha: 0.96,
+    borderWidth: 1.1,
+    padX: 0.16,
+    padY: 0.05,
+    tail: 0.2,
+    notch: 0.08,
+    tailDarken: 0.8,
+    offsetY: 0.66,
+    /** Separator between name and residents */
+    separator: ' · ',
+  },
   /** Highlight of valid tiles: white fill + outline */
   highlightColor: 0xffffff,
   highlightFillAlpha: 0.28,
@@ -866,7 +902,6 @@ export const theme = {
       temple: 54,
       cityCenter: 55,
       sawmill: 55,
-      bakery: 50,
       oilPress: 54,
       winery: 54,
       smelter: 50,

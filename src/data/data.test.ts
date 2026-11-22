@@ -21,8 +21,8 @@ describe('data', () => {
     for (const id of GOOD_IDS) expect(GOODS[id].icon.length).toBeGreaterThan(0);
     expect(BUILDING_IDS).toHaveLength(Object.keys(BUILDINGS).length);
   });
-  it('food is bread and fish only', () => {
-    expect(GOOD_IDS.filter((g) => GOODS[g].isFood)).toEqual(['fish', 'bread']);
+  it('food is fish and grain only', () => {
+    expect(GOOD_IDS.filter((g) => GOODS[g].isFood)).toEqual(['grain', 'fish']);
   });
   it('matches the design table', () => {
     expect(BUILDINGS.woodcutter).toMatchObject({
@@ -30,7 +30,8 @@ describe('data', () => {
       workers: 1,
       outputs: { wood: 2 },
     });
-    expect(BUILDINGS.bakery).toMatchObject({ inputs: { grain: 2 }, outputs: { bread: 3 } });
+    expect(BUILDINGS.farm).toMatchObject({ workers: 2, outputs: { grain: 4 } });
+    expect(BUILDINGS.cityCenter.outputs).toEqual({ grain: 2 });
     expect(BUILDINGS.smelter).toMatchObject({
       inputs: { ore: 2, wood: 1 },
       outputs: { bronze: 1 },

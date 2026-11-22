@@ -85,7 +85,7 @@ describe('i18n/format', () => {
   });
   it('formats the advance, trade and level texts', () => {
     expect(formatAdvanceTo('polis')).toBe('Advance to Polis');
-    expect(formatAdvanced('polis')).toBe('Your city is now a Polis.');
+    expect(formatAdvanced('Argos', 'polis')).toBe('Argos is now a Polis.');
     expect(formatSold('wood', 2, 1)).toBe('Sold 2 Wood for 1 drachma.');
     expect(formatBought('wood', 1, 3)).toBe('Bought 1 Wood for 3 drachmas.');
   });
@@ -96,8 +96,8 @@ describe('i18n/format', () => {
     expect(formatUnitsReady(3)).toBe('3 units are ready');
     expect(formatUnitsLost(1)).toBe('1 unit was lost to hunger');
     expect(formatUnitsLost(2)).toBe('2 units were lost to hunger');
-    expect(formatCaptured(1)).toBe('You captured a city!');
-    expect(formatCaptured(2)).toBe('You captured 2 cities!');
+    expect(formatCaptured(['Argos'])).toBe('You captured Argos!');
+    expect(formatCaptured(['Argos', 'Delphi'])).toBe('You captured 2 cities!');
     const base = { damage: 5, counter: 0, defenderDies: false, attackerDies: false };
     expect(formatAttacked('Spearman', base)).toBe('Spearman attacked: 5 damage.');
     expect(formatAttacked('Spearman', { ...base, damage: 10, defenderDies: true })).toBe(

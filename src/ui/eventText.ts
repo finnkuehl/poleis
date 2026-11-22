@@ -1,12 +1,18 @@
 // News about other civilizations for the turn summary (pure, no DOM).
 import type { GameEvent, GameState, PlayerId } from '../core/state';
 import { en } from '../i18n/en';
+import { cityName } from '../i18n/cityNames';
 import { fill } from '../i18n/format';
 import { civName } from './scoreText';
 import type { SummaryLine } from './turnSummary';
 
 function line(text: string, kind: SummaryLine['kind'] = 'info'): SummaryLine {
   return { text, kind };
+}
+
+function cityNameOf(state: GameState, cityId: number): string {
+  const city = state.cities.find((c) => c.id === cityId);
+  return city ? cityName(city.nameIndex) : en.cityPanel.fallbackName;
 }
 
 function eventToLines(state: GameState, viewer: PlayerId, e: GameEvent): SummaryLine[] {
@@ -43,7 +49,15 @@ function eventToLines(state: GameState, viewer: PlayerId, e: GameEvent): Summary
     }
     case 'cityCaptured':
       if (e.from === viewer) {
-        return [line(fill(en.events.cityLost, { civ: civName(state, e.by) }), 'error')];
+        return [
+          line(
+            fill(en.events.cityLost, {
+              civ: civName(state, e.by),
+              city: cityNameOf(state, e.cityId),
+            }),
+            'error',
+          ),
+        ];
       }
       // Capturing a city is already in the turn summary ("You captured a city!").
       if (e.by === viewer) return [];
@@ -51,6 +65,7 @@ function eventToLines(state: GameState, viewer: PlayerId, e: GameEvent): Summary
         line(
           fill(en.events.cityTakenOther, {
             civ: civName(state, e.by),
+            city: cityNameOf(state, e.cityId),
             other: civName(state, e.from),
           }),
         ),
@@ -58,7 +73,14 @@ function eventToLines(state: GameState, viewer: PlayerId, e: GameEvent): Summary
     case 'cityFounded':
       return e.by === viewer
         ? []
-        : [line(fill(en.events.cityFounded, { civ: civName(state, e.by) }))];
+        : [
+            line(
+              fill(en.events.cityFounded, {
+                civ: civName(state, e.by),
+                city: cityNameOf(state, e.cityId),
+              }),
+            ),
+          ];
     case 'eliminated':
       // Your own defeat has its own screen.
       return e.player === viewer

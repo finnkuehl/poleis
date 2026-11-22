@@ -4,11 +4,14 @@ import {
   CITY_LEVEL_DEFS,
   GOODS,
   populationConfig,
+  type CityLevel,
   type GoodId,
   type Goods,
   type Stock,
 } from '../../data';
-import type { City, GameState, PlayerId } from '../state';
+import type { TurnReport } from './production';
+import type { GameState, PlayerId } from '../state';
+import { advanceCheck } from './advance';
 import { housing } from './workers';
 
 export interface CityReport {
@@ -21,9 +24,6 @@ export interface CityReport {
   /** Food + all needs of the current level covered. */
   needsMet: boolean;
   needsConsumed: Goods;
-  /** Next level's supply good was supplied this turn (null at the highest level). */
-  supplied: boolean | null;
-  supplyStreak: number;
   taxes: number;
 }
 
@@ -32,13 +32,10 @@ export interface CityStats {
   housing: number;
   foodPerTurn: number;
   needs: { good: GoodId; amount: number; inStock: boolean }[];
-  supply: {
-    good: GoodId;
-    amount: number;
-    inStock: boolean;
-    streak: number;
-    turnsNeeded: number;
-  } | null;
+  /** Production per turn vs. need for the next level's supply good (null at the highest level). */
+  supply: { good: GoodId; made: number; needed: number; ok: boolean } | null;
+  /** Residents that move in per turn if the city is fed and has room (incl. the needs bonus). */
+  growthPerTurn: number;
   /** Assumes needs are met if they are in stock. */
   taxPerTurn: number;
 }
@@ -53,15 +50,13 @@ function foodNeeded(residents: number): number {
   return Math.ceil(residents / populationConfig.residentsPerFood);
 }
 
-/** Amount of the next level's supply good per turn (rate = that good's rate at the next level). */
-function supplyAmount(city: City): { good: GoodId; amount: number } | null {
-  const next = CITY_LEVEL_DEFS[city.level].next;
-  if (!next) return null;
-  const rate = CITY_LEVEL_DEFS[next.to].needs.find((n) => n.good === next.supplyGood);
-  return {
-    good: next.supplyGood,
-    amount: rate ? Math.ceil(city.residents / rate.residentsPer) : 0,
-  };
+/** Residents per turn: base growth, +bonus if the level has needs and they are all met. */
+export function growthFor(level: CityLevel, needsMet: boolean): number {
+  const hasNeeds = CITY_LEVEL_DEFS[level].needs.length > 0;
+  return (
+    populationConfig.growthPerTurn[level] +
+    (hasNeeds && needsMet ? populationConfig.growthBonusNeedsMet : 0)
+  );
 }
 
 function taxFor(residents: number, bonus: boolean): number {
@@ -104,28 +99,11 @@ export function runPopulation(state: GameState, player: PlayerId): CityReport[] 
     }
     const needsMet = fed && allNeeds;
 
-    // 3. Supply for the next level.
-    let supplied: boolean | null = null;
-    const supply = supplyAmount({ ...city, residents: before });
-    if (supply) {
-      if (stock[supply.good] >= supply.amount) {
-        stock[supply.good] -= supply.amount;
-        city.supplyStreak += 1;
-        supplied = true;
-      } else {
-        city.supplyStreak = 0;
-        supplied = false;
-      }
-    }
-
-    // 4. Growth / hunger.
+    // 3. Growth / hunger.
     const cap = housing(state, city.id);
     if (fed) {
       if (city.residents < cap) {
-        city.residents += Math.min(
-          populationConfig.growthPerTurn[city.level],
-          cap - city.residents,
-        );
+        city.residents += Math.min(growthFor(city.level, needsMet), cap - city.residents);
       }
     } else {
       city.residents = Math.max(
@@ -135,7 +113,7 @@ export function runPopulation(state: GameState, player: PlayerId): CityReport[] 
     }
     if (city.residents > cap) city.residents = Math.max(populationConfig.minResidents, cap);
 
-    // 5. Taxes.
+    // 4. Taxes.
     const taxes = taxFor(city.residents, needsMet);
     stock.drachmas += taxes;
 
@@ -148,8 +126,6 @@ export function runPopulation(state: GameState, player: PlayerId): CityReport[] 
       fed,
       needsMet,
       needsConsumed,
-      supplied,
-      supplyStreak: city.supplyStreak,
       taxes,
     });
   }
@@ -157,7 +133,7 @@ export function runPopulation(state: GameState, player: PlayerId): CityReport[] 
 }
 
 /** Numbers for the city panel (changes nothing). */
-export function cityStats(state: GameState, cityId: number): CityStats {
+export function cityStats(state: GameState, cityId: number, production?: TurnReport): CityStats {
   const city = state.cities.find((c) => c.id === cityId);
   if (!city) throw new Error(`Unknown city ${cityId}`);
   const stock = stockOf(state, city.owner);
@@ -167,29 +143,21 @@ export function cityStats(state: GameState, cityId: number): CityStats {
     const amount = Math.ceil(city.residents / n.residentsPer);
     return { good: n.good, amount, inStock: stock[n.good] >= amount };
   });
-  const supplyInfo = supplyAmount(city);
-  const next = def.next;
-  const supply =
-    supplyInfo && next
-      ? {
-          good: supplyInfo.good,
-          amount: supplyInfo.amount,
-          inStock: stock[supplyInfo.good] >= supplyInfo.amount,
-          streak: city.supplyStreak,
-          turnsNeeded: next.supplyTurns,
-        }
-      : null;
+  const check = def.next ? advanceCheck(state, cityId, production) : null;
+  const supply = check ? { ...check.supply } : null;
   const foodStock = populationConfig.foodOrder.reduce(
     (sum, g) => sum + (GOODS[g].isFood ? stock[g] : 0),
     0,
   );
   const covered = foodStock >= foodPerTurn && needs.every((n) => n.inStock);
+  const growthPerTurn = growthFor(city.level, covered);
   return {
     residents: city.residents,
     housing: housing(state, city.id),
     foodPerTurn,
     needs,
     supply,
+    growthPerTurn,
     taxPerTurn: taxFor(city.residents, covered),
   };
 }

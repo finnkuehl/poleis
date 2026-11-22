@@ -135,6 +135,28 @@ describe('AI military (3 AIs, 80 rounds)', () => {
     expect(seedsWith, `cities founded per seed: ${counts}`).toBeGreaterThanOrEqual(2);
   });
 
+  it('AIs order settlers at the city center, no barracks needed', () => {
+    let fromCenterWithoutBarracks = 0;
+    let atBarracks = 0;
+    for (const seed of SEEDS) {
+      simulate(seed, 40, {
+        onRound: (_round, state) => {
+          for (const t of state.training) {
+            if (t.unit !== 'settler' || t.owner === 0) continue;
+            const b = state.buildings.find((x) => x.id === t.barracksId);
+            if (b?.type === 'barracks') atBarracks += 1;
+            const hasBarracks = state.buildings.some(
+              (x) => x.owner === t.owner && x.type === 'barracks',
+            );
+            if (b?.type === 'cityCenter' && !hasBarracks) fromCenterWithoutBarracks += 1;
+          }
+        },
+      });
+    }
+    expect(atBarracks).toBe(0);
+    expect(fromCenterWithoutBarracks).toBeGreaterThan(0);
+  }, 60_000);
+
   it('Sparta attacks most; Athens and Corinth only rarely', () => {
     const attacks: Record<string, number> = { sparta: 0, athens: 0, corinth: 0 };
     for (const run of all()) {

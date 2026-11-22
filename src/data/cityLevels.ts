@@ -17,10 +17,9 @@ export interface Advance {
   to: CityLevel;
   // Residents the city needs.
   minResidents: number;
-  // This good must be supplied (at the next level's rate) ...
+  // The player's buildings must produce at least this good per turn to cover what all cities
+  // need of it (the other cities at their level + this city at the next level's rate).
   supplyGood: GoodId;
-  // ... for this many turns in a row.
-  supplyTurns: number;
   // Goods paid once when advancing.
   cost: Goods;
 }
@@ -39,7 +38,6 @@ export const CITY_LEVEL_DEFS: Record<CityLevel, CityLevelDef> = {
       to: 'polis',
       minResidents: 20,
       supplyGood: 'oil',
-      supplyTurns: 3,
       cost: { planks: 20, stone: 20, drachmas: 30 },
     },
   },
@@ -49,7 +47,6 @@ export const CITY_LEVEL_DEFS: Record<CityLevel, CityLevelDef> = {
       to: 'metropolis',
       minResidents: 50,
       supplyGood: 'wine',
-      supplyTurns: 3,
       cost: { planks: 40, stone: 40, bronze: 10, drachmas: 80 },
     },
   },

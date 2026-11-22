@@ -1,13 +1,12 @@
 // Turns the report of a finished turn into short messages (pure, no DOM).
 import type { TurnReport } from '../core/rules/production';
-import { militaryConfig, type CityLevel, type GoodId, type UnitId } from '../data';
+import { militaryConfig, type CityLevel, type UnitId } from '../data';
 import { en } from '../i18n/en';
 import {
   fill,
   formatCaptured,
   formatDrachmas,
   formatResidents,
-  formatTurns,
   formatUnitsLost,
   formatUnitsReady,
 } from '../i18n/format';
@@ -22,27 +21,29 @@ export interface SummaryLine {
 export interface SummaryContext {
   /** City id -> level it can advance to now (only cities that just became ready). */
   canAdvance?: Readonly<Record<number, CityLevel>>;
-  /** City id -> the supply good for the next level and how many turns in a row it must be supplied. */
-  supply?: Readonly<Record<number, { good: GoodId; turnsNeeded: number }>>;
   /** Types of the units that appeared this turn; without it only the count is reported. */
   spawnedUnits?: readonly UnitId[];
+  /** City id -> display name; unknown ids fall back to a generic "City". */
+  cityNames?: Readonly<Record<number, string>>;
 }
 
 /**
- * Messages for the toast after a turn, per city: growth and taxes, hunger, supply progress and
+ * Messages for the toast after a turn, per city: growth and taxes, hunger and
  * "Ready to advance", then units (new, hunger, lost), move order results and captured cities. Lines without news are
  * left out.
  */
 export function turnSummary(report: TurnReport, ctx: SummaryContext = {}): SummaryLine[] {
   const lines: SummaryLine[] = [];
+  const nameOf = (id: number): string => ctx.cityNames?.[id] ?? en.cityPanel.fallbackName;
   for (const city of report.cities) {
+    const name = nameOf(city.cityId);
     const change = city.residentsAfter - city.residentsBefore;
     const parts: string[] = [];
     if (change > 0) parts.push(`+${formatResidents(change)}`);
     if (city.taxes > 0) parts.push(`+${formatDrachmas(city.taxes)}`);
     if (parts.length > 0) {
       lines.push({
-        text: fill(en.turnSummary.line, { turn: report.turn, parts: parts.join(', ') }),
+        text: fill(en.turnSummary.line, { turn: report.turn, city: name, parts: parts.join(', ') }),
         kind: 'info',
       });
     }
@@ -50,27 +51,15 @@ export function turnSummary(report: TurnReport, ctx: SummaryContext = {}): Summa
       lines.push({
         text:
           change < 0
-            ? fill(en.turnSummary.hunger, { residents: formatResidents(-change) })
-            : en.turnSummary.hungerNoLoss,
+            ? fill(en.turnSummary.hunger, { city: name, residents: formatResidents(-change) })
+            : fill(en.turnSummary.hungerNoLoss, { city: name }),
         kind: 'error',
-      });
-    }
-    const supply = ctx.supply?.[city.cityId];
-    // Only report progress up to the goal ("3 of 3"); after that the count keeps running silently.
-    if (city.supplied === true && supply && city.supplyStreak <= supply.turnsNeeded) {
-      lines.push({
-        text: fill(en.turnSummary.supplied, {
-          good: en.goods[supply.good],
-          streak: city.supplyStreak,
-          turns: formatTurns(supply.turnsNeeded),
-        }),
-        kind: 'info',
       });
     }
     const level = ctx.canAdvance?.[city.cityId];
     if (level) {
       lines.push({
-        text: fill(en.turnSummary.ready, { level: en.levels[level] }),
+        text: fill(en.turnSummary.ready, { city: name, level: en.levels[level] }),
         kind: 'info',
       });
     }
@@ -96,7 +85,7 @@ export function turnSummary(report: TurnReport, ctx: SummaryContext = {}): Summa
     lines.push(orderOutcomeText(entry.outcome, entry.unitType));
   }
   if (report.captured.length > 0) {
-    lines.push({ text: formatCaptured(report.captured.length), kind: 'info' });
+    lines.push({ text: formatCaptured(report.captured.map(nameOf)), kind: 'info' });
   }
   return lines;
 }

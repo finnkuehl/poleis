@@ -45,10 +45,10 @@ import {
   economyConfig,
   type BuildingId,
   type CityLevel,
-  type GoodId,
   type Stock,
   type UnitId,
 } from '../data';
+import { cityName } from '../i18n/cityNames';
 import { en } from '../i18n/en';
 import {
   fill,
@@ -290,8 +290,9 @@ export async function createGame(
   /** Ids of the player's cities that can advance right now. */
   function readyCities(s: GameState): Set<number> {
     const ready = new Set<number>();
+    const production = previewProduction(s, PLAYER);
     for (const c of s.cities) {
-      if (c.owner === PLAYER && advanceCheck(s, c.id)?.canAdvance) ready.add(c.id);
+      if (c.owner === PLAYER && advanceCheck(s, c.id, production)?.canAdvance) ready.add(c.id);
     }
     return ready;
   }
@@ -312,18 +313,19 @@ export async function createGame(
     const report = state.result ? null : state.lastReport;
     if (report) {
       const canAdvance: Record<number, CityLevel> = {};
-      const supply: Record<number, { good: GoodId; turnsNeeded: number }> = {};
+      const production = previewProduction(state, PLAYER);
       for (const c of state.cities) {
         if (c.owner !== PLAYER) continue;
-        const check = advanceCheck(state, c.id);
+        const check = advanceCheck(state, c.id, production);
         if (!check) continue;
         if (check.to && check.canAdvance && !readyBefore.has(c.id)) canAdvance[c.id] = check.to;
-        supply[c.id] = { good: check.supply.good, turnsNeeded: check.supply.turns };
       }
       const spawnedUnits = ownUnits()
         .filter((u) => !unitsBefore.has(u.id))
         .map((u) => u.type);
-      lines.push(...turnSummary(report, { canAdvance, supply, spawnedUnits }));
+      const cityNames: Record<number, string> = {};
+      for (const c of state.cities) cityNames[c.id] = cityName(c.nameIndex);
+      lines.push(...turnSummary(report, { canAdvance, spawnedUnits, cityNames }));
     }
     if (lines.length === 0) return;
     const isError = lines.some((l) => l.kind === 'error');
@@ -363,17 +365,6 @@ export async function createGame(
     panel.hide();
     clearDragPreview();
     showOrderPaths();
-  }
-
-  /** Working and free residents of one city. */
-  function cityWorkers(cityId: number): { working: number; free: number } {
-    const assigned = assignWorkers(state, PLAYER, connectedBuildingIds(state, PLAYER));
-    let working = 0;
-    for (const b of state.buildings) {
-      if (b.owner === PLAYER && cityIdOf(state, b) === cityId) working += assigned[b.id] ?? 0;
-    }
-    const residents = state.cities.find((c) => c.id === cityId)?.residents ?? 0;
-    return { working, free: Math.max(0, residents - working) };
   }
 
   /** Residents and housing summed over the player's cities. */
@@ -462,7 +453,8 @@ export async function createGame(
     if (building?.type === 'cityCenter') {
       const cityId = cityIdOf(state, building);
       const city = state.cities.find((c) => c.id === cityId);
-      const check = advanceCheck(state, cityId);
+      const production = previewProduction(state, PLAYER);
+      const check = advanceCheck(state, cityId, production);
       if (city && check) {
         // Residents eat after this turn's production, so judge food, needs and taxes
         // against the stock as it will be after production (a copy – the real state stays).
@@ -471,10 +463,11 @@ export async function createGame(
         panel.showCity({
           hex,
           terrain,
+          name: cityName(city.nameIndex),
           level: city.level,
-          stats: cityStats(afterProduction, cityId),
+          train: trainInfo(building),
+          stats: cityStats(afterProduction, cityId, production),
           check,
-          workers: cityWorkers(cityId),
           stock: stockOf(afterProduction),
           onAdvance: check.to ? () => askAdvance(cityId) : undefined,
         });
@@ -552,7 +545,7 @@ export async function createGame(
     return i >= 0 && player?.explored[i] === true;
   }
 
-  /** Training list of a barracks or harbor, from its city's level, residents and the player's goods. */
+  /** Training list of a barracks, harbor or city center (settlers), from its city's level, residents and the player's goods. */
   function trainInfo(building: GameState['buildings'][number]): {
     options: ReturnType<typeof trainOptions>;
     pending: UnitId | null;
@@ -564,7 +557,12 @@ export async function createGame(
         cityLevel: city?.level ?? 'settlement',
         residents: city?.residents ?? 0,
         stock: stockOf(state),
-        building: building.type === 'harbor' ? 'harbor' : 'barracks',
+        building:
+          building.type === 'harbor'
+            ? 'harbor'
+            : building.type === 'cityCenter'
+              ? 'cityCenter'
+              : 'barracks',
       }),
       pending: state.training.find((t) => t.barracksId === building.id)?.unit ?? null,
       onTrain: (id) => {
@@ -722,7 +720,8 @@ export async function createGame(
     preferBuilding = false;
     renderer.selectTile(hex);
     if (commit({ type: 'foundCity', unitId: unit.id })) {
-      toast.show(en.flow.cityFounded);
+      const founded = state.cities[state.cities.length - 1];
+      toast.show(fill(en.flow.cityFounded, { city: founded ? cityName(founded.nameIndex) : '' }));
     }
   }
 
@@ -1032,6 +1031,11 @@ export async function createGame(
     });
   }
 
+  function cityLabel(cityId: number): string {
+    const city = state.cities.find((c) => c.id === cityId);
+    return city ? cityName(city.nameIndex) : en.cityPanel.fallbackName;
+  }
+
   function askAdvance(cityId: number): void {
     const check = advanceCheck(state, cityId);
     if (!check?.to) return;
@@ -1051,7 +1055,8 @@ export async function createGame(
       lines,
       confirmLabel: en.cityPanel.advanceConfirm,
       onConfirm: () => {
-        if (commit({ type: 'advanceCity', cityId })) toast.show(formatAdvanced(target));
+        if (commit({ type: 'advanceCity', cityId }))
+          toast.show(formatAdvanced(cityLabel(cityId), target));
         else showPanel();
       },
       onCancel: () => showPanel(),

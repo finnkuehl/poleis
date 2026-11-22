@@ -85,7 +85,7 @@ describe('attackPreviewLines', () => {
 });
 
 describe('trainOptions', () => {
-  const rich = { ...emptyStock(), planks: 10, bronze: 10, bread: 10, grain: 10, drachmas: 10 };
+  const rich = { ...emptyStock(), planks: 10, bronze: 10, grain: 10, drachmas: 10 };
   const byId = (o: ReturnType<typeof trainOptions>, id: string) => o.find((x) => x.id === id);
 
   it('offers units by city level', () => {
@@ -103,11 +103,19 @@ describe('trainOptions', () => {
     expect(byId(o, 'spearman')).toMatchObject({ state: 'unaffordable', missing: { bronze: 1 } });
   });
   it('blocks settlers in small cities', () => {
-    const o = trainOptions({ cityLevel: 'settlement', residents: 2, stock: rich });
+    const small = { cityLevel: 'settlement', residents: 2, stock: rich, building: 'cityCenter' };
+    const o = trainOptions(small as Parameters<typeof trainOptions>[0]);
     expect(byId(o, 'settler')).toMatchObject({ state: 'noResidents', residentsNeeded: 3 });
     expect(
-      byId(trainOptions({ cityLevel: 'settlement', residents: 3, stock: rich }), 'settler')?.state,
+      byId(
+        trainOptions({ ...small, residents: 3 } as Parameters<typeof trainOptions>[0]),
+        'settler',
+      )?.state,
     ).toBe('ok');
+    // The barracks list has no settler any more.
+    expect(
+      byId(trainOptions({ cityLevel: 'settlement', residents: 6, stock: rich }), 'settler'),
+    ).toBeUndefined();
   });
   it('sorts ready units first', () => {
     const o = trainOptions({ cityLevel: 'settlement', residents: 6, stock: rich });

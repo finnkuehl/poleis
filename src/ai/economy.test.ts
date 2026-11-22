@@ -5,7 +5,7 @@ import type { GameState, PlayerId } from '../core/state';
 import { addBuilding, addCity, at, makeTestState } from '../core/testing';
 import { BUILDINGS, populationConfig, type BuildingId } from '../data';
 import { buildContext } from './context';
-import { roadCandidates } from './economy';
+import { economyCandidates, roadCandidates } from './economy';
 import { simulate, type SimulationResult } from './testing';
 import { chooseCandidate } from './turn';
 import type { Candidate } from './types';
@@ -64,7 +64,7 @@ describe('AI economy after 50 rounds (3 AIs)', () => {
         expect(countOf(state, p.id, 'woodcutter'), `${label} woodcutter`).toBeGreaterThanOrEqual(1);
         expect(countOf(state, p.id, 'quarry'), `${label} quarry`).toBeGreaterThanOrEqual(1);
         expect(countOf(state, p.id, 'house'), `${label} houses`).toBeGreaterThanOrEqual(2);
-        // A food source that actually works: a fishery, or a bakery (farm + bakery).
+        // A food source that actually works: a fishery or a farm.
         const report = previewProduction(state, p.id);
         const producing = (type: BuildingId): boolean =>
           state.buildings.some(
@@ -73,7 +73,7 @@ describe('AI economy after 50 rounds (3 AIs)', () => {
               b.type === type &&
               report.buildings.some((r) => r.buildingId === b.id && r.status.kind === 'producing'),
           );
-        expect(producing('fishery') || producing('bakery'), `${label} food`).toBe(true);
+        expect(producing('fishery') || producing('farm'), `${label} food`).toBe(true);
         const residents = state.cities
           .filter((c) => c.owner === p.id)
           .reduce((sum, c) => sum + c.residents, 0);
@@ -171,6 +171,34 @@ describe('takeAiTurn on a small map', () => {
     const ctx = buildContext(s, 0);
     expect(ctx.roadInfo(at(1, 1))).toEqual({ cost: 0, target: null });
     expect(ctx.roadInfo(at(4, 1))?.cost).toBe(3);
+  });
+});
+
+describe('food wishes', () => {
+  /** A hungry city: 10 residents eat 5 food, the city center only makes 2 grain. */
+  function hungryCity(rows: string[]): GameState {
+    const s = makeTestState(rows, { goods: { wood: 20, stone: 10, planks: 10 } });
+    addCity(s, at(2, 2), { radius: 5, residents: 10 });
+    addBuilding(s, 'house', at(1, 2));
+    return s;
+  }
+  const foodBuilds = (s: GameState): string[] =>
+    economyCandidates(buildContext(s, 0))
+      .filter((c) => c.reason.startsWith('food'))
+      .map((c) => (c.action?.type === 'build' ? c.action.building : c.reason));
+
+  it('builds a farm inland', () => {
+    const s = hungryCity(['ppppppp', 'ppppppp', 'ppppppp', 'ppppppp', 'ppppppp']);
+    const builds = foodBuilds(s);
+    expect(builds).toContain('farm');
+    expect(builds).not.toContain('fishery');
+  });
+
+  it('builds a fishery at the coast first', () => {
+    const s = hungryCity(['ppppppp', 'ppppppp', 'ppppppp', 'ppppppp', 'ccccccc']);
+    const builds = foodBuilds(s);
+    expect(builds).toContain('fishery');
+    expect(builds).not.toContain('farm');
   });
 });
 

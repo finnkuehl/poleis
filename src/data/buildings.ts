@@ -16,7 +16,6 @@ export type BuildingId =
   | 'farm'
   | 'fishery'
   | 'sawmill'
-  | 'bakery'
   | 'oliveGrove'
   | 'oilPress'
   | 'mine'
@@ -80,7 +79,6 @@ export const BUILDING_IDS: readonly BuildingId[] = [
   'farm',
   'fishery',
   'sawmill',
-  'bakery',
   'oliveGrove',
   'oilPress',
   'mine',
@@ -96,14 +94,14 @@ const onPlains: readonly PlacementOption[] = [{ on: ['plains'] }];
 
 export const BUILDINGS: Record<BuildingId, BuildingDef> = {
   // Start building: storage, +4 housing, claims radius 2. Cannot be built by the player.
-  // Feeds a little by itself (1 bread per turn, no workers), so a city never gets stuck.
+  // Feeds a little by itself (2 grain per turn, no workers = food for 4 residents), so a city never gets stuck.
   cityCenter: {
     category: 'city',
     placement: onPlains,
     cost: {},
     workers: 0,
     inputs: {},
-    outputs: { bread: 1 },
+    outputs: { grain: 2 },
     housing: 4,
     isStorage: true,
     territoryRadius: 2,
@@ -217,14 +215,14 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     playerCanBuild: true,
     icon: '⛏️',
   },
-  // +3 grain per turn, needs 2 workers.
+  // +4 grain per turn, needs 2 workers (grain is food: feeds as well per worker as a fishery).
   farm: {
     category: 'food',
     placement: onPlains,
     cost: { wood: 3 },
     workers: 2,
     inputs: {},
-    outputs: { grain: 3 },
+    outputs: { grain: 4 },
     housing: 0,
     isStorage: false,
     territoryRadius: 0,
@@ -261,21 +259,6 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     minLevel: 'settlement',
     playerCanBuild: true,
     icon: '🪚',
-  },
-  // 2 grain -> 3 bread per turn.
-  bakery: {
-    category: 'food',
-    placement: onPlains,
-    cost: { planks: 3, stone: 2 },
-    workers: 1,
-    inputs: { grain: 2 },
-    outputs: { bread: 3 },
-    housing: 0,
-    isStorage: false,
-    territoryRadius: 0,
-    minLevel: 'settlement',
-    playerCanBuild: true,
-    icon: '🥖',
   },
   // Plains or hills: +2 olives per turn.
   oliveGrove: {

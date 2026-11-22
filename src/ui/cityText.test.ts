@@ -17,6 +17,7 @@ const stats: CityStats = {
   foodPerTurn: 3,
   needs: [],
   supply: null,
+  growthPerTurn: 1,
   taxPerTurn: 3,
 };
 
@@ -28,26 +29,29 @@ describe('growthState', () => {
     expect(growthText(s)).toBe('Growing: +1 per turn');
   });
   it('limits growth to free housing', () => {
-    const stock = { ...emptyStock(), bread: 5 };
+    const stock = { ...emptyStock(), grain: 5 };
     expect(growthState('polis', { ...stats, housing: 7 }, stock)).toEqual({
       kind: 'growing',
       perTurn: 1,
     });
-    expect(growthState('polis', stats, stock)).toEqual({ kind: 'growing', perTurn: 2 });
+    expect(growthState('polis', { ...stats, growthPerTurn: 2 }, stock)).toEqual({
+      kind: 'growing',
+      perTurn: 2,
+    });
   });
   it('is full without free housing', () => {
     const stock = { ...emptyStock(), fish: 3 };
     const s = growthState('settlement', { ...stats, housing: 6 }, stock);
     expect(growthText(s)).toBe('Full – build houses to grow');
   });
-  it('is hungry when food in stock does not cover a turn (fish and bread count together)', () => {
+  it('is hungry when food in stock does not cover a turn (fish and grain count together)', () => {
     expect(growthText(growthState('settlement', stats, emptyStock()))).toBe(
       'Hungry – loses 1 resident per turn',
     );
-    expect(growthState('settlement', stats, { ...emptyStock(), fish: 1, bread: 2 }).kind).toBe(
+    expect(growthState('settlement', stats, { ...emptyStock(), fish: 1, grain: 2 }).kind).toBe(
       'growing',
     );
-    expect(growthState('settlement', stats, { ...emptyStock(), fish: 1, bread: 1 }).kind).toBe(
+    expect(growthState('settlement', stats, { ...emptyStock(), fish: 1, grain: 1 }).kind).toBe(
       'hungry',
     );
   });
@@ -65,7 +69,7 @@ describe('needText', () => {
 const check: AdvanceCheck = {
   to: 'polis',
   residents: { have: 12, need: 20, ok: false },
-  supply: { good: 'oil', streak: 2, turns: 3, ok: false },
+  supply: { good: 'oil', made: 2, needed: 3, ok: false },
   cost: {
     cost: { planks: 20, stone: 20, drachmas: 30 },
     missing: { stone: 5 },
@@ -75,15 +79,15 @@ const check: AdvanceCheck = {
 };
 
 describe('advanceRows', () => {
-  it('caps the supply count at the goal', () => {
-    const long = { ...check, supply: { ...check.supply, streak: 16, ok: true } };
-    expect(advanceRows(long)[1]?.text).toBe('Oil supplied 3 of 3 turns in a row');
+  it('shows made / needed per turn', () => {
+    const ok = { ...check, supply: { ...check.supply, made: 3, ok: true } };
+    expect(advanceRows(ok)[1]).toMatchObject({ ok: true, text: 'Oil: makes 3 / needs 3 per turn' });
   });
   it('lists residents, supply and cost', () => {
     const rows = advanceRows(check);
     expect(rows.map((r) => [r.kind, r.ok, r.text])).toEqual([
       ['residents', false, 'Residents 12 / 20'],
-      ['supply', false, 'Oil supplied 2 of 3 turns in a row'],
+      ['supply', false, 'Oil: makes 2 / needs 3 per turn'],
       ['cost', false, 'Cost: 20 Stone, 20 Planks, 30 Drachmas'],
     ]);
     expect(rows[2]?.parts?.map((p) => [p.good, p.missing])).toEqual([
@@ -101,7 +105,9 @@ describe('advanceBlockReason', () => {
   it('names the first unmet requirement', () => {
     expect(advanceBlockReason(check)).toBe('Not enough residents yet.');
     const r1 = { ...check, residents: { have: 20, need: 20, ok: true } };
-    expect(advanceBlockReason(r1)).toBe('Supply the city with oil for 3 turns in a row first.');
+    expect(advanceBlockReason(r1)).toBe(
+      'Produce more oil first: it makes 2 per turn but 3 are needed.',
+    );
     const r2 = { ...r1, supply: { ...r1.supply, ok: true } };
     expect(advanceBlockReason(r2)).toBe('Not enough goods: 5 Stone missing.');
   });
@@ -119,7 +125,7 @@ describe('tradeRows', () => {
   });
   it('shows all goods on request, without drachmas', () => {
     const rows = tradeRows(emptyStock(), true, true);
-    expect(rows).toHaveLength(12);
+    expect(rows).toHaveLength(11);
     expect(rows.some((r) => r.good === 'drachmas')).toBe(false);
   });
   it('enables selling with the sell amount and buying with enough drachmas', () => {

@@ -16,12 +16,14 @@ import {
 import {
   checkPlacement,
   economyOverview,
+  foodIn,
+  isFoodGood,
   housing,
   previewProduction,
   workerSummary,
   workersNeeded,
-  cityIdOf,
   type BuildingStatus,
+  type TurnReport,
   type WorkerSummary,
 } from '../core/rules';
 import { neighbors, type Hex } from '../core/hex';
@@ -33,8 +35,6 @@ export interface CityInfo {
   housing: number;
   /** Housing minus residents. */
   freeHousing: number;
-  /** Residents minus the workers all (unpaused) buildings of the city need; negative = short. */
-  slack: number;
 }
 
 const INF = 1 << 20;
@@ -47,11 +47,16 @@ export interface AiContext {
   turn: number;
   /** Estimated net change per good next turn. */
   net: Record<GoodId, number>;
-  /** Food (fish + bread) produced per turn, and eaten by the residents if they get all they need. */
+  /** Food (fish + grain) produced per turn, and eaten by the residents if they get all they need. */
   foodProd: number;
   foodNeed: number;
   workers: WorkerSummary;
   cities: CityInfo[];
+  /**
+   * Residents of the whole civilization minus the workers all its unpaused buildings need
+   * (one shared workforce); negative = short.
+   */
+  slack: number;
   ownBuildings: Building[];
   /** Number of own buildings per type. */
   count: Record<BuildingId, number>;
@@ -59,6 +64,8 @@ export interface AiContext {
   pending: Record<BuildingId, number>;
   /** Number of own buildings per type that actually work (producing or open for business). */
   working: Record<BuildingId, number>;
+  /** `previewProduction` of this turn (pass it to `advanceCheck` so it is not recomputed per city). */
+  production: TurnReport;
   statusOf: Map<number, BuildingStatus['kind']>;
   /** Indices of the player's own territory tiles. */
   ownTiles: number[];
@@ -133,7 +140,7 @@ export function buildContext(state: GameState, player: PlayerId): AiContext {
   // what is not there), so it hides how big a shortage really is.
   let foodProd = 0;
   for (const flow of overview.goods) {
-    if (flow.good === 'fish' || flow.good === 'bread') {
+    if (isFoodGood(flow.good)) {
       for (const p of flow.produced) foodProd += p.amount;
     }
   }
@@ -157,7 +164,7 @@ export function buildContext(state: GameState, player: PlayerId): AiContext {
   // Cities with their free housing and free workers (residents - workers the buildings need).
   // A city that is about to starve counts only the residents its food can keep.
   const ownCities = state.cities.filter((c) => c.owner === player);
-  const foodStock = me.goods.fish + me.goods.bread;
+  const foodStock = foodIn(me.goods);
   let eatenNow = 0;
   for (const c of ownCities) eatenNow += Math.ceil(c.residents / populationConfig.residentsPerFood);
   // Residents the food can keep (a stock of food hides a shortage for a while).
@@ -166,15 +173,15 @@ export function buildContext(state: GameState, player: PlayerId): AiContext {
     Math.floor((foodProd * populationConfig.residentsPerFood) / Math.max(1, ownCities.length)),
   );
   const foodSafe = foodStock >= aiConfig.foodStockSafe;
+  let usableResidents = 0;
   const cities: CityInfo[] = ownCities.map((city) => {
     const h = housing(state, city.id);
-    let needed = 0;
-    for (const b of ownBuildings) {
-      if (!b.paused && cityIdOf(state, b) === city.id) needed += workersNeeded(b);
-    }
-    const residents = foodSafe ? city.residents : Math.min(city.residents, sustainable);
-    return { city, housing: h, freeHousing: h - city.residents, slack: residents - needed };
+    usableResidents += foodSafe ? city.residents : Math.min(city.residents, sustainable);
+    return { city, housing: h, freeHousing: h - city.residents };
   });
+  let neededWorkers = 0;
+  for (const b of ownBuildings) if (!b.paused) neededWorkers += workersNeeded(b);
+  const slack = usableResidents - neededWorkers;
 
   const unitCount =
     state.units.filter((u) => u.owner === player).length +
@@ -230,10 +237,12 @@ export function buildContext(state: GameState, player: PlayerId): AiContext {
     skip: new Set<string>(),
     workers,
     cities,
+    slack,
     ownBuildings,
     count,
     pending,
     working,
+    production: report,
     statusOf,
     ownTiles,
     connectedTile,

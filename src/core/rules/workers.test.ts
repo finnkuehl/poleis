@@ -12,6 +12,15 @@ function setup() {
   return s;
 }
 
+/** Two cities on a row of plains, joined by a road; the given residents live in A and B. */
+function twoCities(residentsA: number, residentsB: number) {
+  const s = makeTestState(['ppppppppppppp']);
+  addCity(s, at(0, 0), { radius: 2, residents: residentsA });
+  addCity(s, at(10, 0), { radius: 2, residents: residentsB });
+  for (const x of [3, 4, 5, 6, 7, 8]) addRoad(s, at(x, 0));
+  return s;
+}
+
 describe('workers', () => {
   it('population sums residents, housing sums the housing of the city', () => {
     const s = setup();
@@ -29,24 +38,28 @@ describe('workers', () => {
     const w = assignWorkers(s, 0, connectedBuildingIds(s, 0));
     expect([w[farm], w[wc]]).toEqual([2, 0]);
   });
-  it('each city staffs its own buildings', () => {
-    const s = makeTestState(['ppppppppppppp']);
-    const a = addCity(s, at(0, 0), { radius: 2, residents: 1 });
-    const b = addCity(s, at(10, 0), { radius: 2, residents: 4 });
-    const wcA = addBuilding(s, 'woodcutter', at(1, 0));
-    const farmB = addBuilding(s, 'farm', at(9, 0));
-    const outside = addBuilding(s, 'woodcutter', at(5, 0));
-    addRoad(s, at(2, 0));
-    addRoad(s, at(3, 0));
-    addRoad(s, at(4, 0));
-    addRoad(s, at(6, 0));
-    addRoad(s, at(7, 0));
-    addRoad(s, at(8, 0));
-    expect(a).not.toBe(b);
+  it('residents of one city staff a building in another city', () => {
+    const s = twoCities(0, 4); // nobody lives in city A
+    const farmA = addBuilding(s, 'farm', at(1, 0));
+    const wcB = addBuilding(s, 'woodcutter', at(9, 0));
     const w = assignWorkers(s, 0, connectedBuildingIds(s, 0));
-    expect(w[wcA]).toBe(1);
-    expect(w[farmB]).toBe(2);
-    expect(w[outside]).toBeUndefined();
+    expect([w[farmA], w[wcB]]).toEqual([2, 1]);
+  });
+  it('orders by category, then id, across cities', () => {
+    const s = twoCities(1, 2); // 3 residents in total
+    const wcA = addBuilding(s, 'woodcutter', at(1, 0)); // raw, 1, city A, oldest
+    const farmB = addBuilding(s, 'farm', at(9, 0)); // food, 2, city B
+    const wcB = addBuilding(s, 'woodcutter', at(11, 0)); // raw, 1, city B
+    const w = assignWorkers(s, 0, connectedBuildingIds(s, 0));
+    expect([w[farmB], w[wcA], w[wcB]]).toEqual([2, 1, 0]);
+  });
+  it('skips a crew that does not fit across cities and tries the next', () => {
+    const s = twoCities(1, 2); // 3 residents in total
+    const mineA = addBuilding(s, 'mine', at(1, 0)); // raw, 2
+    const mineB = addBuilding(s, 'mine', at(9, 0)); // raw, 2 -> no 2 left
+    const wcB = addBuilding(s, 'woodcutter', at(11, 0)); // raw, 1 -> still staffed
+    const w = assignWorkers(s, 0, connectedBuildingIds(s, 0));
+    expect([w[mineA], w[mineB], w[wcB]]).toEqual([2, 0, 1]);
   });
   it('a paused building gets no workers; they go to the next building', () => {
     const s = setup();
@@ -148,14 +161,12 @@ describe('low priority goods', () => {
     const wc = addBuilding(s, 'woodcutter', at(2, 2));
     expect([crews(s)[wc], crews(s)[quarry]]).toEqual([0, 1]);
   });
-  it('works per city', () => {
-    const s = makeTestState(['ppppppppppppp']);
-    addCity(s, at(0, 0), { radius: 2, residents: 1 });
-    addCity(s, at(10, 0), { radius: 2, residents: 1 });
+  it('works across cities: the second pass comes after all cities', () => {
+    const s = twoCities(1, 1);
     s.players[0].lowPriorityGoods = ['wood'];
-    const wcA = addBuilding(s, 'woodcutter', at(1, 0));
+    const wcA = addBuilding(s, 'woodcutter', at(1, 0)); // low priority, oldest
     const quarryB = addBuilding(s, 'quarry', at(9, 0));
-    const wcB = addBuilding(s, 'woodcutter', at(11, 0));
+    const wcB = addBuilding(s, 'woodcutter', at(11, 0)); // low priority
     const w = assignWorkers(s, 0, connectedBuildingIds(s, 0));
     expect([w[wcA], w[quarryB], w[wcB]]).toEqual([1, 1, 0]);
   });

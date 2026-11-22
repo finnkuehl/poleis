@@ -5,6 +5,7 @@ import type { GameState } from '../core/state';
 import { at, makeTestState } from '../core/testing';
 import {
   EDGE_DIRECTION,
+  cityEdges,
   edgeMaskOf,
   edgeMidpoint,
   edgeNeighborHex,
@@ -42,6 +43,38 @@ function emptyState(): GameState {
   s.buildings = [];
   return s;
 }
+
+describe('cityEdges', () => {
+  /** Two tiles side by side (b east of a), both of player 0, cities `ca` and `cb`. */
+  function pair(ca: number, cb: number, ownerB = 0): { s: GameState; a: number; b: number } {
+    const s = emptyState();
+    s.tileCity = s.tileCity.map(() => -1);
+    const ha = at(4, 3);
+    const a = tileIndex(s.map, ha);
+    const b = tileIndex(s.map, hexAdd(ha, HEX_DIRECTIONS[0]));
+    s.territory[a] = 0;
+    s.territory[b] = ownerB;
+    s.tileCity[a] = ca;
+    s.tileCity[b] = cb;
+    return { s, a, b };
+  }
+
+  it('draws no edge inside one city', () => {
+    const { s } = pair(7, 7);
+    expect(cityEdges(s, 0)).toEqual([]);
+  });
+
+  it('draws the edge between two cities of one owner once', () => {
+    const { s, a, b } = pair(7, 9);
+    const edges = cityEdges(s, 0);
+    expect(edges).toEqual([{ tile: Math.min(a, b), edges: [a < b ? 0 : 3] }]);
+  });
+
+  it('draws none across different owners or toward land of no city', () => {
+    expect(cityEdges(pair(7, 9, 1).s, 0)).toEqual([]);
+    expect(cityEdges(pair(7, -1).s, 0)).toEqual([]);
+  });
+});
 
 describe('territoryEdges', () => {
   it('a single tile has all 6 edges', () => {

@@ -7,7 +7,7 @@
 import type { Action } from '../core/actions';
 import { neighbors, type Hex } from '../core/hex';
 import { terrainAt, tileIndex } from '../core/map';
-import { advanceCheck, canAfford, cityStats, missingGoods, territoryGain } from '../core/rules';
+import { advanceCheck, canAfford, foodIn, missingGoods, territoryGain } from '../core/rules';
 import {
   aiConfig,
   BUILDINGS,
@@ -119,15 +119,16 @@ function sitesFor(g: Gen, type: BuildingId): Map<number, Site> {
   return result;
 }
 
-/** How much a worker building suffers from a lack of free workers in its city. */
-function workerFactor(ctx: AiContext, ci: CityInfo, type: BuildingId): number {
+/** How much a worker building suffers from a lack of free workers (shared by all cities). */
+function workerFactor(ctx: AiContext, type: BuildingId): number {
   // The wonder is worth building before its crew is there (more housing and food follow).
   if (type === 'wonder') return 1;
   const need = BUILDINGS[type].workers;
-  if (need === 0 || ci.slack >= need) return 1;
-  const growing = ci.freeHousing > 0 && ctx.foodProd - ctx.foodNeed >= 1;
+  if (need === 0 || ctx.slack >= need) return 1;
+  const freeHousing = ctx.cities.reduce((sum, c) => sum + c.freeHousing, 0);
+  const growing = freeHousing > 0 && ctx.foodProd - ctx.foodNeed >= 1;
   if (BUILDINGS[type].category === 'food') return aiConfig.foodNoWorkersFactor;
-  if (growing && ci.slack + Math.min(ci.freeHousing, aiConfig.futureWorkerHousing) >= need)
+  if (growing && ctx.slack + Math.min(freeHousing, aiConfig.futureWorkerHousing) >= need)
     return aiConfig.growingFactor;
   return aiConfig.noFreeWorkersFactor;
 }
@@ -179,7 +180,7 @@ function wishBuilding(
     const cost = addGoodsTo(BUILDINGS[type].cost, roadGoods(site.roadCost));
     const candidate: Candidate = {
       action: { type: 'build', building: type, hex: site.hex },
-      utility: base * w * workerFactor(ctx, ci, type),
+      utility: base * w * workerFactor(ctx, type),
       reason,
       key: key(type, site.hex),
       cost,
@@ -212,13 +213,13 @@ function foodSituation(ctx: AiContext): { net: number; projNet: number } {
   return { net, projNet: net + needNow - needProj };
 }
 
-/** Food: fishery first (cheap), else farm + bakery as a chain. */
+/** Food: fishery first (cheap), else a farm (grain is food, so one building is enough). */
 function foodWishes(g: Gen): void {
   const { ctx } = g;
   const nCities = ctx.cities.length;
   const food = foodSituation(ctx);
   const deficit = aiConfig.foodNetTarget - food.projNet;
-  const stockFood = ctx.stock.fish + ctx.stock.bread;
+  const stockFood = foodIn(ctx.stock);
   let urgency =
     deficit > 0 ? 1 + Math.min(aiConfig.foodUrgencyMax, deficit / aiConfig.foodUrgencyDivisor) : 0;
   if (stockFood >= aiConfig.foodStockHalvesUrgency) urgency /= 2;
@@ -230,43 +231,10 @@ function foodWishes(g: Gen): void {
     wishBuilding(g, 'fishery', U.food * urgency, 'food: fishery', { essential: true });
   }
   const fisheriesDone = !fisheryTiles || ctx.count.fishery >= maxFish;
-  if (
-    urgency > 0 &&
-    fisheriesDone &&
-    ctx.count.farm <= ctx.count.bakery &&
-    ctx.count.farm < maxFarm &&
-    ctx.pending.farm === 0
-  ) {
-    // A farm without a bakery feeds nobody and eats the workers: start it once the bakery
-    // can be paid (and keep the goods for it until then).
-    const bakeryCost = BUILDINGS.bakery.cost;
-    if (ctx.count.bakery > ctx.count.farm || canAfford(ctx.stock, bakeryCost)) {
-      wishBuilding(g, 'farm', U.food * aiConfig.farmFactor * urgency, 'food: farm', {
-        essential: true,
-      });
-    } else {
-      g.demand.push({
-        action: null,
-        utility: U.food * urgency,
-        reason: 'save for the bakery',
-        key: 'save:bakery',
-        cost: bakeryCost,
-        reserve: true,
-      });
-    }
-  }
-  // A farm without a bakery feeds nobody: finish the chain.
-  if (ctx.count.farm > ctx.count.bakery && ctx.pending.bakery === 0) {
-    wishBuilding(
-      g,
-      'bakery',
-      U.food * aiConfig.bakeryFactor * Math.max(urgency, 1),
-      'food: bakery',
-      {
-        reserve: true,
-        essential: true,
-      },
-    );
+  if (urgency > 0 && fisheriesDone && ctx.count.farm < maxFarm && ctx.pending.farm === 0) {
+    wishBuilding(g, 'farm', U.food * aiConfig.farmFactor * urgency, 'food: farm', {
+      essential: true,
+    });
   }
 }
 
@@ -291,13 +259,13 @@ function houseWishes(g: Gen): void {
     // No spare workers for a wished building: more housing means more workers.
     const crew =
       ci.city.level === 'metropolis' && wonderUnfinished(ctx) ? BUILDINGS.wonder.workers : 1;
-    const needsWorkers = ci.slack < crew && ci.freeHousing <= aiConfig.needsWorkersMaxFreeHousing;
+    const needsWorkers = ctx.slack < crew && ci.freeHousing <= aiConfig.needsWorkersMaxFreeHousing;
     if (ci.freeHousing > buffer && !needsWorkers) continue;
     const prepare =
       ci.city.level === 'settlement' && ci.housing < aiConfig.preparePolisHousing
         ? aiConfig.preparePolisFactor
         : 1;
-    const short = ci.slack < 0 ? aiConfig.workerShortHouseFactor : 1;
+    const short = ctx.slack < 0 ? aiConfig.workerShortHouseFactor : 1;
     wishBuilding(g, 'house', U.house * prepare * short, 'housing', { wish: 'house', city: ci });
   }
 }
@@ -306,7 +274,7 @@ function houseWishes(g: Gen): void {
 function advanceWishes(g: Gen): void {
   const { ctx } = g;
   for (const ci of ctx.cities) {
-    const check = advanceCheck(ctx.state, ci.city.id);
+    const check = advanceCheck(ctx.state, ci.city.id, ctx.production);
     if (!check || check.to === null) continue;
     if (check.canAdvance) {
       g.demand.push({
@@ -316,7 +284,7 @@ function advanceWishes(g: Gen): void {
         key: `advance:${ci.city.id}`,
         cost: check.cost.cost,
       });
-    } else if (check.residents.ok && (check.supply.ok || ctx.stock[check.supply.good] > 0)) {
+    } else if (check.residents.ok && check.supply.ok) {
       g.demand.push({
         action: null,
         utility: U.advanceReserve,
@@ -338,12 +306,26 @@ function chainWishes(g: Gen): void {
     cities.some((c) => levelIndex(c) === level && c.city.residents >= minRes);
   const atLeast = (level: number): boolean => cities.some((c) => levelIndex(c) >= level);
 
+  // Production still missing for an advance (made vs needed, see `advanceCheck`): a city
+  // prepares its advance once it is nearly big enough. Oil/wine already used by Polis /
+  // Metropolis cities are covered by the net target.
+  const supplyShort = (good: GoodId, level: number, minRes: number): number => {
+    let short = 0;
+    for (const ci of cities) {
+      if (levelIndex(ci) !== level || ci.city.residents < minRes) continue;
+      const check = advanceCheck(ctx.state, ci.city.id, ctx.production);
+      if (check && check.to !== null && check.supply.good === good) {
+        short = Math.max(short, check.supply.needed - check.supply.made);
+      }
+    }
+    return short;
+  };
+
   // Oil: needed from Polis on, prepared by a settlement that is nearly big enough.
   const oilNeedy = anyLevel(0, cfg.oilChainResidents) || atLeast(1);
   if (
     oilNeedy &&
-    ctx.net.oil < cfg.oilNetTarget &&
-    (ctx.stock.oil < cfg.oilStartStock || ctx.net.oil < 0)
+    (ctx.net.oil < cfg.oilNetTarget || supplyShort('oil', 0, cfg.oilChainResidents) > 0)
   ) {
     const groveCap = cfg.maxPerCity.oliveGrove * cities.length;
     if (ctx.count.oliveGrove <= ctx.count.oilPress) {
@@ -361,8 +343,7 @@ function chainWishes(g: Gen): void {
   const wineNeedy = anyLevel(1, cfg.wineChainResidents) || atLeast(2);
   if (
     wineNeedy &&
-    ctx.net.wine < cfg.wineNetTarget &&
-    (ctx.stock.wine < cfg.wineStartStock || ctx.net.wine < 0)
+    (ctx.net.wine < cfg.wineNetTarget || supplyShort('wine', 1, cfg.wineChainResidents) > 0)
   ) {
     if (ctx.count.vineyard <= ctx.count.winery) {
       if (
@@ -612,25 +593,6 @@ function tradeWishes(g: Gen): Candidate[] {
       reason: `sell surplus ${good}`,
       key: `sell:${good}`,
       cost: { [good]: lots * sellAmount },
-    });
-  }
-  // Buy the oil / wine a city needs to count its supply turns for the next level.
-  for (const ci of ctx.cities) {
-    const check = advanceCheck(ctx.state, ci.city.id);
-    if (!check || check.to === null || !check.residents.ok || check.supply.ok) continue;
-    const supply = cityStats(ctx.state, ci.city.id).supply;
-    if (!supply) continue;
-    const lots = supply.amount - ctx.stock[supply.good];
-    const keep = Math.max(cfg.buyKeepDrachmas, check.cost.cost.drachmas ?? 0);
-    const rich = ctx.stock.drachmas >= cfg.buyRichDrachmas;
-    if (lots < 1 || lots > (rich ? cfg.buyMaxGoodsRich : cfg.buyMaxGoods)) continue;
-    if (ctx.stock.drachmas < lots * buyPrice + keep) continue;
-    out.push({
-      action: { type: 'trade', good: supply.good, direction: 'buy', lots },
-      utility: U.buy * w,
-      reason: `buy ${supply.good} for the supply of ${check.to}`,
-      key: `buy:${supply.good}`,
-      cost: { drachmas: lots * buyPrice },
     });
   }
   // Buy what blocks the strongest wish if that is only a few goods and the drachmas allow it.

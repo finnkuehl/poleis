@@ -48,12 +48,13 @@ function isLowPriority(state: GameState, b: Building): boolean {
 }
 
 /**
- * Distributes residents as workers (building id -> assigned workers), city by city:
- * the residents of a city staff the buildings in that city's territory.
- * Only connected, unpaused buildings that need workers get any. Order: category, then older
- * first. Buildings producing a low-priority good of their owner come after all others of the
- * city (same order among themselves). Crews are all-or-nothing: a building gets its full crew only if enough residents
- * remain, otherwise it gets 0 and the next building (maybe with a smaller crew) is tried.
+ * Distributes residents as workers (building id -> assigned workers) from one shared pool:
+ * all residents of the player staff any connected building of the player, in any city.
+ * Only connected, unpaused buildings that need workers get any. Order: first all normal
+ * buildings, then those producing a low-priority good of their owner; within each pass by
+ * category (food, raw, processing, city), then older building first across all cities. Crews
+ * are all-or-nothing: a building gets its full crew only if enough residents remain, otherwise
+ * it gets 0 and the next building (maybe with a smaller crew) is tried.
  */
 export function assignWorkers(
   state: GameState,
@@ -61,28 +62,25 @@ export function assignWorkers(
   connected: ReadonlySet<number>,
 ): Record<number, number> {
   const assigned: Record<number, number> = {};
-  for (const city of state.cities.filter((c) => c.owner === player)) {
-    let remaining = city.residents;
-    for (const lowPass of [false, true]) {
-      for (const category of CATEGORY_ORDER) {
-        const group = state.buildings
-          .filter(
-            (b) =>
-              b.owner === player &&
-              !b.paused &&
-              connected.has(b.id) &&
-              cityIdOf(state, b) === city.id &&
-              BUILDINGS[b.type].category === category &&
-              workersNeeded(b) > 0 &&
-              isLowPriority(state, b) === lowPass,
-          )
-          .sort((a, b) => a.id - b.id);
-        for (const b of group) {
-          const needed = workersNeeded(b);
-          const n = remaining >= needed ? needed : 0;
-          assigned[b.id] = n;
-          remaining -= n;
-        }
+  let remaining = population(state, player);
+  for (const lowPass of [false, true]) {
+    for (const category of CATEGORY_ORDER) {
+      const group = state.buildings
+        .filter(
+          (b) =>
+            b.owner === player &&
+            !b.paused &&
+            connected.has(b.id) &&
+            BUILDINGS[b.type].category === category &&
+            workersNeeded(b) > 0 &&
+            isLowPriority(state, b) === lowPass,
+        )
+        .sort((a, b) => a.id - b.id);
+      for (const b of group) {
+        const needed = workersNeeded(b);
+        const n = remaining >= needed ? needed : 0;
+        assigned[b.id] = n;
+        remaining -= n;
       }
     }
   }

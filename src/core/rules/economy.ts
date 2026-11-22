@@ -4,7 +4,7 @@
 import { GOOD_IDS, type BuildingId, type GoodId, type Stock } from '../../data';
 import type { GameState, PlayerId } from '../state';
 import { connectedBuildingIds } from './connection';
-import { cityStats, runPopulation } from './population';
+import { runPopulation } from './population';
 import { runProduction } from './production';
 import { runUpkeep } from './units';
 import { assignWorkers, canPrioritizeGood, housing, population, workersNeeded } from './workers';
@@ -14,9 +14,9 @@ export interface GoodFlow {
   stock: number;
   /** source = BuildingId (aggregated per building type) or 'taxes'; count = buildings of that type. */
   produced: { source: string; amount: number; count: number }[];
-  /** detail = BuildingId for buildings, the good for needs / supply. */
+  /** detail = BuildingId for buildings, the good for needs. */
   consumed: {
-    source: 'building' | 'residents' | 'units' | 'needs' | 'supply';
+    source: 'building' | 'residents' | 'units' | 'needs';
     detail?: string;
     amount: number;
     count: number;
@@ -124,19 +124,12 @@ export function economyOverview(state: GameState, player: PlayerId): EconomyOver
     }
   }
 
-  // 2. Residents: food, needs, next-level supply, taxes.
-  const supplies = new Map<number, { good: GoodId; amount: number }>();
-  for (const city of sim.cities.filter((c) => c.owner === player)) {
-    const s = cityStats(sim, city.id).supply;
-    if (s) supplies.set(city.id, { good: s.good, amount: s.amount });
-  }
+  // 2. Residents: food, needs, taxes.
   for (const cr of runPopulation(sim, player)) {
     for (const id of GOOD_IDS) {
       addConsumed(id, 'residents', undefined, cr.foodEaten[id] ?? 0);
       addConsumed(id, 'needs', id, cr.needsConsumed[id] ?? 0);
     }
-    const supply = supplies.get(cr.cityId);
-    if (supply && cr.supplied) addConsumed(supply.good, 'supply', supply.good, supply.amount);
     addProduced('drachmas', 'taxes', cr.taxes);
   }
 

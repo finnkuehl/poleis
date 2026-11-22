@@ -54,7 +54,6 @@ export const GROUND_KIND: Readonly<Record<BuildingId, GroundKind>> = {
   farm: 'farm',
   fishery: 'fishery',
   sawmill: 'yard',
-  bakery: 'yard',
   oliveGrove: 'orchard',
   oilPress: 'yard',
   mine: 'mine',
@@ -72,7 +71,6 @@ export type YardLitter = 'sawdust' | 'soot' | 'straw';
 export const YARD_LITTER: Readonly<Partial<Record<BuildingId, YardLitter>>> = {
   sawmill: 'sawdust',
   smelter: 'soot',
-  bakery: 'straw',
   storehouse: 'straw',
 };
 

@@ -13,8 +13,6 @@ function cityReport(over: Partial<CityReport>): CityReport {
     fed: true,
     needsMet: true,
     needsConsumed: {},
-    supplied: null,
-    supplyStreak: 0,
     taxes: 0,
     ...over,
   };
@@ -40,46 +38,30 @@ describe('turnSummary', () => {
   });
   it('joins growth and taxes with commas', () => {
     const r = report(cityReport({ residentsAfter: 7, taxes: 3 }));
-    expect(turnSummary(r)).toEqual([{ text: 'Turn 5: +1 resident, +3 drachmas', kind: 'info' }]);
+    expect(turnSummary(r)).toEqual([
+      { text: 'Turn 5, City: +1 resident, +3 drachmas', kind: 'info' },
+    ]);
   });
   it('uses plurals', () => {
     const r = report(cityReport({ residentsAfter: 8, taxes: 1 }));
-    expect(turnSummary(r)[0]?.text).toBe('Turn 5: +2 residents, +1 drachma');
+    expect(turnSummary(r)[0]?.text).toBe('Turn 5, City: +2 residents, +1 drachma');
   });
   it('reports hunger as an error, still showing taxes', () => {
     const r = report(cityReport({ fed: false, residentsAfter: 5, taxes: 2 }));
     expect(turnSummary(r)).toEqual([
-      { text: 'Turn 5: +2 drachmas', kind: 'info' },
-      { text: 'Hunger: lost 1 resident', kind: 'error' },
+      { text: 'Turn 5, City: +2 drachmas', kind: 'info' },
+      { text: 'Hunger in City: lost 1 resident', kind: 'error' },
     ]);
   });
   it('reports hunger without a loss at the minimum', () => {
     const r = report(cityReport({ fed: false, residentsBefore: 1, residentsAfter: 1 }));
-    expect(turnSummary(r)).toEqual([
-      { text: 'Hunger: the city has too little food.', kind: 'error' },
-    ]);
-  });
-  it('shows supply progress only when supplied and the context is known', () => {
-    const r = report(cityReport({ supplied: true, supplyStreak: 2 }));
-    expect(turnSummary(r)).toEqual([]);
-    expect(turnSummary(r, { supply: { 1: { good: 'oil', turnsNeeded: 3 } } })).toEqual([
-      { text: 'Oil supplied 2 of 3 turns', kind: 'info' },
-    ]);
-    const missed = report(cityReport({ supplied: false }));
-    expect(turnSummary(missed, { supply: { 1: { good: 'oil', turnsNeeded: 3 } } })).toEqual([]);
-  });
-  it('stops reporting supply once the goal is reached', () => {
-    const ctx = { supply: { 1: { good: 'oil' as const, turnsNeeded: 3 } } };
-    expect(turnSummary(report(cityReport({ supplied: true, supplyStreak: 3 })), ctx)).toEqual([
-      { text: 'Oil supplied 3 of 3 turns', kind: 'info' },
-    ]);
-    expect(turnSummary(report(cityReport({ supplied: true, supplyStreak: 16 })), ctx)).toEqual([]);
+    expect(turnSummary(r)).toEqual([{ text: 'Hunger in City: too little food.', kind: 'error' }]);
   });
   it('announces cities that are ready to advance', () => {
     const r = report(cityReport({ taxes: 3 }));
     expect(turnSummary(r, { canAdvance: { 1: 'polis' } })).toEqual([
-      { text: 'Turn 5: +3 drachmas', kind: 'info' },
-      { text: 'Ready to advance to Polis', kind: 'info' },
+      { text: 'Turn 5, City: +3 drachmas', kind: 'info' },
+      { text: 'City is ready to advance to Polis', kind: 'info' },
     ]);
   });
   it('reports new units by name or by count', () => {
@@ -116,12 +98,18 @@ describe('turnSummary', () => {
       { text: 'Scout arrived', kind: 'info' },
       { text: 'Spearman stopped: enemy in sight', kind: 'error' },
       { text: 'Settler stopped: the way is blocked', kind: 'error' },
-      { text: 'You captured a city!', kind: 'info' },
+      { text: 'You captured City!', kind: 'info' },
     ]);
   });
   it('reports captured cities', () => {
-    expect(turnSummary({ ...report(), captured: [3] })).toEqual([
-      { text: 'You captured a city!', kind: 'info' },
+    expect(turnSummary({ ...report(), captured: [3] }, { cityNames: { 3: 'Argos' } })).toEqual([
+      { text: 'You captured Argos!', kind: 'info' },
     ]);
+    expect(turnSummary({ ...report(), captured: [3, 4] })).toEqual([
+      { text: 'You captured 2 cities!', kind: 'info' },
+    ]);
+    // Cities are named in the lines when the names are known.
+    const named = turnSummary(report(cityReport({ taxes: 3 })), { cityNames: { 1: 'Delphi' } });
+    expect(named[0]?.text).toBe('Turn 5, Delphi: +3 drachmas');
   });
 });

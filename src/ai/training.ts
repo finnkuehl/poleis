@@ -1,8 +1,9 @@
-// Training candidates: one order per barracks per turn (scout, settler, defender, attacker).
+// Training candidates: one order per training building per turn (settlers at the city center;
+// scouts, defenders and attackers at the barracks).
 
 import { distance, neighbors } from '../core/hex';
 import { hexAtIndex, tileIndex } from '../core/map';
-import { advanceCheck, cityIdOf, canAfford } from '../core/rules';
+import { advanceCheck, cityIdOf, canAfford, foodIn } from '../core/rules';
 import type { Building, City } from '../core/state';
 import { aiConfig, CITY_LEVELS, GOOD_IDS, UNITS, type Goods, type UnitId } from '../data';
 import type { AiContext } from './context';
@@ -90,7 +91,7 @@ function pickCombat(ctx: AiContext, city: City, role: 'defender' | 'attacker'): 
 /** Goods a city that is ready to advance still needs: units must not eat into them. */
 function advanceKeep(ctx: AiContext): Goods {
   for (const ci of ctx.cities) {
-    const check = advanceCheck(ctx.state, ci.city.id);
+    const check = advanceCheck(ctx.state, ci.city.id, ctx.production);
     if (check && check.to !== null && check.residents.ok && !check.canAdvance) {
       return check.cost.cost;
     }
@@ -104,35 +105,43 @@ export function trainingCandidates(ctx: AiContext): Candidate[] {
   const { state } = ctx;
   const foodAfter = ctx.foodProd - ctx.foodNeed - 1;
   const margin = M.unitFoodMargin[ctx.personality];
-  const foodOk =
-    foodAfter >= 0 ||
-    (foodAfter >= margin && ctx.stock.fish + ctx.stock.bread >= M.unitFoodStockMin);
+  const foodOk = foodAfter >= 0 || (foodAfter >= margin && foodIn(ctx.stock) >= M.unitFoodStockMin);
   const keep = advanceKeep(ctx);
   // Does paying for the unit leave what the advance of a city needs?
   const keeps = (unit: UnitId): boolean =>
     GOOD_IDS.every((g) => ctx.stock[g] - (UNITS[unit].cost[g] ?? 0) >= (keep[g] ?? 0));
+  const makeAdd =
+    (building: Building) =>
+    (unit: UnitId, utility: number, reason: string): void => {
+      if (utility < M.utility.trainDefenderUnderThreat && !keeps(unit)) return;
+      out.push({
+        action: { type: 'train', barracksId: building.id, unit },
+        utility,
+        reason,
+        key: `train:${building.id}`,
+        cost: UNITS[unit].cost,
+      });
+    };
+
+  // Settlers come from the city center: the new city is worth more than any unit.
+  for (const center of ctx.ownBuildings) {
+    if (center.type !== 'cityCenter') continue;
+    if (state.training.some((t) => t.barracksId === center.id)) continue;
+    const city = ctx.cities.find((c) => c.city.id === cityIdOf(state, center))?.city;
+    if (!city) continue;
+    if (mayExpandFrom(ctx, city) && canAfford(ctx.stock, UNITS.settler.cost)) {
+      if (settleSites(view, center.hex, 1).length > 0) {
+        makeAdd(center)('settler', M.utility.trainSettler, 'settler for a new city');
+      }
+    }
+  }
+
   for (const barracks of ctx.ownBuildings) {
     if (barracks.type !== 'barracks') continue;
     if (state.training.some((t) => t.barracksId === barracks.id)) continue;
     const city = ctx.cities.find((c) => c.city.id === cityIdOf(state, barracks))?.city;
     if (!city) continue;
-    const add = (unit: UnitId, utility: number, reason: string): void => {
-      if (utility < M.utility.trainDefenderUnderThreat && !keeps(unit)) return;
-      out.push({
-        action: { type: 'train', barracksId: barracks.id, unit },
-        utility,
-        reason,
-        key: `train:${barracks.id}`,
-        cost: UNITS[unit].cost,
-      });
-    };
-
-    // Settler: the new city is worth more than any unit.
-    if (mayExpandFrom(ctx, city) && canAfford(ctx.stock, UNITS.settler.cost)) {
-      if (settleSites(view, barracks.hex, 1).length > 0) {
-        add('settler', M.utility.trainSettler, 'settler for a new city');
-      }
-    }
+    const add = makeAdd(barracks);
     if (!foodOk) continue;
 
     // Scout.

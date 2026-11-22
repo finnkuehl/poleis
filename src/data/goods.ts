@@ -10,7 +10,6 @@ export type GoodId =
   | 'grapes'
   | 'ore'
   | 'planks'
-  | 'bread'
   | 'oil'
   | 'wine'
   | 'bronze'
@@ -25,7 +24,7 @@ export type Stock = Record<GoodId, number>;
 export interface GoodDef {
   /** raw = produced directly, processed = made from other goods, currency = money. */
   kind: 'raw' | 'processed' | 'currency';
-  /** Does it count as food? (Residents eat bread or fish, both count the same.) */
+  /** Does it count as food? (Residents eat fish or grain, both count the same.) */
   isFood: boolean;
   /** Symbol shown in the UI. */
   icon: string;
@@ -41,7 +40,6 @@ export const GOOD_IDS: readonly GoodId[] = [
   'grapes',
   'ore',
   'planks',
-  'bread',
   'oil',
   'wine',
   'bronze',
@@ -51,15 +49,14 @@ export const GOOD_IDS: readonly GoodId[] = [
 export const GOODS: Record<GoodId, GoodDef> = {
   wood: { kind: 'raw', isFood: false, icon: '🪵' },
   stone: { kind: 'raw', isFood: false, icon: '🪨' },
-  grain: { kind: 'raw', isFood: false, icon: '🌾' },
+  // Grain is eaten directly, so it counts as food (like fish).
+  grain: { kind: 'raw', isFood: true, icon: '🌾' },
   // Fish is eaten directly, so it counts as food.
   fish: { kind: 'raw', isFood: true, icon: '🐟' },
   olives: { kind: 'raw', isFood: false, icon: '🫒' },
   grapes: { kind: 'raw', isFood: false, icon: '🍇' },
   ore: { kind: 'raw', isFood: false, icon: '🌑' },
   planks: { kind: 'processed', isFood: false, icon: '🪜' },
-  // Bread (baked from grain) counts as food.
-  bread: { kind: 'processed', isFood: true, icon: '🍞' },
   oil: { kind: 'processed', isFood: false, icon: '🏺' },
   wine: { kind: 'processed', isFood: false, icon: '🍷' },
   bronze: { kind: 'processed', isFood: false, icon: '🥉' },
