@@ -144,9 +144,29 @@ change what stands on them). Same light direction; soft, painted look: one flat 
 terrain with large, soft light/dark washes from a smooth noise over the whole map (no per-tile
 shade, so no hex patchwork), wavy organic edges between different terrains that are identical
 from both tiles, with tongues of color bleeding across, and small details
-(grass tufts, umbrella pines and cypresses, rolling hills, rocky peaks with snow, sandy beaches
-where land meets water, foam and wave lines on the coast, darker deep ocean). Tile outlines
+(grass tufts, umbrella pines and cypresses, golden hill country that fills its tiles and rolls
+into neighboring hills, faceted mountain massifs joined into ranges with snow, terraces under
+buildings on slopes, sandy beaches where land meets water, foam and wave lines on the coast,
+darker deep ocean). Hill shading uses three tiny shared textures (soft spot, mound shading,
+rock-face gradient) stretched and tinted per shape; standing terrain (trees, massifs) is drawn in
+one row layer per map row, sorted together with the buildings. Tile outlines
 are faint. Everything must stay smooth (60 fps) on a 40 × 40 map on a mid-range phone.
+
+### Hills and mountains (decided with the user after the grounded-buildings playtest)
+
+- **Fill the whole tile and connect:** hills and mountains are no longer a few small shapes on a
+  flat tile. They fill their tile and continue into neighboring tiles of the same kind (rolling
+  hill country, mountain ranges with ridges and saddles from peak to peak), easing out toward
+  other terrain.
+- **Hills: golden Mediterranean** – sun-dried golden-green slopes, dark green maquis shrubs, a few
+  olive trees, pale limestone rocks; lit from the upper left, shaded to the lower right.
+- **Mountains: rocky ranges with snow** – big grey-brown faceted massifs with lit and shaded faces,
+  strata, snow on the peaks, scree and boulders at the foot.
+- **Buildings on slopes stand on a terrace:** the slope stays around the building (rising behind it);
+  the building stands on a flat terrace cut into it with a small earth bank (hills) or stone edge
+  (mountains) in front. A mine sits at the foot of its peak.
+- **Draw order:** terrain shapes and buildings are sorted together by row, so a mountain in front
+  covers a building behind it and vice versa. Units stay on top.
 
 ## Where the art comes from
 
