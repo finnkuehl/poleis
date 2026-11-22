@@ -31,6 +31,7 @@ import {
   footprintSignature,
   groundFootprints,
   groundSide,
+  groundKey,
   groundSignature,
   hillHeight,
   hillLight,
@@ -49,10 +50,8 @@ import {
   patchCenter,
   patchRadii,
   polygonArea,
-  roadPairsBetweenBuildings,
   slopeOutline,
   spacedWells,
-  tilePairKey,
   townJoinMask,
   townTiles,
   unitFootprints,
@@ -758,24 +757,28 @@ describe('town ground', () => {
     }
   });
 
-  it('knows the roads between building tiles (no lane there) and repaints when they change', () => {
-    const state = makeTestState(['pppp', 'pppp']);
+  it('repaints when a road is built or removed next to a town (no wall toward it)', () => {
+    const state = makeTestState(['ppppp', 'ppppp'], { ownAll: true });
     addBuilding(state, 'house', at(0, 0));
     addBuilding(state, 'bakery', at(1, 0));
-    const a = tileIndex(state.map, at(0, 0));
-    const b = tileIndex(state.map, at(1, 0));
-    const c = tileIndex(state.map, at(2, 0));
-    // Only pairs with a building at both ends count
-    const pairs = roadPairsBetweenBuildings(
-      state.map,
-      [
-        [a, b],
-        [b, c],
-      ],
-      state.buildings,
+    const key = (): string => {
+      const towns = townTiles(state.map, state.buildings, state.roads, state.territory);
+      return groundKey(state.map, state.buildings, towns, state.roads);
+    };
+    const before = key();
+    // A road leading out of town: one town neighbor, so it does not join the town
+    const road = tileIndex(state.map, at(2, 0));
+    state.roads[road] = true;
+    expect(townTiles(state.map, state.buildings, state.roads, state.territory).has(road)).toBe(
+      false,
     );
-    expect([...pairs]).toEqual([tilePairKey(a, b)]);
-    expect(groundSignature(state.buildings, pairs)).not.toBe(groundSignature(state.buildings));
+    const built = key();
+    expect(built).not.toBe(before);
+    // Removing it again restores the old key; a road far from the town changes nothing
+    state.roads[road] = false;
+    expect(key()).toBe(before);
+    state.roads[tileIndex(state.map, at(4, 1))] = true;
+    expect(key()).toBe(before);
   });
 
   it('keeps wells about two tiles apart', () => {

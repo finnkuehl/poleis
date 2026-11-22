@@ -29,7 +29,8 @@ import {
   type GpuProgram,
 } from 'pixi.js';
 import { hexToPixel, type Hex } from '../core/hex';
-import type { GameState } from '../core/state';
+import type { GameState, PlayerId } from '../core/state';
+import { buildingsShownTo } from './fog';
 import { previewPiece, roadSignature, roadTracks, type TrackParams } from './geometry';
 import type { MeshData } from './roadMesh';
 import { ROAD_MESHES, roadMeshData, type RoadMeshId } from './roadPaint';
@@ -183,7 +184,8 @@ function fillMeshes(layer: Container, data: Record<RoadMeshId, MeshData>): void 
     // A mesh does not free its geometry (the GPU buffers); the shaders and textures are shared
     const geometry = child instanceof Mesh ? child.geometry : null;
     child.destroy();
-    geometry?.destroy();
+    // true: also its GPU buffers (not shared with anything)
+    geometry?.destroy(true);
   }
   for (const id of ROAD_MESHES) {
     const mesh = makeMesh(data[id], MESH_TEXTURE[id]);
@@ -196,8 +198,12 @@ export interface RoadLayer {
   roads: Container;
   /** The planned road while building one (above the units). */
   preview: Container;
-  /** Repaints the roads when the network changed (same network: nothing to do). */
-  update(state: GameState): void;
+  /**
+   * Repaints the roads when the network as `viewer` sees it changed (same network: nothing to
+   * do). Paving, plaza ends and yards only come from buildings the viewer may see (`revealAll`:
+   * test option, every tile counts as explored).
+   */
+  update(state: GameState, viewer: PlayerId, revealAll: boolean): void;
   /** Ghost of the planned road along `path`, dots on `newTiles` (tiles that need a new road); null clears. */
   setPreview(path: readonly Hex[] | null, newTiles: readonly Hex[]): void;
 }
@@ -213,11 +219,12 @@ export function createRoadLayer(size: number): RoadLayer {
   return {
     roads,
     preview,
-    update(state) {
-      const next = roadSignature(state);
+    update(state, viewer, revealAll) {
+      const shown = buildingsShownTo(state, viewer, revealAll);
+      const next = roadSignature(state, shown);
       if (next === key) return;
       key = next;
-      fillMeshes(roads, roadMeshData(roadTracks(state, size, roadTrackParams()), size));
+      fillMeshes(roads, roadMeshData(roadTracks(state, size, roadTrackParams(), shown), size));
     },
     setPreview(path, newTiles) {
       dots.clear();

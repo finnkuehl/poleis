@@ -1301,34 +1301,35 @@ export function fieldJoinMask(
   return mask;
 }
 
-/**
- * Cheap key of everything the ground depends on: the shown buildings (id, type, tile, owner:
- * town areas are per owner) and the roads between town tiles (`roads`, keys from
- * `tilePairKey`: no lane is drawn there). Same key -> no repaint.
- */
-export function groundSignature(
-  shown: readonly Building[],
-  roads: ReadonlySet<string> = new Set(),
-): string {
+/** Key of the shown buildings (id, type, tile, owner: town areas are per owner). */
+export function groundSignature(shown: readonly Building[]): string {
   const parts: string[] = [];
   for (const b of shown) parts.push(`${b.id}.${b.type}.${b.hex.q}.${b.hex.r}.${b.owner}`);
-  return `${parts.join(',')}|${[...roads].sort().join(',')}`;
+  return parts.join(',');
 }
 
 /**
- * The road segments (roadGeometry `segments`: pairs of tile indices) that join two tiles with a
- * shown building, as `tilePairKey` keys: a town lane gives way to a real road there.
+ * Cheap key of everything the ground depends on (same key -> no repaint): the shown buildings,
+ * the town areas (`towns`, see townTiles; streets joining or leaving change them) and the road
+ * tiles next to a town (no wall is drawn toward a road leading out of town).
  */
-export function roadPairsBetweenBuildings(
+export function groundKey(
   map: MapState,
-  segments: readonly (readonly [number, number])[],
   shown: readonly Building[],
-): Set<string> {
-  const built = new Set<number>();
-  for (const b of shown) built.add(tileIndex(map, b.hex));
-  const out = new Set<string>();
-  for (const [a, b] of segments) if (built.has(a) && built.has(b)) out.add(tilePairKey(a, b));
-  return out;
+  towns: ReadonlyMap<number, number>,
+  roads: readonly boolean[],
+): string {
+  const areas = [...towns].map(([i, area]) => `${i}:${area}`);
+  const nearRoads = new Set<number>();
+  for (const i of towns.keys()) {
+    const h = hexAtIndex(map, i);
+    for (let e = 0; e < 6; e++) {
+      const n = tileIndex(map, edgeNeighborHex(h, e));
+      if (n >= 0 && roads[n] && !towns.has(n)) nearRoads.add(n);
+    }
+  }
+  const roadList = [...nearRoads].sort((a, b) => a - b);
+  return `${groundSignature(shown)}|${areas.join(',')}|${roadList.join(',')}`;
 }
 
 /**

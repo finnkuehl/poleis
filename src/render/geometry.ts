@@ -1,7 +1,7 @@
 // Pure geometry helpers for the map layers (no PixiJS, easy to test).
 import { HEX_DIRECTIONS, hexAdd, hexCorners, hexToPixel, type Hex, type Point } from '../core/hex';
 import { hexAtIndex, tileIndex } from '../core/map';
-import type { GameState, MapState, PlayerId } from '../core/state';
+import type { Building, GameState, MapState, PlayerId } from '../core/state';
 
 /**
  * Edge i of a tile connects corner i and corner i+1 (see `hexCorners`).
@@ -299,6 +299,26 @@ export function roadGeometry(state: GameState): RoadGeometry {
   return { segments, stubs };
 }
 
+/**
+ * `roadGeometry` as the viewer sees it: road-building pairs only to the buildings in `shown`
+ * (a road never bends toward a building on a tile the viewer has not explored); a road tile left
+ * without any pair becomes a lone road tile. The terrain keeps using `roadGeometry` itself.
+ */
+export function shownRoadGeometry(
+  state: GameState,
+  shown: readonly Building[] = state.buildings,
+): RoadGeometry {
+  const all = roadGeometry(state);
+  if (shown === state.buildings) return all;
+  const shownTiles = new Set(shown.map((b) => tileIndex(state.map, b.hex)));
+  // Road-road pairs stay; a road-building pair (road first) only to a building in `shown`
+  const segments = all.segments.filter(([, b]) => state.roads[b] || shownTiles.has(b));
+  const linked = new Set(segments.flat());
+  const stubs = new Set(all.stubs);
+  for (const [a] of all.segments) if (!linked.has(a)) stubs.add(a);
+  return { segments, stubs: [...stubs].sort((x, y) => x - y) };
+}
+
 // ---------------------------------------------------------------------------------------------
 // Road tracks: gravel roads that bend smoothly through the tiles (docs/ART.md "Roads")
 // ---------------------------------------------------------------------------------------------
@@ -448,10 +468,17 @@ function unit(v: Point): Point {
   return { x: v.x / l, y: v.y / l };
 }
 
-/** Tiles paved like the city: every city center tile and its direct neighbors. */
-export function pavedTiles(state: GameState): Set<number> {
+/**
+ * Tiles paved like the city: every city center tile and its direct neighbors. Only the city
+ * centers in `shown` count (the buildings the viewer may see, fog.ts `buildingsShownTo`), so
+ * paving never gives away a city on a tile the viewer has not explored.
+ */
+export function pavedTiles(
+  state: GameState,
+  shown: readonly Building[] = state.buildings,
+): Set<number> {
   const out = new Set<number>();
-  for (const b of state.buildings) {
+  for (const b of shown) {
     if (b.type !== 'cityCenter') continue;
     const i = tileIndex(state.map, b.hex);
     if (i < 0) continue;
@@ -600,10 +627,18 @@ function chainAlong(drafts: Draft[]): void {
  * On city center tiles and their neighbors the pieces are paved. On hills the pieces carry the
  * strength of the banks of their cut through the slope.
  */
-export function roadTracks(state: GameState, size: number, params: TrackParams): RoadTracks {
+export function roadTracks(
+  state: GameState,
+  size: number,
+  params: TrackParams,
+  shown: readonly Building[] = state.buildings,
+): RoadTracks {
   const map = state.map;
-  const { segments, stubs } = roadGeometry(state);
-  const paved = pavedTiles(state);
+  const { segments, stubs } = shownRoadGeometry(state, shown);
+  const paved = pavedTiles(state, shown);
+  const shownCenters = new Set(
+    shown.filter((b) => b.type === 'cityCenter').map((b) => tileIndex(map, b.hex)),
+  );
   const styleOf = (i: number): TrackStyle => (paved.has(i) ? 'paved' : 'dirt');
   const hill = (i: number): boolean => map.tiles[i] === 'hills';
   const center = (i: number): Point => hexToPixel(hexAtIndex(map, i), size);
@@ -699,9 +734,7 @@ export function roadTracks(state: GameState, size: number, params: TrackParams):
     };
     if (!state.roads[tile]) {
       // Onto a building tile: a city center's plaza (clean end), or a yard (fading out)
-      const plaza = state.buildings.some(
-        (b) => b.type === 'cityCenter' && tileIndex(map, b.hex) === tile,
-      );
+      const plaza = shownCenters.has(tile);
       for (const arm of list) {
         if (plaza) {
           const end = onEllipse(arm.mid, c0, params.plazaRx * size, params.plazaRy * size);
@@ -927,10 +960,16 @@ export function trackRibbon(
   return [...left, ...right];
 }
 
-/** Cheap key of the road network (same key -> no repaint of the tracks). */
-export function roadSignature(state: GameState): string {
-  const { segments, stubs } = roadGeometry(state);
-  const paved = [...pavedTiles(state)].sort((a, b) => a - b);
+/**
+ * Cheap key of the road network as the viewer sees it (`shown`: the buildings it may see), so
+ * the tracks repaint when the network or what the viewer may see of it changes.
+ */
+export function roadSignature(
+  state: GameState,
+  shown: readonly Building[] = state.buildings,
+): string {
+  const { segments, stubs } = shownRoadGeometry(state, shown);
+  const paved = [...pavedTiles(state, shown)].sort((a, b) => a - b);
   return `${segments.map(([a, b]) => `${a}-${b}`).join(',')}|${stubs.join(',')}|${paved.join(',')}`;
 }
 

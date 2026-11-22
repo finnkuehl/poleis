@@ -326,8 +326,8 @@ export function createEconomyLayers(art: ArtSet = NO_ART): EconomyLayers {
     above: [highlights, roads.preview],
     update(state, statuses, viewer) {
       drawTerritory(state);
-      // Repaints only when the road network changed
-      roads.update(state);
+      // Repaints only when the road network (as the viewer may see it) changed
+      roads.update(state, viewer, revealAll);
       drawBuildings(state, statuses, viewer);
     },
     setRevealAll(value) {

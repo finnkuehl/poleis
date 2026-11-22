@@ -8,7 +8,7 @@ import { hexToPixel, type Hex, type Point } from '../core/hex';
 import { hexAtIndex, tileIndex } from '../core/map';
 import type { Building, GameState, MapState, PlayerId } from '../core/state';
 import { buildingsShownTo } from './fog';
-import { edgeNeighborHex, roadGeometry, trackRibbon } from './geometry';
+import { edgeNeighborHex, trackRibbon } from './geometry';
 import type { HillMound } from './relief';
 import {
   ISO_A,
@@ -36,7 +36,7 @@ import {
   fisheryYardOffset,
   flatPoints,
   groundKindOf,
-  groundSignature,
+  groundKey,
   hillHeight,
   hillLight,
   insideConvex,
@@ -53,7 +53,6 @@ import {
   patchCenter,
   patchRadii,
   polygonArea,
-  roadPairsBetweenBuildings,
   scalePoints,
   slopeOutline,
   spacedWells,
@@ -1259,9 +1258,9 @@ function laneLine(map: MapState, t: TownSite, e: number): Point[] {
 /**
  * One town ground over all tiles of a town area (`streets`: its road tiles): worn ground with a
  * soft rim, packed-earth lanes
- * from building to building (paved next to the city center; none where a real road joins the two
- * tiles: `roads`, tilePairKey keys), a square under every building, gardens, wells (spaced apart)
- * and trees in some gaps, low walls on some outer edges.
+ * from building to building (paved next to the city center; the road on a street tile is its
+ * street), a square under every building, gardens, wells (spaced apart) and trees in some gaps,
+ * low walls on some outer edges (not toward a road leading out: `roadTiles`, per tile).
  */
 function paintTowns(
   p: Painter,
@@ -1269,7 +1268,6 @@ function paintTowns(
   sites: readonly TownSite[],
   streets: readonly TownGround[],
   map: MapState,
-  roads: ReadonlySet<string>,
   roadTiles: readonly boolean[],
 ): void {
   const T = G.town;
@@ -1302,9 +1300,7 @@ function paintTowns(
   const paved: Point[][] = [];
   for (const t of sites) {
     for (let e = 0; e < 6; e++) {
-      const key = tilePairKey(t.index, t.neighbors[e]);
-      // A real road between the two tiles takes the lane's place
-      if (!t.joined[e] || !lanes.has(key) || roads.has(key)) continue;
+      if (!t.joined[e] || !lanes.has(tilePairKey(t.index, t.neighbors[e]))) continue;
       const line = laneLine(map, t, e);
       const other = byIndex.get(t.neighbors[e]);
       const nearCenter = t.b.type === 'cityCenter' || other?.b.type === 'cityCenter';
@@ -1476,16 +1472,12 @@ function smallTree(p: Painter, x: number, y: number, size: number, rng: () => nu
   dab(p, T.treeLight, 1, x - r * 0.3, y - r * 1.6, r * 0.55, r * 0.45, rng, 8);
 }
 
-/**
- * Paints the ground of `shown` into `g` (cleared first). `roads`: the road segments between
- * building tiles (see roadPairsBetweenBuildings): no town lane is drawn there.
- */
+/** Paints the ground of `shown` into `g` (cleared first); `towns`: see townTiles. */
 export function paintGround(
   g: Graphics,
   state: GameState,
   shown: readonly Building[],
   size: number,
-  roads: ReadonlySet<string> = new Set(),
   towns: ReadonlyMap<number, number> = townTiles(state.map, shown, state.roads, state.territory),
 ): void {
   g.clear();
@@ -1535,7 +1527,7 @@ export function paintGround(
   p.flush(g);
   for (const f of fieldSites) paintFieldRim(p, f, map);
   p.flush(g);
-  if (townSites.length > 0) paintTowns(p, g, townSites, streets, map, roads, state.roads);
+  if (townSites.length > 0) paintTowns(p, g, townSites, streets, map, state.roads);
 
   // 2. Patches under the buildings
   for (const s of sites) {
@@ -1572,11 +1564,6 @@ export function paintGround(
   p.flush(g);
 }
 
-/** Key of the town areas (streets joining or leaving a town change it). */
-function townSignature(towns: ReadonlyMap<number, number>): string {
-  return [...towns].map(([i, area]) => `${i}:${area}`).join(',');
-}
-
 export function createGroundLayer(size: number): GroundLayer {
   const layer = new Graphics();
   let revealAll = false;
@@ -1585,12 +1572,11 @@ export function createGroundLayer(size: number): GroundLayer {
     layer,
     update(state, viewer) {
       const shown = buildingsShownTo(state, viewer, revealAll);
-      const roads = roadPairsBetweenBuildings(state.map, roadGeometry(state).segments, shown);
       const towns = townTiles(state.map, shown, state.roads, state.territory);
-      const next = `${groundSignature(shown, roads)}|${townSignature(towns)}`;
+      const next = groundKey(state.map, shown, towns, state.roads);
       if (next === key) return false;
       key = next;
-      paintGround(layer, state, shown, size, roads, towns);
+      paintGround(layer, state, shown, size, towns);
       return true;
     },
     setRevealAll(value) {

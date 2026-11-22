@@ -14,6 +14,7 @@ import {
   trackRibbon,
   type TrackPiece,
 } from './geometry';
+import { buildingsShownTo } from './fog';
 import { roadDistance, roadMasks } from './relief';
 import { roadTrackParams } from './roadLayer';
 import { apothem } from './terrain';
@@ -222,6 +223,33 @@ describe('roadTracks', () => {
     expect(street.curbs[curbAt]).toBe(true);
     expect(street.curbs[1 - curbAt]).toBe(false);
     expect(plaza.curbs).toEqual([false, false]);
+  });
+
+  it('gives away no hidden city: paving, plaza ends and yards only from buildings the viewer may see', () => {
+    // Nobody owns the land yet: the enemy city claims its own territory
+    const s = makeTestState(Array(9).fill('ppppppppp'), { ownAll: false });
+    // An enemy city on a tile player 0 has not explored; its road (and a house) next to it
+    const city = at(4, 4);
+    addCity(s, city, { radius: 2, owner: 1 });
+    const n1 = edgeNeighborHex(city, 0);
+    const n2 = edgeNeighborHex(n1, 0);
+    road(s, n1, n2);
+    const house = edgeNeighborHex(n2, 1);
+    addBuilding(s, 'house', house, 1);
+    for (const h of [city, house]) s.players[0].explored[tileIndex(s.map, h)] = false;
+    const hidden = buildingsShownTo(s, 0, false);
+    const fogged = roadTracks(s, size, params, hidden);
+    expect(pieceOf(fogged.pieces, s, n1)?.style).toBe('dirt');
+    expect(pieceOf(fogged.pieces, s, city)).toBeUndefined();
+    expect(pieceOf(fogged.pieces, s, house)).toBeUndefined();
+    // With everything revealed: paved next to the city, ending at its plaza; a yard at the house
+    const all = buildingsShownTo(s, 0, true);
+    const open = roadTracks(s, size, params, all);
+    expect(pieceOf(open.pieces, s, n1)?.style).toBe('paved');
+    expect(pieceOf(open.pieces, s, city)?.kind).toBe('plaza');
+    expect(pieceOf(open.pieces, s, house)?.kind).toBe('yard');
+    // The key changes when the viewer gets to see the city
+    expect(roadSignature(s, hidden)).not.toBe(roadSignature(s, all));
   });
 
   it('meets in a small paved square where paved roads join', () => {
