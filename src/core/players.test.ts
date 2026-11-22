@@ -125,6 +125,9 @@ describe('passive enemy (test mode)', () => {
 });
 
 /** Human city at (0,0), AI 1 city at (6,2) with a spearman, a human spearman next to it. */
+/** Event types without the city fire (the duel's cities shoot at units in range). */
+const noShots = (s: GameState) => s.events.filter((e) => e.type !== 'defenseShot');
+
 function duel() {
   const s = makeTestState(['pppppppp', 'pppppppp', 'pppppppp', 'pppppppp'], { ownAll: false });
   s.players.push({
@@ -163,8 +166,8 @@ describe('elimination', () => {
     expect(s.players[1].alive).toBe(false);
     expect(s.units.filter((u) => u.owner === 1)).toHaveLength(0);
     expect(s.training.filter((t) => t.owner === 1)).toHaveLength(0);
-    expect(s.events.map((e) => e.type)).toEqual(['cityCaptured', 'eliminated']);
-    expect(s.events[1]).toMatchObject({ type: 'eliminated', player: 1, seenBy: [0, 1] });
+    expect(noShots(s).map((e) => e.type)).toEqual(['cityCaptured', 'eliminated']);
+    expect(noShots(s)[1]).toMatchObject({ type: 'eliminated', player: 1, seenBy: [0, 1] });
     // Skipped from now on.
     const next = act(s, { type: 'endTurn' });
     expect([next.currentPlayer, next.turn]).toEqual([0, s.turn + 1]);
@@ -223,7 +226,7 @@ describe('events', () => {
     s = act(s, { type: 'endTurn' });
     s = act(s, { type: 'endTurn' });
     expect(s.currentPlayer).toBe(0);
-    expect(s.events).toEqual([
+    expect(noShots(s)).toEqual([
       expect.objectContaining({
         type: 'cityCaptured',
         by: 0,
@@ -253,13 +256,14 @@ describe('events', () => {
     expect(s.events).toHaveLength(1);
     s = act(s, { type: 'endTurn' });
     expect(s.currentPlayer).toBe(1);
-    expect(s.events).toHaveLength(0);
+    expect(noShots(s)).toHaveLength(0);
+    s.events = [];
     s.events.push({ type: 'eliminated', turn: 1, player: 5, seenBy: [0] });
     s = act(s, { type: 'endTurn' });
     expect(s.currentPlayer).toBe(0);
-    expect(s.events).toHaveLength(1);
+    expect(noShots(s)).toHaveLength(1);
     s = act(s, { type: 'endTurn' });
-    expect(s.events).toHaveLength(0);
+    expect(noShots(s)).toHaveLength(0);
   });
 });
 

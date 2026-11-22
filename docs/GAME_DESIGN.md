@@ -94,7 +94,7 @@ Woodcutter ─Wood─┴► Smelter ──Bronze──► Units, wonder
 | Mine | on mountains | 5 wood, 3 stone | 2 | +2 ore | Settlement |
 | Smelter | Plains | 2 planks, 4 stone | 1 | 2 ore + 1 wood → 1 bronze | Settlement |
 | Barracks | Plains | 6 planks, 4 stone | 0 | trains land units | Settlement |
-| Watchtower (id `borderTower`) | Plains or hills, inside own territory | 2 wood, 4 stone | 0 | claims territory radius 2 around the tower (only unclaimed tiles); the new land belongs to the tower's city; **limit per city: 1 as a Settlement, 3 as a Polis, 6 as a Metropolis** | Settlement |
+| Watchtower (id `borderTower`) | Plains or hills, inside own territory | 2 wood, 4 stone | 0 | claims territory radius 2 around the tower (only unclaimed tiles); sees 3 tiles and **shoots at enemy units within 2 tiles (2 damage per turn)**; the new land belongs to the tower's city; **limit per city: 1 as a Settlement, 3 as a Polis, 6 as a Metropolis** | Settlement |
 | Vineyard | Hills | 4 planks, 2 stone | 1 | +2 grapes | Polis |
 | Winery | Plains | 4 planks, 4 stone | 1 | 2 grapes → 2 wine | Polis |
 | Harbor | Plains at coastal water | 8 planks, 4 stone | 1 | builds ships; road connection point like a storehouse | Polis |
@@ -181,6 +181,14 @@ damage        = round(attackPower / total × Attack_A × 4.5)
 counterattack = round(defensePower / total × Defense_D × 4.5)   // only if D survives and A is within D's range
 ```
 
+### City and tower fire
+At the start of its owner's turn, **every city center and every watchtower shoots once** at an enemy unit within **2 tiles**. Fixed damage, no counterattack: city center 3 (Settlement), 4 (Polis), 5 (Metropolis); watchtower 2 (numbers in `src/data/military.ts`).
+- Order: city centers first, then watchtowers, each by building id. Dead units are removed right after the shot, so the next shooter picks a new target.
+- Target: the unit capturing this city first, then the lowest HP, then the nearest, then the lowest unit id. Passengers are never targets (their ship is, and a sunk ship takes them along). Ships near the coast can be hit.
+- **Shots never cancel a capture** (only an attack by a unit does), otherwise no city could ever be taken. The army has to survive the fire for a turn.
+- The sequence at the start of a turn: capture, elimination, **city and tower fire**, healing/new units, move orders, production. A city captured this turn already shoots for its new owner.
+- Shooting needs no extra vision (city and tower vision is 3, range 2). The turn summary reports shots on your units and your shots at enemies.
+
 ### Capturing cities
 An enemy land unit that stands on a city center undisturbed for one turn takes over the city, including the buildings in its territory.
 
@@ -218,6 +226,7 @@ An enemy land unit that stands on a city center undisturbed for one turn takes o
 - City center: territory radius 2. Border tower: radius 2 around the tower (must border your own territory).
 - Tiles belong to the civilization that claimed them first.
 - **Fog of war:** unexplored tiles black; explored but currently not visible tiles darkened. Vision range: units 2, city center/border tower 3.
+- **Watchtowers (border towers) also shoot:** like the city center, each watchtower fires once per turn at an enemy unit within 2 tiles for 2 damage (see section 7, city and tower fire).
 
 ## 9. AI civilizations
 

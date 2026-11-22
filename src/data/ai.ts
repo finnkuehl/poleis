@@ -320,6 +320,11 @@ export const aiConfig = {
     engageRadius: 3,
     // Strength (attack x HP share) of visible enemy units within this distance of the target.
     targetStrengthRadius: 4,
+    // City and watchtower fire (docs/GAME_DESIGN.md, section 7) counts as enemy strength when the
+    // army judges an attack: strength added = fire damage per turn x this weight, for the city
+    // center and the known watchtowers of the target city. Fire never misses and cannot be
+    // answered, so the army wants a bigger edge against a city that shoots hard.
+    fireStrengthWeight: 1,
     // Strength assumed for a target city whose center is not in sight.
     assumedCityDefense: 4,
     // The army strength must be at least this many times the enemy strength near the target.
@@ -334,6 +339,9 @@ export const aiConfig = {
     // --- Exploring ---
     // Frontier tiles tried per scout (nearest first), and the distance two scouts keep apart.
     frontierTries: 4,
+    // Soft penalty on the explore utility of a spot within the range of a known enemy city or
+    // watchtower: the scout would be shot there. A spot is still used if nothing better exists.
+    fireAvoidPenalty: 60,
     scoutSpread: 5,
 
     // --- Settling ---

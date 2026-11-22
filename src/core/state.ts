@@ -149,6 +149,21 @@ export type GameEvent =
       seenBy: PlayerId[];
     }
   | {
+      /** A city center or watchtower shot at an enemy unit at the start of its owner's turn. */
+      type: 'defenseShot';
+      turn: number;
+      shooter: PlayerId;
+      victim: PlayerId;
+      source: 'city' | 'tower';
+      unit: UnitId;
+      /** The target's tile. */
+      hex: Hex;
+      /** HP the target lost. */
+      damage: number;
+      killed: boolean;
+      seenBy: PlayerId[];
+    }
+  | {
       type: 'cityCaptured';
       turn: number;
       by: PlayerId;

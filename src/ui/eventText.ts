@@ -47,6 +47,32 @@ function eventToLines(state: GameState, viewer: PlayerId, e: GameEvent): Summary
         ),
       ];
     }
+    case 'defenseShot': {
+      const unit = en.units[e.unit].toLowerCase();
+      if (e.victim === viewer) {
+        const civ = civName(state, e.shooter);
+        return [
+          line(
+            e.killed
+              ? fill(en.events.shotKilledYou, { civ, unit })
+              : fill(en.events.shotAtYou, { civ, unit, damage: e.damage }),
+            'error',
+          ),
+        ];
+      }
+      if (e.shooter === viewer) {
+        const source = e.source === 'city' ? en.events.sourceCity : en.events.sourceTower;
+        return [
+          line(
+            e.killed
+              ? fill(en.events.shotKilledEnemy, { source, unit })
+              : fill(en.events.shotAtEnemy, { source, unit, damage: e.damage }),
+          ),
+        ];
+      }
+      const values = { civ: civName(state, e.shooter), other: civName(state, e.victim), unit };
+      return [line(fill(e.killed ? en.events.shotOtherKilled : en.events.shotOther, values))];
+    }
     case 'cityCaptured':
       if (e.from === viewer) {
         return [

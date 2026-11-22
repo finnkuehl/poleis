@@ -2,7 +2,7 @@
 
 import { distance, hexEquals, range, type Hex } from '../core/hex';
 import { hexAtIndex, inBounds, terrainAt, tileIndex } from '../core/map';
-import { advanceCheck, checkFoundCity } from '../core/rules';
+import { advanceCheck, checkFoundCity, planMoveOrder } from '../core/rules';
 import type { City, Unit } from '../core/state';
 import { aiConfig, militaryConfig, type TerrainId } from '../data';
 import type { AiContext } from './context';
@@ -133,6 +133,8 @@ export function settlerCandidates(ctx: AiContext): Candidate[] {
     }
     sites.forEach((site, k) => {
       if (hexEquals(site.hex, u.hex)) return;
+      // Only sites the settler can really walk to (other units may block the way).
+      if (!planMoveOrder(view.state, u.id, site.hex).ok) return;
       out.push({
         action: { type: 'setOrder', unitId: u.id, to: site.hex },
         utility: M.utility.settleWalk - k,

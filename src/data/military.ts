@@ -1,3 +1,5 @@
+import type { CityLevel } from './buildings';
+
 // General military numbers (see docs/GAME_DESIGN.md, section 7).
 // To rebalance: change the numbers below, save, reload the game.
 
@@ -36,4 +38,16 @@ export const militaryConfig = {
   visionUnit: 2,
   // Vision range of city centers and border towers, in tiles.
   visionCity: 3,
+
+  // City and watchtower fire (docs/GAME_DESIGN.md, section 7): at the start of its owner's turn
+  // every city center and every watchtower shoots once at an enemy unit in range. The damage is
+  // fixed and the target never shoots back. Shots never cancel a capture.
+  defense: {
+    // Range in tiles (hex distance).
+    range: 2,
+    // Damage of a city center's shot, by city level.
+    cityDamage: { settlement: 3, polis: 4, metropolis: 5 } as Record<CityLevel, number>,
+    // Damage of a watchtower's shot.
+    towerDamage: 2,
+  },
 };

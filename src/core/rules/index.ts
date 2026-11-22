@@ -18,6 +18,7 @@ export * from './orders';
 export * from './units';
 export * from './combat';
 export * from './capture';
+export * from './defense';
 export * from './found';
 export * from './vision';
 export * from './economy';

@@ -6,6 +6,7 @@ import { runPopulation } from './rules/population';
 import { runProduction } from './rules/production';
 import { updateAllExplored } from './rules/vision';
 import { captureCities } from './rules/capture';
+import { runDefense } from './rules/defense';
 import { eliminatePlayers } from './rules/elimination';
 import {
   checkEliminationResult,
@@ -44,6 +45,14 @@ export function endTurn(state: GameState): GameState {
   // Players without a city are out of the game.
   eliminatePlayers(next, player);
   checkEliminationResult(next);
+  // Cities and watchtowers shoot (also the ones just captured); this is before the own units
+  // heal, spawn and walk, so the enemies they shoot at are exactly the ones standing there.
+  runDefense(next, player);
+  // Test mode: the passive enemy never takes a turn, so its cities and towers shoot at the
+  // start of the human's turn instead (otherwise their fire could not be tried out).
+  if (next.players.find((p) => p.id === player)?.isHuman) {
+    for (const p of next.players) if (p.alive && isPassive(p)) runDefense(next, p.id);
+  }
   // Units first: heal, reset, new units appear.
   healAndResetUnits(next, player);
   const spawned = spawnUnits(next, player);

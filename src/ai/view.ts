@@ -4,7 +4,7 @@
 import { distance, hexEquals, neighbors, type Hex } from '../core/hex';
 import { hexAtIndex, inBounds, terrainAt, tileIndex } from '../core/map';
 import { visibleTiles } from '../core/rules';
-import type { City, GameState, PlayerId, Unit } from '../core/state';
+import type { Building, City, GameState, PlayerId, Unit } from '../core/state';
 import { aiConfig, TERRAIN, UNITS } from '../data';
 import type { AiContext } from './context';
 
@@ -89,6 +89,21 @@ export function freeKnown(view: View, h: Hex): boolean {
 
 export function isEnemyCenter(view: View, h: Hex): boolean {
   return view.enemyCities.some((c) => hexEquals(c.center, h));
+}
+
+/**
+ * Buildings of other alive civilizations that shoot (city centers and watchtowers) and stand
+ * on an explored tile (fairness: the AI only knows what it has seen).
+ */
+export function knownEnemyShooters(view: View): Building[] {
+  const alive = new Set(view.state.players.filter((p) => p.alive).map((p) => p.id));
+  return view.state.buildings.filter(
+    (b) =>
+      b.owner !== view.me &&
+      alive.has(b.owner) &&
+      (b.type === 'cityCenter' || b.type === 'borderTower') &&
+      view.explored[tileIndex(view.state.map, b.hex)],
+  );
 }
 
 /** Is the tile inside the player's own territory? */
