@@ -259,6 +259,29 @@ export function territoryEdges(state: GameState, player: PlayerId): TileEdges[] 
   return result;
 }
 
+/**
+ * Inner borders between the cities of `owner`: edges between two of its tiles that belong to
+ * different cities (`state.tileCity`; tiles of no city are left out). Every shared edge comes
+ * once, from the tile with the lower index.
+ */
+export function cityEdges(state: GameState, owner: PlayerId): TileEdges[] {
+  const result: TileEdges[] = [];
+  for (let i = 0; i < state.territory.length; i++) {
+    const city = state.tileCity[i];
+    if (state.territory[i] !== owner || city === undefined || city < 0) continue;
+    const h = hexAtIndex(state.map, i);
+    const edges: number[] = [];
+    for (let e = 0; e < 6; e++) {
+      const n = edgeNeighborIndex(state, h, e);
+      if (n <= i || state.territory[n] !== owner) continue;
+      const other = state.tileCity[n];
+      if (other !== undefined && other >= 0 && other !== city) edges.push(e);
+    }
+    if (edges.length > 0) result.push({ tile: i, edges });
+  }
+  return result;
+}
+
 export interface RoadGeometry {
   /** Pairs of tile indices (a < b is not guaranteed for road-building pairs), each pair once */
   segments: [number, number][];

@@ -20,13 +20,21 @@ import {
 import { hexSize } from './config';
 import { buildingsShownTo } from './fog';
 import { jettyEdge } from './groundworks';
-import { edgeMaskOf, insetRuns, territoryEdges, type InsetRun } from './geometry';
+import {
+  cityEdges,
+  edgeMaskOf,
+  edgeNeighborHex,
+  insetRuns,
+  territoryEdges,
+  type InsetRun,
+} from './geometry';
 import { playerColorOf } from './playerColor';
 import { mineArtTransform } from './relief';
 import { createRoadLayer } from './roadLayer';
 import { badgeKind, cityRingStyle } from './style';
 import { mixColor } from './terrain';
 import { theme } from './theme';
+import { cityName } from '../i18n/cityNames';
 
 export interface EconomyLayers {
   /**
@@ -67,6 +75,93 @@ function strokeRuns(
   g.stroke({ ...style, cap: 'round', join: 'round' });
 }
 
+/** `a`-`b` shortened by `margin` at both ends. */
+function trimLine(a: Point, b: Point, margin: number): [Point, Point] {
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  const k = len > 2 * margin ? margin / len : 0.5;
+  return [
+    { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k },
+    { x: b.x - (b.x - a.x) * k, y: b.y - (b.y - a.y) * k },
+  ];
+}
+
+/** Dash segments along `a`-`b`, centered so both ends look alike. */
+function dashes(a: Point, b: Point, dash: number, gap: number): [Point, Point][] {
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  if (len <= dash) return [[a, b]];
+  const n = Math.max(1, Math.floor((len + gap) / (dash + gap)));
+  const used = n * dash + (n - 1) * gap;
+  const start = (len - used) / 2;
+  const at = (t: number): Point => ({
+    x: a.x + ((b.x - a.x) * t) / len,
+    y: a.y + ((b.y - a.y) * t) / len,
+  });
+  const out: [Point, Point][] = [];
+  for (let i = 0; i < n; i++) {
+    const t0 = start + i * (dash + gap);
+    out.push([at(t0), at(t0 + dash)]);
+  }
+  return out;
+}
+
+/** A city's name banner: parchment ribbon with tails in the owner color, and its text. */
+interface CityBanner {
+  root: Container;
+  ribbon: Graphics;
+  text: Text;
+  /** Text and color it was last drawn with. */
+  key: string;
+}
+
+function createCityBanner(): CityBanner {
+  const B = theme.cityBanner;
+  const root = new Container();
+  const ribbon = new Graphics();
+  const text = new Text({
+    text: '',
+    style: {
+      fontSize: hexSize * B.fontSizeFactor,
+      fontFamily: theme.fontFamily,
+      fill: B.textColor,
+      fontWeight: 'bold',
+    },
+    resolution: 3,
+  });
+  text.anchor.set(0.5, 0.5);
+  root.addChild(ribbon, text);
+  return { root, ribbon, text, key: '' };
+}
+
+/** Redraws the banner when its text or the owner color changed. */
+function updateCityBanner(banner: CityBanner, label: string, color: number): void {
+  const key = `${label}|${color}`;
+  if (banner.key === key) return;
+  banner.key = key;
+  const B = theme.cityBanner;
+  banner.text.text = label;
+  const h = hexSize * (B.fontSizeFactor * 1.2 + 2 * B.padY);
+  const w = banner.text.width + 2 * hexSize * B.padX;
+  const tail = hexSize * B.tail;
+  const notch = hexSize * B.notch;
+  const tailColor = mixColor(color, 0x000000, 1 - B.tailDarken);
+  const g = banner.ribbon;
+  g.clear();
+  // Swallow-tail ends behind the body, a little lower (a ribbon wrapped around)
+  const y0 = h * 0.28;
+  const y1 = h * 1.12;
+  for (const side of [-1, 1]) {
+    const inner = side * (w / 2 - 2);
+    const outer = side * (w / 2 + tail);
+    g.poly([inner, y0, outer, y0, outer - side * notch, (y0 + y1) / 2, outer, y1, inner, y1]).fill(
+      tailColor,
+    );
+  }
+  g.roundRect(-w / 2, 0, w, h, h * 0.3)
+    .fill({ color: B.fill, alpha: B.fillAlpha })
+    .stroke({ color, width: B.borderWidth });
+  banner.text.position.set(0, h / 2);
+}
+
 /** `art`: the loaded building art (missing entries fall back to plate + emoji). */
 export function createEconomyLayers(art: ArtSet = NO_ART): EconomyLayers {
   const tint = new Graphics();
@@ -78,15 +173,15 @@ export function createEconomyLayers(art: ArtSet = NO_ART): EconomyLayers {
   /** Building art and emoji, sorted by row so lower tiles overlap the tile above. */
   const objects = new Container();
   objects.sortableChildren = true;
-  /** Resident counts of the cities (above all building art). */
+  /** Name banners of the cities (above all building art). */
   const labels = new Container();
   const badges = new Graphics();
   const highlights = new Graphics();
 
-  /** One resident-count Text per city id (created/destroyed when cities appear/disappear). */
-  const residentTexts = new Map<number, Text>();
+  /** One name banner per city id (created/destroyed when cities appear/disappear). */
+  const banners = new Map<number, CityBanner>();
 
-  function drawTerritory(state: GameState): void {
+  function drawTerritory(state: GameState, viewer: PlayerId): void {
     tint.clear();
     border.clear();
     const players = new Set<number>();
@@ -120,7 +215,39 @@ export function createEconomyLayers(art: ArtSet = NO_ART): EconomyLayers {
         width: theme.territoryInnerLineWidth,
         alpha: theme.territoryInnerLineAlpha,
       });
+      drawCityBorders(state, player, color, viewer);
     }
+  }
+
+  /**
+   * Fine dashed lines between the cities of `player` (which land belongs to which city), only
+   * where the viewer has explored both tiles.
+   */
+  function drawCityBorders(state: GameState, player: PlayerId, color: number, viewer: PlayerId) {
+    const B = theme.cityBorder;
+    const explored = revealAll ? null : state.players.find((p) => p.id === viewer)?.explored;
+    const seen = (i: number): boolean => explored === null || explored?.[i] === true;
+    const lines: Point[][] = [];
+    for (const { tile, edges } of cityEdges(state, player)) {
+      const h = hexAtIndex(state.map, tile);
+      const corners = hexCorners(hexToPixel(h, hexSize), hexSize);
+      for (const e of edges) {
+        const n = tileIndex(state.map, edgeNeighborHex(h, e));
+        if (!seen(tile) || !seen(n)) continue;
+        lines.push(trimLine(corners[e], corners[(e + 1) % 6], B.endMargin * hexSize));
+      }
+    }
+    if (lines.length === 0) return;
+    const light = mixColor(color, 0xffffff, B.lightMix);
+    const soft = mixColor(color, theme.outlineColor, B.softMix);
+    for (const [a, b] of lines) border.moveTo(a.x, a.y).lineTo(b.x, b.y);
+    border.stroke({ color: soft, width: B.softWidth, alpha: B.softAlpha, cap: 'round' });
+    for (const [a, b] of lines) {
+      for (const [d0, d1] of dashes(a, b, B.dash * hexSize, B.gap * hexSize)) {
+        border.moveTo(d0.x, d0.y).lineTo(d1.x, d1.y);
+      }
+    }
+    border.stroke({ color: light, width: B.width, alpha: B.alpha, cap: 'round' });
   }
 
   /** Visuals of one building, created/destroyed only when buildings appear/disappear. */
@@ -274,26 +401,18 @@ export function createEconomyLayers(art: ArtSet = NO_ART): EconomyLayers {
       if (city) {
         drawCityRings(p, city.level, diorama, radius);
         seenCities.add(city.id);
-        let label = residentTexts.get(city.id);
-        if (!label) {
-          label = new Text({
-            text: String(city.residents),
-            style: {
-              fontSize: hexSize * theme.residentsSizeFactor,
-              fontFamily: theme.fontFamily,
-              fill: 0xffffff,
-              stroke: { color: theme.residentsStrokeColor, width: 3 },
-              fontWeight: 'bold',
-            },
-            resolution: 2,
-          });
-          label.anchor.set(0.5, 0);
-          labels.addChild(label);
-          residentTexts.set(city.id, label);
+        let banner = banners.get(city.id);
+        if (!banner) {
+          banner = createCityBanner();
+          labels.addChild(banner.root);
+          banners.set(city.id, banner);
         }
-        const str = String(city.residents);
-        if (label.text !== str) label.text = str;
-        label.position.set(p.x, p.y + radius + 2);
+        updateCityBanner(
+          banner,
+          `${cityName(city.nameIndex)}${theme.cityBanner.separator}${city.residents}`,
+          color,
+        );
+        banner.root.position.set(p.x, p.y + hexSize * theme.cityBanner.offsetY);
       }
 
       const kind = badgeKind(statuses[b.id]);
@@ -314,10 +433,10 @@ export function createEconomyLayers(art: ArtSet = NO_ART): EconomyLayers {
       v.root.destroy({ children: true });
       visuals.delete(id);
     }
-    for (const [id, label] of residentTexts) {
+    for (const [id, banner] of banners) {
       if (seenCities.has(id)) continue;
-      label.destroy();
-      residentTexts.delete(id);
+      banner.root.destroy({ children: true });
+      banners.delete(id);
     }
   }
 
@@ -353,7 +472,7 @@ export function createEconomyLayers(art: ArtSet = NO_ART): EconomyLayers {
     sorted: objects,
     above: [highlights, roads.preview],
     update(state, statuses, viewer) {
-      drawTerritory(state);
+      drawTerritory(state, viewer);
       // Repaints only when the road network (as the viewer may see it) changed
       roads.update(state, viewer, revealAll);
       drawBuildings(state, statuses, viewer);
