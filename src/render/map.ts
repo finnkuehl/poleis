@@ -1,16 +1,16 @@
-// Draws the terrain once statically (fills, outlines, symbols); dynamic layers above it.
+// Map view: the painted terrain (drawn once, statically) with the dynamic layers above it.
 import { Container, Graphics } from 'pixi.js';
-import { allHexes, inBounds } from '../core/map';
-import { hexCorners, hexToPixel, type Hex, type Point } from '../core/hex';
+import { inBounds } from '../core/map';
+import { hexCorners, hexToPixel, type Hex } from '../core/hex';
 import type { BuildingStatus } from '../core/rules/production';
 import type { GameState, MapState, PlayerId } from '../core/state';
-import { terrainAt } from '../core/map';
 import { mapWorldBounds } from './bounds';
 import type { Rect } from './camera';
 import { hexSize } from './config';
 import { createEconomyLayers } from './economyLayers';
 import { createOrderLayers, type OrderPath } from './orderLayers';
 import { playerColorOf } from './playerColor';
+import { createTerrainLayer } from './terrainLayer';
 import { createUnitLayers } from './unitLayers';
 import { theme } from './theme';
 
@@ -36,78 +36,21 @@ export interface MapView {
   setOrderPaths(paths: readonly OrderPath[]): void;
 }
 
-function drawTree(g: Graphics, cx: number, cy: number, s: number): void {
-  g.poly([cx, cy - s, cx + s * 0.7, cy + s * 0.6, cx - s * 0.7, cy + s * 0.6]).fill(
-    theme.treeColor,
-  );
-}
-
-function drawHills(g: Graphics, c: Point, size: number): void {
-  const w = size * 0.35;
-  for (const dx of [-w, w]) {
-    const cx = c.x + dx;
-    const cy = c.y + size * 0.15;
-    g.moveTo(cx - w, cy)
-      .quadraticCurveTo(cx, cy - size * 0.5, cx + w, cy)
-      .stroke({ color: theme.hillColor, width: 2, cap: 'round' });
-  }
-}
-
-function drawMountain(g: Graphics, c: Point, size: number): void {
-  const hw = size * 0.5;
-  const top = { x: c.x, y: c.y - size * 0.5 };
-  const baseY = c.y + size * 0.4;
-  g.poly([top.x, top.y, c.x + hw, baseY, c.x - hw, baseY]).fill(theme.mountainColor);
-  // white peak: top third of the triangle
-  const t = 0.35;
-  g.poly([
-    top.x,
-    top.y,
-    top.x + hw * t,
-    top.y + (baseY - top.y) * t,
-    top.x - hw * t,
-    top.y + (baseY - top.y) * t,
-  ]).fill(theme.mountainPeakColor);
-}
-
 export function createMapView(map: MapState): MapView {
   const container = new Container();
-  const fields = new Graphics();
-  const symbols = new Graphics();
+  // Static painted terrain, built once (see terrainLayer.ts)
+  const terrain = createTerrainLayer(map, hexSize);
   const selection = new Graphics();
   const economy = createEconomyLayers();
   const unitLayers = createUnitLayers();
   const orders = createOrderLayers();
 
-  for (const h of allHexes(map)) {
-    const terrain = terrainAt(map, h);
-    if (!terrain) continue;
-    const c = hexToPixel(h, hexSize);
-    const corners = hexCorners(c, hexSize).flatMap((p) => [p.x, p.y]);
-    fields.poly(corners).fill(theme.terrainColors[terrain]).stroke({
-      color: theme.outlineColor,
-      alpha: theme.outlineAlpha,
-      width: theme.outlineWidth,
-    });
-
-    if (terrain === 'forest') {
-      const s = hexSize * 0.3;
-      drawTree(symbols, c.x - s * 1.1, c.y + s * 0.4, s);
-      drawTree(symbols, c.x + s * 1.1, c.y + s * 0.4, s);
-      drawTree(symbols, c.x, c.y - s * 0.5, s);
-    } else if (terrain === 'hills') {
-      drawHills(symbols, c, hexSize);
-    } else if (terrain === 'mountains') {
-      drawMountain(symbols, c, hexSize);
-    }
-  }
-
   // economy layers: [tint, border, roads, plates, icons, badges, highlights, preview]
   const below = economy.layers.slice(0, 6);
   const above = economy.layers.slice(6);
   container.addChild(
-    fields,
-    symbols,
+    terrain.ground,
+    terrain.details,
     ...below,
     unitLayers.units,
     unitLayers.fog,

@@ -6,9 +6,10 @@ import type { BuildingStatus } from '../core/rules/production';
 import type { GameState } from '../core/state';
 import { BUILDINGS } from '../data';
 import { hexSize } from './config';
-import { roadGeometry, territoryEdges } from './geometry';
+import { edgeMaskOf, insetRuns, roadGeometry, territoryEdges, type InsetRun } from './geometry';
 import { playerColorOf } from './playerColor';
 import { badgeKind, cityRingStyle } from './style';
+import { ellipsePoints, mixColor, tileHash } from './terrain';
 import { theme } from './theme';
 
 export interface EconomyLayers {
@@ -21,6 +22,21 @@ export interface EconomyLayers {
 
 function flatCorners(c: Point): number[] {
   return hexCorners(c, hexSize).flatMap((p) => [p.x, p.y]);
+}
+
+/** Strokes inset lines (closed rings get a proper join instead of two caps). */
+function strokeRuns(
+  g: Graphics,
+  runs: readonly InsetRun[],
+  style: { color: number; width: number; alpha?: number },
+): void {
+  if (runs.length === 0) return;
+  for (const { points, closed } of runs) {
+    g.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) g.lineTo(points[i].x, points[i].y);
+    if (closed) g.closePath();
+  }
+  g.stroke({ ...style, cap: 'round', join: 'round' });
 }
 
 export function createEconomyLayers(): EconomyLayers {
@@ -50,20 +66,27 @@ export function createEconomyLayers(): EconomyLayers {
         tint.poly(flatCorners(hexToPixel(hexAtIndex(state.map, i), hexSize)));
       }
       tint.fill({ color, alpha: theme.territoryTintAlpha });
+      // Double line: colored border (with a dark rim) just inside the edge, thin light line further in.
+      // Lines are chained per tile and meet the neighbor tile's lines exactly (see insetRuns).
+      const outer: InsetRun[] = [];
+      const inner: InsetRun[] = [];
       for (const { tile, edges } of territoryEdges(state, player)) {
-        const corners = hexCorners(hexToPixel(hexAtIndex(state.map, tile), hexSize), hexSize);
-        for (const e of edges) {
-          const a = corners[e];
-          const b = corners[(e + 1) % 6];
-          border.moveTo(a.x, a.y).lineTo(b.x, b.y);
-        }
+        const c = hexToPixel(hexAtIndex(state.map, tile), hexSize);
+        const corners = hexCorners(c, hexSize);
+        const mask = edgeMaskOf(edges);
+        outer.push(...insetRuns(c, corners, mask, theme.territoryBorderInset));
+        inner.push(...insetRuns(c, corners, mask, theme.territoryInnerLineInset));
       }
-      border.stroke({
-        color,
-        width: theme.territoryBorderWidth,
-        alpha: theme.territoryBorderAlpha,
-        cap: 'round',
-        join: 'round',
+      const width = theme.territoryBorderWidth;
+      strokeRuns(border, outer, {
+        color: mixColor(color, theme.outlineColor, theme.territoryBorderRimMix),
+        width: width + theme.territoryBorderRimExtra,
+      });
+      strokeRuns(border, outer, { color, width, alpha: theme.territoryBorderAlpha });
+      strokeRuns(border, inner, {
+        color: theme.territoryInnerLineColor,
+        width: theme.territoryInnerLineWidth,
+        alpha: theme.territoryInnerLineAlpha,
       });
     }
   }
@@ -73,17 +96,57 @@ export function createEconomyLayers(): EconomyLayers {
     const { segments, stubs } = roadGeometry(state);
     const width = hexSize * theme.roadWidthFactor;
     const center = (i: number): Point => hexToPixel(hexAtIndex(state.map, i), hexSize);
-    for (const [a, b] of segments) {
-      const pa = center(a);
-      const pb = center(b);
-      roads.moveTo(pa.x, pa.y).lineTo(pb.x, pb.y);
+    const lines = segments.map(([a, b]) => [center(a), center(b)] as const);
+    const isStub = new Set(stubs);
+    const roadTiles: { p: Point; stub: boolean }[] = [];
+    for (let i = 0; i < state.roads.length; i++) {
+      if (state.roads[i]) roadTiles.push({ p: center(i), stub: isStub.has(i) });
     }
-    roads.stroke({ color: theme.roadColor, width, cap: 'round', join: 'round' });
-    for (const i of stubs) {
-      const p = center(i);
-      roads.circle(p.x, p.y, width * 0.8);
+    // Dirt road in three opaque layers (dark rim, dirt, light worn center). Segments have flat
+    // ends and every road tile gets a round disc: looks like round joins, but costs far fewer
+    // vertices than round caps (~30 each). Opaque, so overlaps at junctions do not show.
+    const layers = [
+      { color: theme.roadRimColor, w: width + theme.roadRimExtra },
+      { color: theme.roadColor, w: width },
+      { color: theme.roadCenterColor, w: width * theme.roadCenterFactor },
+    ];
+    for (const { color, w } of layers) {
+      if (lines.length > 0) {
+        for (const [pa, pb] of lines) roads.moveTo(pa.x, pa.y).lineTo(pb.x, pb.y);
+        roads.stroke({ color, width: w, cap: 'butt' });
+      }
+      if (roadTiles.length > 0) {
+        for (const { p, stub } of roadTiles) {
+          const r = stub ? w * 0.8 : w / 2;
+          roads.poly(ellipsePoints(p.x, p.y, r, r, 12));
+        }
+        roads.fill(color);
+      }
     }
-    roads.fill(theme.roadColor);
+    // Tiny stones on the dirt, fixed per road segment (same place on every redraw)
+    const stoneR = width * theme.roadStoneRadiusFactor;
+    const stones: number[][][] = theme.roadStoneColors.map(() => []);
+    segments.forEach(([a, b], k) => {
+      const [pa, pb] = lines[k];
+      const len = Math.hypot(pb.x - pa.x, pb.y - pa.y) || 1;
+      const nx = (-(pb.y - pa.y) / len) * width * 0.34;
+      const ny = ((pb.x - pa.x) / len) * width * 0.34;
+      for (const [t, side] of [
+        [0.3, 1],
+        [0.62, -1],
+      ]) {
+        const hash = tileHash(a, b, t * 10);
+        if (hash < 0.35) continue;
+        const x = pa.x + (pb.x - pa.x) * t + nx * side;
+        const y = pa.y + (pb.y - pa.y) * t + ny * side;
+        stones[hash < 0.7 ? 0 : 1].push(ellipsePoints(x, y, stoneR, stoneR * 0.75, 6));
+      }
+    });
+    theme.roadStoneColors.forEach((color, i) => {
+      if (stones[i].length === 0) return;
+      for (const p of stones[i]) roads.poly(p);
+      roads.fill(color);
+    });
   }
 
   function drawBuildings(state: GameState, statuses: Record<number, BuildingStatus>): void {
