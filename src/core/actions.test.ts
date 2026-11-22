@@ -166,3 +166,30 @@ describe('togglePause', () => {
     expect(applyAction(s, { type: 'togglePause', hex: at(1, 0) })).toEqual(err);
   });
 });
+
+describe('setGoodPriority', () => {
+  it('toggles a good on and off, keeping the list sorted and unique', () => {
+    const s = makeTestState(['ppp']);
+    const on = applyAction(s, { type: 'setGoodPriority', good: 'wood', low: true });
+    if (!on.ok) throw new Error('expected ok');
+    const on2 = applyAction(on.state, { type: 'setGoodPriority', good: 'stone', low: true });
+    if (!on2.ok) throw new Error('expected ok');
+    const again = applyAction(on2.state, { type: 'setGoodPriority', good: 'wood', low: true });
+    if (!again.ok) throw new Error('expected ok');
+    expect(again.state.players[0].lowPriorityGoods).toEqual(['stone', 'wood']);
+    const off = applyAction(again.state, { type: 'setGoodPriority', good: 'wood', low: false });
+    if (!off.ok) throw new Error('expected ok');
+    expect(off.state.players[0].lowPriorityGoods).toEqual(['stone']);
+    expect(s.players[0].lowPriorityGoods).toEqual([]);
+  });
+  it('refuses goods no building with workers produces, and is deterministic', () => {
+    const s = makeTestState(['ppp']);
+    expect(applyAction(s, { type: 'setGoodPriority', good: 'drachmas', low: true })).toEqual({
+      ok: false,
+      error: { code: 'cannotPrioritizeGood' },
+    });
+    const a = applyAction(s, { type: 'setGoodPriority', good: 'wood', low: true });
+    const b = applyAction(s, { type: 'setGoodPriority', good: 'wood', low: true });
+    expect(a).toEqual(b);
+  });
+});

@@ -83,6 +83,7 @@ import {
   formatSaveError,
   orderConfirm,
   perTurnText,
+  setArtPlayers,
   trainOptions,
   turnSummary,
 } from './index';
@@ -116,6 +117,7 @@ export async function createGame(
   const watch = options.watch === true;
   const reveal = watch || options.reveal === true;
   let state = initialState;
+  setArtPlayers(state.players);
   let mode: Mode = { kind: 'idle' };
   let selected: Hex | null = null;
   let statuses: Record<number, BuildingStatus> = {};
@@ -149,7 +151,11 @@ export async function createGame(
       economySheet.open(economyOverview(state, PLAYER));
     },
   });
-  const economySheet = createEconomySheet(uiContainer);
+  const economySheet = createEconomySheet(uiContainer, {
+    onTogglePriority: (good, low) => {
+      commit({ type: 'setGoodPriority', good, low });
+    },
+  });
   const scoresSheet = createScoresSheet(uiContainer);
   const banner = createModeBanner(uiContainer, () => resetToIdle());
   const confirm = createConfirmSheet(uiContainer);

@@ -26,6 +26,8 @@ The game opens with the start menu: continue the autosaved game, load one of 3 s
 - `&reveal` – shows the whole map without fog of war (display only; the game rules and the AI are unchanged), e.g. `?seed=7&ai=3&reveal`.  Use it together with `ai`/`size`/`sandbox` (these skip the menu).
 - `&watch` – watch mode: an AI also plays your civilization and a turn runs every second, with no fog; End turn pauses/resumes; no autosave, e.g. `?seed=7&ai=3&watch`.
 
+**Dev-only pages** (with `npm run dev`, not part of the build): `/ui-preview.html` shows the UI panels with sample data, `/art-preview.html` shows every drawn asset (goods, buildings, units) at game sizes.
+
 ## Testing on a phone over Wi-Fi
 
 ```

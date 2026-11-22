@@ -2,6 +2,7 @@
 import { en } from '../i18n/en';
 import { fill } from '../i18n/format';
 import type { GameState, PlayerId } from '../core/state';
+import { buildingIcon } from './art';
 import { button, el } from './dom';
 import { playerCssColor } from './playerColors';
 import { scoreBreakdown, scoreRows, type ScoreRowView } from './scoreText';
@@ -11,9 +12,10 @@ export function scoreRowElement(row: ScoreRowView, rank: number): HTMLElement {
   const li = el('li', 'score-row');
   li.classList.toggle('is-viewer', row.isViewer);
   li.classList.toggle('is-out', row.out);
-  const dot = el('span', 'score-row__dot');
-  dot.style.background = playerCssColor(row.color);
-  dot.setAttribute('aria-hidden', 'true');
+  // A small city center miniature in the civilization's color (its base rim shows the color).
+  const mark = el('span', 'score-row__mark');
+  mark.setAttribute('aria-hidden', 'true');
+  mark.appendChild(buildingIcon('cityCenter', playerCssColor(row.color)));
   const info = el('div', 'score-row__info');
   const name = el('span', 'score-row__name', `${rank}. ${row.name}`);
   if (row.isViewer) name.appendChild(el('span', 'score-row__you', en.scores.you));
@@ -24,7 +26,7 @@ export function scoreRowElement(row: ScoreRowView, rank: number): HTMLElement {
   if (notes.length > 0) info.appendChild(el('span', 'score-row__note', notes.join(' – ')));
   const points = el('span', 'score-row__points', String(row.points));
   points.setAttribute('aria-label', fill(en.scores.points, { n: row.points }));
-  li.append(dot, info, points);
+  li.append(mark, info, points);
   return li;
 }
 

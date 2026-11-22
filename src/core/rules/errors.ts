@@ -26,6 +26,7 @@ export type RuleErrorCode =
   | 'cannotDemolishCityCenter'
   | 'cannotDemolishWonder'
   | 'cannotPause'
+  | 'cannotPrioritizeGood'
   | 'notOwnUnit'
   | 'cannotReach'
   | 'blockedByUnseen'

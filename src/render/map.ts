@@ -1,30 +1,40 @@
-// Draws the terrain once statically (fills, outlines, symbols); dynamic layers above it.
+// Map view: the painted terrain (drawn once, statically) with the dynamic layers above it.
 import { Container, Graphics } from 'pixi.js';
-import { allHexes, inBounds } from '../core/map';
-import { hexCorners, hexToPixel, type Hex, type Point } from '../core/hex';
+import { inBounds } from '../core/map';
+import { visibleTiles } from '../core/rules/vision';
+import { hexCorners, hexToPixel, type Hex } from '../core/hex';
 import type { BuildingStatus } from '../core/rules/production';
 import type { GameState, MapState, PlayerId } from '../core/state';
-import { terrainAt } from '../core/map';
+import { NO_ART, type ArtSet } from './art';
 import { mapWorldBounds } from './bounds';
 import type { Rect } from './camera';
 import { hexSize } from './config';
 import { createEconomyLayers } from './economyLayers';
+import { roadGeometry } from './geometry';
+import { createGroundLayer } from './groundLayer';
+import { footprintSignature, groundFootprints, unitFootprints } from './groundworks';
 import { createOrderLayers, type OrderPath } from './orderLayers';
 import { playerColorOf } from './playerColor';
+import { createTerrainLayer } from './terrainLayer';
 import { createUnitLayers } from './unitLayers';
 import { theme } from './theme';
 
 export { mapWorldBounds };
 
+/** Tiles `viewer` has explored (none if the player is unknown). */
+function exploredBy(state: GameState, viewer: PlayerId): readonly boolean[] {
+  return state.players.find((p) => p.id === viewer)?.explored ?? [];
+}
+
 export interface MapView {
   container: Container;
   bounds: Rect;
-  /** Redraws the dynamic layers (territory, roads, buildings, badges). */
+  /** Redraws the dynamic layers (territory, roads, buildings, badges, the ground under buildings). */
   update(state: GameState, statuses: Record<number, BuildingStatus>, viewer?: PlayerId): void;
   /** Red outlines on attack targets; [] clears. */
   setAttackTargets(hexes: readonly Hex[]): void;
   setSelection(h: Hex | null): void;
-  /** Test option: no fog, enemy units drawn everywhere. Takes effect on the next update. */
+  /** Test option: no fog, enemy units and buildings drawn everywhere. Takes effect on the next update. */
   setRevealAll(value: boolean): void;
   /** Ghost token at world position; null hides it. */
   setGhost(unit: { type: string; owner: number } | null, x?: number, y?: number): void;
@@ -36,83 +46,37 @@ export interface MapView {
   setOrderPaths(paths: readonly OrderPath[]): void;
 }
 
-function drawTree(g: Graphics, cx: number, cy: number, s: number): void {
-  g.poly([cx, cy - s, cx + s * 0.7, cy + s * 0.6, cx - s * 0.7, cy + s * 0.6]).fill(
-    theme.treeColor,
-  );
-}
-
-function drawHills(g: Graphics, c: Point, size: number): void {
-  const w = size * 0.35;
-  for (const dx of [-w, w]) {
-    const cx = c.x + dx;
-    const cy = c.y + size * 0.15;
-    g.moveTo(cx - w, cy)
-      .quadraticCurveTo(cx, cy - size * 0.5, cx + w, cy)
-      .stroke({ color: theme.hillColor, width: 2, cap: 'round' });
-  }
-}
-
-function drawMountain(g: Graphics, c: Point, size: number): void {
-  const hw = size * 0.5;
-  const top = { x: c.x, y: c.y - size * 0.5 };
-  const baseY = c.y + size * 0.4;
-  g.poly([top.x, top.y, c.x + hw, baseY, c.x - hw, baseY]).fill(theme.mountainColor);
-  // white peak: top third of the triangle
-  const t = 0.35;
-  g.poly([
-    top.x,
-    top.y,
-    top.x + hw * t,
-    top.y + (baseY - top.y) * t,
-    top.x - hw * t,
-    top.y + (baseY - top.y) * t,
-  ]).fill(theme.mountainPeakColor);
-}
-
-export function createMapView(map: MapState): MapView {
+/**
+ * `art`: the loaded building, unit and terrain art (see art.ts); without it the map uses plates
+ * and emoji, and the terrain its own painted trees.
+ */
+export function createMapView(map: MapState, art: ArtSet = NO_ART): MapView {
   const container = new Container();
-  const fields = new Graphics();
-  const symbols = new Graphics();
+  // Static painted terrain, built once (see terrainLayer.ts), with the drawn trees and shrubs
+  const terrain = createTerrainLayer(map, hexSize, art.terrain);
+  // Ground under the buildings (yards, plazas, fields, the fishery's sandy yard), see groundLayer.ts
+  const ground = createGroundLayer(hexSize);
   const selection = new Graphics();
-  const economy = createEconomyLayers();
-  const unitLayers = createUnitLayers();
+  const economy = createEconomyLayers(art);
+  const unitLayers = createUnitLayers(art);
   const orders = createOrderLayers();
+  /** Test option "no fog"; the ground footprints use the same filter as the buildings. */
+  let revealAll = false;
+  /** Key of the footprints last sent to the terrain (it repaints only when they change). */
+  let footprintKey = '';
 
-  for (const h of allHexes(map)) {
-    const terrain = terrainAt(map, h);
-    if (!terrain) continue;
-    const c = hexToPixel(h, hexSize);
-    const corners = hexCorners(c, hexSize).flatMap((p) => [p.x, p.y]);
-    fields.poly(corners).fill(theme.terrainColors[terrain]).stroke({
-      color: theme.outlineColor,
-      alpha: theme.outlineAlpha,
-      width: theme.outlineWidth,
-    });
+  // Terrain rows (trees, hills' texture, mountains) sort together with the buildings: a
+  // mountain in front covers a building behind it and the other way round
+  for (const row of terrain.rows) economy.sorted.addChild(row);
 
-    if (terrain === 'forest') {
-      const s = hexSize * 0.3;
-      drawTree(symbols, c.x - s * 1.1, c.y + s * 0.4, s);
-      drawTree(symbols, c.x + s * 1.1, c.y + s * 0.4, s);
-      drawTree(symbols, c.x, c.y - s * 0.5, s);
-    } else if (terrain === 'hills') {
-      drawHills(symbols, c, hexSize);
-    } else if (terrain === 'mountains') {
-      drawMountain(symbols, c, hexSize);
-    }
-  }
-
-  // economy layers: [tint, border, roads, plates, icons, badges, highlights, preview]
-  const below = economy.layers.slice(0, 6);
-  const above = economy.layers.slice(6);
   container.addChild(
-    fields,
-    symbols,
-    ...below,
+    terrain.ground,
+    ground.layer,
+    ...economy.below,
     unitLayers.units,
     unitLayers.fog,
     orders.layer,
-    ...above,
+    ...economy.above,
     unitLayers.attack,
     selection,
     unitLayers.ghost,
@@ -121,9 +85,31 @@ export function createMapView(map: MapState): MapView {
   return {
     container,
     bounds: mapWorldBounds(map, hexSize),
-    setRevealAll: unitLayers.setRevealAll,
+    setRevealAll(value) {
+      revealAll = value;
+      economy.setRevealAll(value);
+      ground.setRevealAll(value);
+      unitLayers.setRevealAll(value);
+    },
     update(state, statuses, viewer = 0) {
-      economy.update(state, statuses);
+      economy.update(state, statuses, viewer);
+      ground.update(state, viewer);
+      // The terrain makes room (no trees, rocks, flowers) where the ground under a building lies,
+      // and its trees, shrubs and rocks step aside under the units the viewer can see (the same
+      // filter as the unit sprites, so no hidden unit shows through a gap in the forest)
+      const visible = revealAll ? null : visibleTiles(state, viewer);
+      const footprints = [
+        ...groundFootprints(state, viewer, revealAll, hexSize),
+        ...unitFootprints(state, viewer, revealAll, hexSize, visible),
+      ];
+      const key = footprintSignature(footprints);
+      if (key !== footprintKey) {
+        footprintKey = key;
+        terrain.setFootprints(footprints);
+      }
+      // ... keeps its trees and shrubs off the roads, and shows nothing on unexplored tiles
+      terrain.setRoads(roadGeometry(state));
+      terrain.setExplored(revealAll ? null : exploredBy(state, viewer));
       orders.setColor(playerColorOf(state, viewer));
       unitLayers.update(state, viewer);
     },

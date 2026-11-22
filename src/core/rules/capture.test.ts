@@ -19,6 +19,7 @@ function world(type: 'spearman' | 'settler' = 'spearman') {
     alive: true,
     goods: { ...s.players[0].goods },
     explored: s.map.tiles.map(() => false),
+    lowPriorityGoods: [],
   });
   const cityId = addCity(s, at(4, 2), { owner: 1 });
   const farm = addBuilding(s, 'farm', at(5, 2), 1);

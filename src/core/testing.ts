@@ -69,6 +69,7 @@ export function makeTestState(
         alive: true,
         goods,
         explored: tiles.map(() => opts.explored ?? true),
+        lowPriorityGoods: [],
       },
     ],
     buildings: [],

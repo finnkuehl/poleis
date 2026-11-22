@@ -1,15 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { HEX_DIRECTIONS, hexAdd, hexToPixel } from '../core/hex';
+import { HEX_DIRECTIONS, hexAdd, hexCorners, hexToPixel, type Point } from '../core/hex';
 import { tileIndex } from '../core/map';
 import type { GameState } from '../core/state';
 import { at, makeTestState } from '../core/testing';
 import {
   EDGE_DIRECTION,
+  edgeMaskOf,
   edgeMidpoint,
+  edgeNeighborHex,
+  insetBands,
+  insetEdge,
+  insetRuns,
+  insetStrips,
   sharedEdgeMidpoint,
   roadGeometry,
+  subPolyline,
   territoryEdges,
+  wavyInsetLine,
+  wavyTileOutline,
 } from './geometry';
+import { edgeWave, WAVE_SEGMENTS } from './terrain';
 
 describe('EDGE_DIRECTION', () => {
   it('each edge faces the neighbor it is mapped to', () => {
@@ -107,5 +117,193 @@ describe('sharedEdgeMidpoint', () => {
       expect(m.x).toBeCloseTo((ca.x + cb.x) / 2, 6);
       expect(m.y).toBeCloseTo((ca.y + cb.y) / 2, 6);
     }
+  });
+});
+
+/** Distance of point p to the infinite line through a and b. */
+function distToLine(p: Point, a: Point, b: Point): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  return Math.abs(dy * p.x - dx * p.y + b.x * a.y - b.y * a.x) / Math.hypot(dx, dy);
+}
+
+describe('insetEdge', () => {
+  const size = 32;
+  const c = hexToPixel({ q: 2, r: 1 }, size);
+  const corners = hexCorners(c, size);
+
+  it('both endpoints lie exactly `depth` inside the edge, in every corner mode', () => {
+    for (let e = 0; e < 6; e++) {
+      for (const prevIn of [false, true]) {
+        for (const nextIn of [false, true]) {
+          const [s, t] = insetEdge(c, corners, e, 5, prevIn, nextIn);
+          const a = corners[e];
+          const b = corners[(e + 1) % 6];
+          expect(distToLine(s, a, b)).toBeCloseTo(5, 6);
+          expect(distToLine(t, a, b)).toBeCloseTo(5, 6);
+        }
+      }
+    }
+  });
+
+  it('slides along the neighboring edge when that edge is not part of the line', () => {
+    const [s, t] = insetEdge(c, corners, 0, 5, false, false);
+    // start lies on edge 5 (corner 5 -> corner 0), end on edge 1 (corner 1 -> corner 2)
+    expect(distToLine(s, corners[5], corners[0])).toBeCloseTo(0, 6);
+    expect(distToLine(t, corners[1], corners[2])).toBeCloseTo(0, 6);
+  });
+
+  it('meets the line of the neighbor tile exactly at a shared corner', () => {
+    // Tile A and its east neighbor B both border the tile N to the north-east of A
+    // (NE of A = across edge 5). B's edge facing N is edge 4. They share corner 0 of A.
+    const a = { q: 2, r: 1 };
+    const b = edgeNeighborHex(a, 0);
+    const n = edgeNeighborHex(a, 5);
+    expect(edgeNeighborHex(b, 4)).toEqual(n);
+    const ca = hexToPixel(a, size);
+    const cb = hexToPixel(b, size);
+    const [, endA] = insetEdge(ca, hexCorners(ca, size), 5, 4, false, false);
+    const [startB] = insetEdge(cb, hexCorners(cb, size), 4, 4, false, false);
+    expect(endA.x).toBeCloseTo(startB.x, 6);
+    expect(endA.y).toBeCloseTo(startB.y, 6);
+  });
+});
+
+describe('insetRuns / insetBands / insetStrips', () => {
+  const size = 32;
+  const c = { x: 0, y: 0 };
+  const corners = hexCorners(c, size);
+
+  it('chains consecutive edges into one line, wrapping around edge 0', () => {
+    const runs = insetRuns(c, corners, edgeMaskOf([5, 0, 1, 3]), 3);
+    expect(runs).toHaveLength(2);
+    // Run over edges 5, 0, 1: 4 points; run over edge 3 alone: 2 points
+    const lengths = runs.map((r) => r.points.length).sort();
+    expect(lengths).toEqual([2, 4]);
+    expect(runs.every((r) => !r.closed)).toBe(true);
+  });
+
+  it('all six edges make one closed ring', () => {
+    const runs = insetRuns(c, corners, edgeMaskOf([0, 1, 2, 3, 4, 5]), 3);
+    expect(runs).toHaveLength(1);
+    expect(runs[0].closed).toBe(true);
+    expect(runs[0].points).toHaveLength(6);
+  });
+
+  it('no edges, no lines', () => {
+    expect(insetRuns(c, corners, edgeMaskOf([]), 3)).toEqual([]);
+    expect(insetBands(c, corners, edgeMaskOf([]), 3)).toEqual([]);
+  });
+
+  it('bands start on the edge itself, strips run parallel inside', () => {
+    const bands = insetBands(c, corners, edgeMaskOf([2]), 6);
+    expect(bands).toHaveLength(1);
+    expect(bands[0][0]).toEqual(corners[2]);
+    expect(bands[0][1]).toEqual(corners[3]);
+    const [strip] = insetStrips(c, corners, edgeMaskOf([2]), 2, 6);
+    expect(distToLine(strip[0], corners[2], corners[3])).toBeCloseTo(2, 6);
+    expect(distToLine(strip[2], corners[2], corners[3])).toBeCloseTo(6, 6);
+  });
+});
+
+describe('wavy edges (shared curve between two tiles)', () => {
+  const size = 32;
+  const amp = 0.15 * size;
+  const tile = (h: { q: number; r: number }): { c: Point; corners: Point[] } => {
+    const c = hexToPixel(h, size);
+    return { c, corners: hexCorners(c, size) };
+  };
+
+  it('both tiles draw the identical curve (reversed), ending exactly in the shared corners', () => {
+    for (const a of [
+      { q: 0, r: 0 },
+      { q: 3, r: -2 },
+      { q: -5, r: 7 },
+    ]) {
+      for (let e = 0; e < 6; e++) {
+        const b = edgeNeighborHex(a, e);
+        const back = (e + 3) % 6;
+        const ta = tile(a);
+        const tb = tile(b);
+        const lineA = wavyInsetLine(ta.c, ta.corners, e, edgeWave(a, e, amp), 0, false, false);
+        const lineB = wavyInsetLine(
+          tb.c,
+          tb.corners,
+          back,
+          edgeWave(b, back, amp),
+          0,
+          false,
+          false,
+        );
+        expect(lineA).toHaveLength(WAVE_SEGMENTS + 1);
+        const reversed = [...lineB].reverse();
+        lineA.forEach((p, i) => {
+          expect(p.x).toBeCloseTo(reversed[i].x, 9);
+          expect(p.y).toBeCloseTo(reversed[i].y, 9);
+        });
+        expect(lineA[0].x).toBeCloseTo(ta.corners[e].x, 9);
+        expect(lineA[0].y).toBeCloseTo(ta.corners[e].y, 9);
+        expect(lineA[WAVE_SEGMENTS].x).toBeCloseTo(ta.corners[(e + 1) % 6].x, 9);
+        expect(lineA[WAVE_SEGMENTS].y).toBeCloseTo(ta.corners[(e + 1) % 6].y, 9);
+      }
+    }
+  });
+
+  it('a line inside the tile keeps the insetEdge ends and follows the curve', () => {
+    const { c, corners } = tile({ q: 2, r: 1 });
+    const offsets = edgeWave({ q: 2, r: 1 }, 1, amp);
+    const line = wavyInsetLine(c, corners, 1, offsets, 6, true, false);
+    const [s, e] = insetEdge(c, corners, 1, 6, true, false);
+    expect(line[0]).toEqual(s);
+    expect(line[WAVE_SEGMENTS].x).toBeCloseTo(e.x, 9);
+    expect(line[WAVE_SEGMENTS].y).toBeCloseTo(e.y, 9);
+    // Straight offsets give a straight line between the two ends
+    const flatLine = wavyInsetLine(
+      c,
+      corners,
+      1,
+      new Array(WAVE_SEGMENTS + 1).fill(0),
+      6,
+      true,
+      false,
+    );
+    const mid = flatLine[WAVE_SEGMENTS / 2];
+    expect(mid.x).toBeCloseTo((s.x + e.x) / 2, 9);
+    expect(mid.y).toBeCloseTo((s.y + e.y) / 2, 9);
+  });
+
+  it('tile outline: corners once, wavy edges add their inner points', () => {
+    const { corners } = tile({ q: 0, r: 0 });
+    const waves = [
+      edgeWave({ q: 0, r: 0 }, 0, amp),
+      null,
+      null,
+      edgeWave({ q: 0, r: 0 }, 3, amp),
+      null,
+      null,
+    ];
+    const outline = wavyTileOutline(corners, waves);
+    expect(outline).toHaveLength(6 + 2 * (WAVE_SEGMENTS - 1));
+    for (const corner of corners) expect(outline).toContainEqual(corner);
+    expect(wavyTileOutline(corners, [null, null, null, null, null, null])).toEqual(corners);
+  });
+});
+
+describe('subPolyline', () => {
+  const line: Point[] = [
+    { x: 0, y: 0 },
+    { x: 10, y: 0 },
+    { x: 20, y: 0 },
+    { x: 30, y: 0 },
+    { x: 40, y: 0 },
+  ];
+  it('cuts out the part between t0 and t1, keeping the points inside', () => {
+    expect(subPolyline(line, 0.1, 0.6)).toEqual([
+      { x: 4, y: 0 },
+      { x: 10, y: 0 },
+      { x: 20, y: 0 },
+      { x: 24, y: 0 },
+    ]);
+    expect(subPolyline(line, 0, 1)).toEqual(line);
   });
 });

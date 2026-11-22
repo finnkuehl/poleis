@@ -16,6 +16,7 @@ function world() {
     alive: true,
     goods: { ...s.players[0].goods },
     explored: s.map.tiles.map(() => false),
+    lowPriorityGoods: [],
   });
   return s;
 }

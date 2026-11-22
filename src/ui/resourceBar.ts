@@ -1,8 +1,9 @@
 // Top strip: turn chip, residents chip and one chip per good (icon + amount + change per turn).
-import { GOOD_IDS, GOODS, type Goods, type GoodId, type Stock } from '../data';
+import { GOOD_IDS, type Goods, type GoodId, type Stock } from '../data';
 import { en } from '../i18n/en';
 import { fill, formatTurnOf } from '../i18n/format';
 import type { WorkerSummary } from '../core/rules/economy';
+import { goodIcon } from './art';
 import { button, el } from './dom';
 import { createMenuButton } from './gameMenu';
 
@@ -75,8 +76,9 @@ export function createResourceBar(
     const chip = el('button', 'resource-chip');
     chip.type = 'button';
     chip.setAttribute('role', 'listitem');
-    const icon = el('span', 'resource-chip__icon', GOODS[id].icon);
+    const icon = el('span', 'resource-chip__icon');
     icon.setAttribute('aria-hidden', 'true');
+    icon.appendChild(goodIcon(id));
     const amount = el('span', 'resource-chip__amount');
     const delta = el('span', 'resource-chip__delta');
     chip.append(icon, amount, delta);
