@@ -2,7 +2,7 @@
 
 ## Next
 
-1. **Gameplay pass** (plan agreed with the user): PR 1 "Simpler economy" (done, `v0.6.1`) → PR 2 "Armies cost money, cities shoot back" (branch `gameplay-defense`, PR for review) → PR 3 "One-tap controls" (tap to move/order/attack, damage labels, undo, next unit automatically, roads in the build menu).
+1. **Gameplay pass** (plan agreed with the user): PR 1 "Simpler economy" (done, `v0.6.1`) → PR 2 "Armies cost money, cities shoot back" (done, `v0.6.2`) → PR 3 "One-tap controls" (tap to move/order/attack, damage labels, undo, next unit automatically, roads in the build menu).
 2. **Rest of M7**: sound, animations, tutorial hints, PWA; seafaring AI later. Check phone smoothness first.
 
 **Handover for a new session:** see `docs/HANDOVER.md`.
@@ -27,7 +27,7 @@
 
 - **Gameplay pass, PR 1 – Simpler economy** (`v0.6.1`, PR #13): grain is food like fish, the bakery and bread are gone (farm 2 workers → 4 grain, city center +2 grain feeds its first 4 residents, settlers cost grain); oil and wine are used only at the level that needs them, advancing needs enough production per turn ("makes 2 / needs 3"), no hidden streak, needs met → +50 % taxes and +1 growth; one shared workforce across all cities; cities have names (banner on the map, fine dashed border between your cities); settlers are trained in the city center. Saves upgrade to version 4 (bread → grain, bakeries → farms).
 
-- **Gameplay pass, PR 2 – Armies cost money, cities shoot back** (branch `gameplay-defense`, not merged yet): every unit costs 1 food and 1 drachma per turn (unpaid or hungry units lose 2 HP); each city may have 1 / 3 / 6 watchtowers as Settlement / Polis / Metropolis (the border tower is now called watchtower); from turn 15 on (the end of the AI peace time), at the start of a player's turn every city center (3 / 4 / 5 damage by level) and watchtower (2) hits one enemy within 2 tiles, the city's capturer first, without counterattack (shots never cancel a capture; the passive test-mode enemy fires from turn 1); scouts can no longer capture cities. The AI trains within its money, counts city fire when attacking, keeps scouts away from enemy fire and expands by settlers when its start is cramped.
+- **Gameplay pass, PR 2 – Armies cost money, cities shoot back** (`v0.6.2`, PR #14): every unit costs 1 food and 1 drachma per turn (unpaid or hungry units lose 2 HP); each city may have 1 / 3 / 6 watchtowers as Settlement / Polis / Metropolis (the border tower is now called watchtower); from turn 15 on (the end of the AI peace time), at the start of a player's turn every city center (3 / 4 / 5 damage by level) and watchtower (2) hits one enemy within 2 tiles, the city's capturer first, without counterattack (shots never cancel a capture; the passive test-mode enemy fires from turn 1); scouts can no longer capture cities. The AI trains within its money, counts city fire when attacking, keeps scouts away from enemy fire and expands by settlers when its start is cramped.
 
 ## Known limitations
 
