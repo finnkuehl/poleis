@@ -2,7 +2,7 @@
 
 import { distance, neighbors } from '../core/hex';
 import { hexAtIndex, tileIndex } from '../core/map';
-import { advanceCheck, cityIdOf, canAfford } from '../core/rules';
+import { advanceCheck, cityIdOf, canAfford, foodIn } from '../core/rules';
 import type { Building, City } from '../core/state';
 import { aiConfig, CITY_LEVELS, GOOD_IDS, UNITS, type Goods, type UnitId } from '../data';
 import type { AiContext } from './context';
@@ -104,9 +104,7 @@ export function trainingCandidates(ctx: AiContext): Candidate[] {
   const { state } = ctx;
   const foodAfter = ctx.foodProd - ctx.foodNeed - 1;
   const margin = M.unitFoodMargin[ctx.personality];
-  const foodOk =
-    foodAfter >= 0 ||
-    (foodAfter >= margin && ctx.stock.fish + ctx.stock.bread >= M.unitFoodStockMin);
+  const foodOk = foodAfter >= 0 || (foodAfter >= margin && foodIn(ctx.stock) >= M.unitFoodStockMin);
   const keep = advanceKeep(ctx);
   // Does paying for the unit leave what the advance of a city needs?
   const keeps = (unit: UnitId): boolean =>

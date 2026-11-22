@@ -85,7 +85,7 @@ describe('attackPreviewLines', () => {
 });
 
 describe('trainOptions', () => {
-  const rich = { ...emptyStock(), planks: 10, bronze: 10, bread: 10, grain: 10, drachmas: 10 };
+  const rich = { ...emptyStock(), planks: 10, bronze: 10, grain: 10, drachmas: 10 };
   const byId = (o: ReturnType<typeof trainOptions>, id: string) => o.find((x) => x.id === id);
 
   it('offers units by city level', () => {

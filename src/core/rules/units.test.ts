@@ -4,7 +4,7 @@ import { createGameState, type GameState } from '../state';
 import { addBuilding, addCity, addUnit, at, makeTestState } from '../testing';
 import { endTurn } from '../turn';
 
-const RICH = { planks: 50, bronze: 50, bread: 50, drachmas: 50, grain: 50 };
+const RICH = { planks: 50, bronze: 50, drachmas: 50, grain: 50 };
 
 /** 5x5 plains, city at (2,2) with barracks next to it at (1,2). */
 function world(opts: { level?: 'settlement' | 'polis' | 'metropolis'; residents?: number } = {}) {
@@ -37,6 +37,18 @@ describe('train', () => {
     const small = world({ residents: 2 });
     const bad = train(small.s, small.barracks, 'settler');
     expect(bad.ok === false && bad.error.code).toBe('notEnoughResidents');
+  });
+
+  it('settler is paid with grain and planks', () => {
+    const { s, barracks } = world({ residents: 4 });
+    s.players[0].goods.grain = 10;
+    s.players[0].goods.planks = 10;
+    const res = train(s, barracks, 'settler');
+    expect(res.ok && res.state.players[0].goods.grain).toBe(6);
+    expect(res.ok && res.state.players[0].goods.planks).toBe(6);
+    s.players[0].goods.grain = 3;
+    const poor = train(s, barracks, 'settler');
+    expect(poor.ok === false && poor.error.code).toBe('notAffordable');
   });
 
   it('allows one order per barracks per turn', () => {
@@ -114,7 +126,7 @@ describe('turn: healing, reset, upkeep', () => {
     const outside = addUnit(s, 'spearman', at(2, 0), { hp: 3 });
     const acted = addUnit(s, 'spearman', at(1, 0), { hp: 3, acted: true });
     const nearFull = addUnit(s, 'spearman', at(3, 0), { hp: 9 });
-    s.players[0].goods.bread = 50;
+    s.players[0].goods.grain = 50;
     const next = endTurn(s);
     const hp = (id: number) => next.units.find((u) => u.id === id)!.hp;
     expect(hp(inside)).toBe(7);
@@ -125,7 +137,7 @@ describe('turn: healing, reset, upkeep', () => {
 
   it('resets movement and flags', () => {
     const s = makeTestState(['pppp']);
-    s.players[0].goods.bread = 5;
+    s.players[0].goods.grain = 5;
     const id = addUnit(s, 'scout', at(0, 0), { movesLeft: 0, hasMoved: true, acted: true });
     const u = endTurn(s).units.find((x) => x.id === id)!;
     expect(u).toMatchObject({ movesLeft: 3, hasMoved: false, acted: false });
@@ -135,19 +147,19 @@ describe('turn: healing, reset, upkeep', () => {
     const s = makeTestState(['ppppp', 'ppppp', 'ppppp']);
     addCity(s, at(2, 1), { residents: 4 });
     s.players[0].goods.fish = 1;
-    s.players[0].goods.bread = 5;
+    s.players[0].goods.grain = 5;
     addUnit(s, 'spearman', at(0, 0));
     addUnit(s, 'spearman', at(4, 2));
     const next = endTurn(s);
-    // City eats 2 (fish 1 + bread 1) and produces 1 bread; units eat 2 bread.
+    // City eats 2 (fish 1 + grain 1) and produces 2 grain; units eat 2 grain.
     expect(next.lastReport?.units).toEqual({
       spawned: 0,
-      upkeepEaten: { bread: 2 },
+      upkeepEaten: { grain: 2 },
       starving: false,
       lost: 0,
     });
-    expect(next.players[0].goods.bread).toBe(5 + 1 - 1 - 2);
-    expect(next.lastReport?.delta.bread).toBe(1 - 1 - 2);
+    expect(next.players[0].goods.grain).toBe(5 + 2 - 1 - 2);
+    expect(next.lastReport?.delta.grain).toBe(2 - 1 - 2);
     expect(next.units.every((u) => u.hp === 10)).toBe(true);
   });
 
@@ -155,12 +167,12 @@ describe('turn: healing, reset, upkeep', () => {
     const s = makeTestState(['pppp']);
     const a = addUnit(s, 'spearman', at(0, 0), { acted: true });
     const b = addUnit(s, 'scout', at(1, 0), { hp: 2, acted: true });
-    s.players[0].goods.bread = 1;
+    s.players[0].goods.grain = 1;
     const next = endTurn(s);
     expect(next.lastReport?.units).toMatchObject({
       starving: true,
       lost: 1,
-      upkeepEaten: { bread: 1 },
+      upkeepEaten: { grain: 1 },
     });
     // Idle healing happened before hunger (acted -> no healing here).
     expect(next.units.find((u) => u.id === a)?.hp).toBe(8);

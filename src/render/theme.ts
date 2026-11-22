@@ -866,7 +866,6 @@ export const theme = {
       temple: 54,
       cityCenter: 55,
       sawmill: 55,
-      bakery: 50,
       oilPress: 54,
       winery: 54,
       smelter: 50,

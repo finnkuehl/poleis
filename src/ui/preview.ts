@@ -95,7 +95,7 @@ const economy = createEconomySheet(ui, {
 const bar = createResourceBar(ui, { onOverview: () => economy.open(sampleOverview) });
 bar.update(
   { ...stock, drachmas: 7, grapes: 2, wine: 1 },
-  { wood: 2, stone: -1, grain: 3, planks: 0, bread: 1, drachmas: 3 },
+  { wood: 2, stone: -1, grain: 3, planks: 0, drachmas: 3 },
   3,
   120,
   { residents: 6, housing: 8 },
@@ -187,7 +187,7 @@ const settlementCheck: AdvanceCheck = {
   },
   canAdvance: false,
 };
-const fed: Stock = { ...stock, fish: 8, bread: 2, oil: 3, drachmas: 40, planks: 30, stone: 30 };
+const fed: Stock = { ...stock, fish: 8, grain: 2, oil: 3, drachmas: 40, planks: 30, stone: 30 };
 
 function showCity(level: CityLevel, stats: CityStats, check: AdvanceCheck, goods: Stock): void {
   panel.showCity({
@@ -218,7 +218,7 @@ addControl('City: settlement, ready', () =>
   ),
 );
 addControl('City: hungry', () =>
-  showCity('settlement', cityStats, settlementCheck, { ...fed, fish: 1, bread: 0 }),
+  showCity('settlement', cityStats, settlementCheck, { ...fed, fish: 1, grain: 0 }),
 );
 addControl('City: polis, no oil', () =>
   showCity(
@@ -529,7 +529,7 @@ addControl('Settler: blocked', () =>
     },
   }),
 );
-const trainStock: Stock = { ...emptyStock(), planks: 5, bronze: 0, bread: 4, drachmas: 9 };
+const trainStock: Stock = { ...emptyStock(), planks: 5, bronze: 0, grain: 4, drachmas: 9 };
 function showBarracks(pending: UnitId | null): void {
   panel.showBuilding({
     hex,

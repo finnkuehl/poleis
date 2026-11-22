@@ -16,6 +16,8 @@ import {
 import {
   checkPlacement,
   economyOverview,
+  foodIn,
+  isFoodGood,
   housing,
   previewProduction,
   workerSummary,
@@ -47,7 +49,7 @@ export interface AiContext {
   turn: number;
   /** Estimated net change per good next turn. */
   net: Record<GoodId, number>;
-  /** Food (fish + bread) produced per turn, and eaten by the residents if they get all they need. */
+  /** Food (fish + grain) produced per turn, and eaten by the residents if they get all they need. */
   foodProd: number;
   foodNeed: number;
   workers: WorkerSummary;
@@ -133,7 +135,7 @@ export function buildContext(state: GameState, player: PlayerId): AiContext {
   // what is not there), so it hides how big a shortage really is.
   let foodProd = 0;
   for (const flow of overview.goods) {
-    if (flow.good === 'fish' || flow.good === 'bread') {
+    if (isFoodGood(flow.good)) {
       for (const p of flow.produced) foodProd += p.amount;
     }
   }
@@ -157,7 +159,7 @@ export function buildContext(state: GameState, player: PlayerId): AiContext {
   // Cities with their free housing and free workers (residents - workers the buildings need).
   // A city that is about to starve counts only the residents its food can keep.
   const ownCities = state.cities.filter((c) => c.owner === player);
-  const foodStock = me.goods.fish + me.goods.bread;
+  const foodStock = foodIn(me.goods);
   let eatenNow = 0;
   for (const c of ownCities) eatenNow += Math.ceil(c.residents / populationConfig.residentsPerFood);
   // Residents the food can keep (a stock of food hides a shortage for a while).

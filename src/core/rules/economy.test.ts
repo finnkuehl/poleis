@@ -31,7 +31,7 @@ describe('economyOverview', () => {
     expect(planks.net).toBe(2);
   });
 
-  it('residents eat fish or bread and the turns left are counted', () => {
+  it('residents eat fish or grain and the turns left are counted', () => {
     const s = setup({ fish: 7 }, 8); // 8 residents eat 4 food per turn
     const fish = flow(economyOverview(s, 0), 'fish')!;
     expect(fish.consumed).toEqual([
@@ -42,12 +42,12 @@ describe('economyOverview', () => {
   });
 
   it('unit upkeep is attributed to the units', () => {
-    const s = setup({ bread: 20 }, 4);
+    const s = setup({ grain: 20 }, 4);
     addUnit(s, 'spearman', at(1, 1));
     addUnit(s, 'spearman', at(2, 1));
-    const bread = flow(economyOverview(s, 0), 'bread')!;
-    expect(bread.consumed.find((c) => c.source === 'units')?.amount).toBe(2);
-    expect(bread.consumed.find((c) => c.source === 'residents')).toBeDefined();
+    const grain = flow(economyOverview(s, 0), 'grain')!;
+    expect(grain.consumed.find((c) => c.source === 'units')?.amount).toBe(2);
+    expect(grain.consumed.find((c) => c.source === 'residents')).toBeDefined();
   });
 
   it('counts working, free and missing workers', () => {

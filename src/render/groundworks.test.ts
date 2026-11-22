@@ -696,7 +696,7 @@ describe('town ground', () => {
     const state = makeTestState(['ppppp', 'ppppp', 'ppppp']);
     addBuilding(state, 'cityCenter', at(1, 1));
     addBuilding(state, 'house', at(2, 1));
-    addBuilding(state, 'bakery', at(2, 0));
+    addBuilding(state, 'sawmill', at(2, 0));
     // A field and another owner's house next to the town stay out of it
     addBuilding(state, 'farm', at(1, 2));
     addBuilding(state, 'house', at(0, 1), 1);
@@ -761,7 +761,7 @@ describe('town ground', () => {
   it('repaints when a road is built or removed next to a town (no wall toward it)', () => {
     const state = makeTestState(['ppppp', 'ppppp'], { ownAll: true });
     addBuilding(state, 'house', at(0, 0));
-    addBuilding(state, 'bakery', at(1, 0));
+    addBuilding(state, 'sawmill', at(1, 0));
     const key = (): string => {
       const towns = townTiles(state.map, state.buildings, state.roads, state.territory);
       return groundKey(state.map, state.buildings, towns, state.roads);

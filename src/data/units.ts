@@ -86,7 +86,7 @@ export const UNITS: Record<UnitId, UnitDef> = {
     hp: 5,
     movement: 1,
     range: 0,
-    cost: { bread: 4, planks: 4 },
+    cost: { grain: 4, planks: 4 },
     residents: 2,
     minLevel: 'settlement',
     canCapture: false,

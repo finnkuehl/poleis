@@ -4,7 +4,7 @@
 import type { GameState } from '../core/state';
 
 /** Current save format version. Bump it and add a step to MIGRATIONS when the state changes. */
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 /** Number of manual save slots (technical constant, not a balancing value). */
 export const SAVE_SLOT_COUNT = 3;
@@ -93,6 +93,34 @@ export const MIGRATIONS: Record<number, (env: Record<string, unknown>) => Record
           if (isRecord(u) && u.aboard === undefined) u.aboard = null;
         }
       }
+      return env;
+    },
+    // 3 -> 4: bread and the bakery were removed (grain is food now). Bread becomes grain,
+    // bakeries become farms, and the stored turn report (which may mention bread) is dropped.
+    3: (env) => {
+      const state = env.state;
+      if (!isRecord(state)) return env;
+      if (Array.isArray(state.players)) {
+        for (const p of state.players) {
+          if (!isRecord(p)) continue;
+          if (isRecord(p.goods)) {
+            const bread = typeof p.goods.bread === 'number' ? p.goods.bread : 0;
+            const grain = typeof p.goods.grain === 'number' ? p.goods.grain : 0;
+            p.goods.grain = grain + bread;
+            delete p.goods.bread;
+          }
+          if (Array.isArray(p.lowPriorityGoods)) {
+            p.lowPriorityGoods = p.lowPriorityGoods.filter((g) => g !== 'bread');
+          }
+        }
+      }
+      if (Array.isArray(state.buildings)) {
+        for (const b of state.buildings) {
+          if (isRecord(b) && b.type === 'bakery') b.type = 'farm';
+        }
+      }
+      // Training orders only store the unit type (the cost is paid when ordered): nothing to convert.
+      state.lastReport = null;
       return env;
     },
   };

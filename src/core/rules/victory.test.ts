@@ -14,7 +14,7 @@ const wonderCost = { stone: 40, planks: 20, bronze: 20, wine: 10 };
 
 /** One human with a Metropolis (4+ residents) at (0,3), wonder goods in stock. */
 function setup(): GameState {
-  const s = makeTestState(rows, { goods: { ...wonderCost, bread: 50 } });
+  const s = makeTestState(rows, { goods: { ...wonderCost, grain: 50 } });
   addCity(s, at(0, 3), { radius: 6, level: 'metropolis', residents: 6 });
   return s;
 }

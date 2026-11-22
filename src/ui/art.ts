@@ -51,7 +51,6 @@ export const BUILDING_ART_BOUNDS: Readonly<Record<BuildingId, ArtBounds>> = {
   cityCenter: [47, 43, 224, 216],
   fishery: [51, 94, 188, 217],
   sawmill: [46.5, 96.5, 208.5, 211],
-  bakery: [57.5, 84, 195.5, 213],
   oilPress: [61.5, 88, 212.5, 207.5],
   winery: [46.5, 93.5, 200, 201.5],
   // incl. the smoke

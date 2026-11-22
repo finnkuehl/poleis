@@ -16,13 +16,20 @@ function setup(
 }
 
 describe('food', () => {
-  it('eats fish before bread', () => {
-    const { s, goods } = setup({ goods: { fish: 1, bread: 5 }, residents: 4 });
+  it('eats fish before grain', () => {
+    const { s, goods } = setup({ goods: { fish: 1, grain: 5 }, residents: 4 });
     const [r] = runPopulation(s, 0);
     expect(goods.fish).toBe(0);
-    expect(goods.bread).toBe(4);
+    expect(goods.grain).toBe(4);
     expect(r.foodNeeded).toBe(2);
-    expect(r.foodEaten).toEqual({ fish: 1, bread: 1 });
+    expect(r.foodEaten).toEqual({ fish: 1, grain: 1 });
+    expect(r.fed).toBe(true);
+  });
+  it('grain alone feeds residents', () => {
+    const { s, goods } = setup({ goods: { grain: 3 }, residents: 4 });
+    const [r] = runPopulation(s, 0);
+    expect(goods.grain).toBe(1);
+    expect(r.foodEaten).toEqual({ grain: 2 });
     expect(r.fed).toBe(true);
   });
   it('rounds the food need up', () => {

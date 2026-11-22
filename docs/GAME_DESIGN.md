@@ -52,25 +52,24 @@
 |---|---|---|
 | Wood | Raw material | Woodcutter |
 | Stone | Raw material | Quarry |
-| Grain | Raw material | Farm |
-| Fish | Raw material | Fishery |
+| Grain | Raw material (food) | Farm, city center |
+| Fish | Raw material (food) | Fishery |
 | Olives | Raw material | Olive grove |
 | Grapes | Raw material | Vineyard |
 | Ore | Raw material | Mine |
 | Planks | Processed | Sawmill (wood) |
-| Bread | Processed | Bakery (grain) |
 | Oil | Processed | Oil press (olives) |
 | Wine | Processed | Winery (grapes) |
 | Bronze | Processed | Smelter (ore + wood) |
 | **Drachmas** | Currency | Taxes, later marketplace |
 
-**Food** = bread or fish (both count the same).
+**Food** = fish or grain (both count the same; 1 food feeds 2 residents).
 
 ### Goods chains
 ```
 Woodcutter ──Wood──► Sawmill ──Planks──► Construction, ships
 Quarry ──Stone──► Construction, walls, wonder
-Farm ──Grain──► Bakery ──Bread──► Residents, upkeep
+Farm ──Grain──► Residents, upkeep, settlers, horsemen
 Fishery ──Fish──► Residents, upkeep
 Olive grove ──Olives──► Oil press ──Oil──► Need from Polis
 Vineyard ──Grapes──► Winery ──Wine──► Need from Metropolis
@@ -82,15 +81,14 @@ Woodcutter ─Wood─┴► Smelter ──Bronze──► Units, wonder
 
 | Building | Placement | Cost | Workers | Per turn | From level |
 |---|---|---|---|---|---|
-| City center | Plains | (start / settler) | – | Storehouse, territory radius 2, +4 housing, +1 bread (no workers) | Start |
+| City center | Plains | (start / settler) | – | Storehouse, territory radius 2, +4 housing, +2 grain (no workers) | Start |
 | Storehouse | Plains | 4 wood, 2 stone | 0 | additional road connection point | Settlement |
 | House | Plains | 3 wood | 0 | +6 housing | Settlement |
 | Woodcutter | on forest, or plains/hills next to forest | 2 wood | 1 | +2 wood | Settlement |
 | Quarry | on hills or mountains, or plains next to them | 3 wood | 1 | +2 stone | Settlement |
-| Farm | Plains | 3 wood | 2 | +3 grain | Settlement |
+| Farm | Plains | 3 wood | 2 | +4 grain (feeds as well per worker as a fishery) | Settlement |
 | Fishery | Plains at coastal water | 3 wood | 1 | +2 fish | Settlement |
 | Sawmill | Plains | 4 wood, 2 stone | 1 | 2 wood → 2 planks | Settlement |
-| Bakery | Plains | 3 planks, 2 stone | 1 | 2 grain → 3 bread | Settlement |
 | Olive grove | Plains or hills | 4 planks | 1 | +2 olives | Settlement |
 | Oil press | Plains | 4 planks, 3 stone | 1 | 2 olives → 2 oil | Settlement |
 | Mine | on mountains | 5 wood, 3 stone | 2 | +2 ore | Settlement |
@@ -119,7 +117,7 @@ Woodcutter ─Wood─┴► Smelter ──Bronze──► Units, wonder
 - **Roads** only on walkable land in the player's own territory (plains, forest, hills – not mountains, not water). A road may pass through the player's own buildings at no cost.
 - **Demolishing** buildings and roads is allowed, **without refund**. The city center cannot be demolished.
 - **Production order:** raw-material buildings (no inputs) produce first, then processing buildings – so freshly cut wood can become planks in the same turn. If goods run short, older buildings go first.
-- **Workers** go only to connected buildings, in this order: food (farm, fishery, bakery), then raw materials, then processing; older buildings first within a group. A building only gets workers if its **whole crew** can be filled – otherwise it gets none and the workers go on to the next building, so no worker is wasted.
+- **Workers** go only to connected buildings, in this order: food (farm, fishery), then raw materials, then processing; older buildings first within a group. A building only gets workers if its **whole crew** can be filled – otherwise it gets none and the workers go on to the next building, so no worker is wasted.
 - **Pause:** the player can pause any building; a paused building gets no workers and produces nothing, so its workers go to the next building in line.
 - **Low priority per good** (decided after M5, toggle in the 📊 Overview): buildings that produce a good marked "low priority" get workers only after all other buildings of their city are staffed. They keep producing with leftover workers, so production slows instead of stopping. The setting is per civilization and also applies to buildings built later.
 
@@ -141,8 +139,8 @@ Every city of a civilization has its own level; the stock is shared.
 
 **Detailed rules (decided in M3)**
 - **Start:** a new city has **4 residents** (its city center is full). Residents live in the city center and the houses in that city's territory and work in that city's buildings.
-- **The city center feeds a little by itself:** it produces **1 bread per turn** without workers. Without other food a city swings between 2 and 3 residents but never gets stuck – a fishery or the bread chain can always be staffed again.
-- **Eating:** fish is eaten first, then bread (bread is kept back for settlers). If food runs short, residents eat what is there and the city loses 1 resident; a city never drops below 1 resident.
+- **The city center feeds a little by itself:** it produces **2 grain per turn** without workers, which feeds its first 4 residents. A city never gets stuck – a fishery or a farm can always be staffed again.
+- **Eating:** fish is eaten first, then grain (grain is kept back for settlers and horsemen). If food runs short, residents eat what is there and the city loses 1 resident; a city never drops below 1 resident.
 - **Growth** needs only food and free housing; missing oil or wine does not stop growth.
 - **Oil and wine are supplied beforehand:** as soon as oil is in stock, a settlement starts using 1 oil per 10 residents (rounded up) each turn. Turns in a row with enough oil are counted; a turn without enough oil resets the count to 0. Three supplied turns in a row (plus the other requirements) allow the advance to Polis. Wine works the same way for Polis → Metropolis.
 - **Advancing is the player's decision:** the city panel shows the requirements; the "Advance" button pays the goods and raises the level. A city never drops back a level – a Polis without oil only loses the +50 % tax bonus.
@@ -155,7 +153,7 @@ Every city of a civilization has its own level; the stock is shared.
 | Unit | Attack | Defense | HP | Movement | Range | Cost | From |
 |---|---|---|---|---|---|---|---|
 | Scout | 1 | 1 | 5 | 3 | 1 | 2 planks, 5 drachmas | Settlement |
-| Settler | 0 | 1 | 5 | 1 | – | 4 bread, 4 planks, 2 residents | Settlement |
+| Settler | 0 | 1 | 5 | 1 | – | 4 grain, 4 planks, 2 residents | Settlement |
 | Spearman | 2 | 2 | 10 | 1 | 1 | 2 planks, 1 bronze | Settlement |
 | Archer | 2 | 1 | 8 | 1 | 2 | 3 planks, 1 bronze | Settlement |
 | Hoplite | 2 | 3 | 12 | 1 | 1 | 1 planks, 3 bronze | Polis |

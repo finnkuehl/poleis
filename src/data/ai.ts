@@ -53,7 +53,7 @@ export const aiConfig = {
     advance: 800,
     // Keeping the goods for an advance whose other requirements are met.
     advanceReserve: 700,
-    // Food buildings (fishery, farm, bakery); multiplied by how short food is.
+    // Food buildings (fishery, farm); multiplied by how short food is.
     food: 100,
     // A house when the city runs out of housing.
     house: 75,
@@ -87,9 +87,8 @@ export const aiConfig = {
   foodUrgencyDivisor: 2,
   // A food stock this big halves the food urgency.
   foodStockHalvesUrgency: 20,
-  // Farm / bakery wish strength relative to the base food utility.
+  // Farm wish strength relative to the base food utility.
   farmFactor: 0.9,
-  bakeryFactor: 1.1,
   // Housing buffer a Metropolis keeps (room for the wonder's crew).
   metropolisHouseBuffer: 4,
   // A city with at most this much free housing and no spare workers builds houses for workers.

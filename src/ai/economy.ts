@@ -7,7 +7,14 @@
 import type { Action } from '../core/actions';
 import { neighbors, type Hex } from '../core/hex';
 import { terrainAt, tileIndex } from '../core/map';
-import { advanceCheck, canAfford, cityStats, missingGoods, territoryGain } from '../core/rules';
+import {
+  advanceCheck,
+  canAfford,
+  cityStats,
+  foodIn,
+  missingGoods,
+  territoryGain,
+} from '../core/rules';
 import {
   aiConfig,
   BUILDINGS,
@@ -212,13 +219,13 @@ function foodSituation(ctx: AiContext): { net: number; projNet: number } {
   return { net, projNet: net + needNow - needProj };
 }
 
-/** Food: fishery first (cheap), else farm + bakery as a chain. */
+/** Food: fishery first (cheap), else a farm (grain is food, so one building is enough). */
 function foodWishes(g: Gen): void {
   const { ctx } = g;
   const nCities = ctx.cities.length;
   const food = foodSituation(ctx);
   const deficit = aiConfig.foodNetTarget - food.projNet;
-  const stockFood = ctx.stock.fish + ctx.stock.bread;
+  const stockFood = foodIn(ctx.stock);
   let urgency =
     deficit > 0 ? 1 + Math.min(aiConfig.foodUrgencyMax, deficit / aiConfig.foodUrgencyDivisor) : 0;
   if (stockFood >= aiConfig.foodStockHalvesUrgency) urgency /= 2;
@@ -230,43 +237,10 @@ function foodWishes(g: Gen): void {
     wishBuilding(g, 'fishery', U.food * urgency, 'food: fishery', { essential: true });
   }
   const fisheriesDone = !fisheryTiles || ctx.count.fishery >= maxFish;
-  if (
-    urgency > 0 &&
-    fisheriesDone &&
-    ctx.count.farm <= ctx.count.bakery &&
-    ctx.count.farm < maxFarm &&
-    ctx.pending.farm === 0
-  ) {
-    // A farm without a bakery feeds nobody and eats the workers: start it once the bakery
-    // can be paid (and keep the goods for it until then).
-    const bakeryCost = BUILDINGS.bakery.cost;
-    if (ctx.count.bakery > ctx.count.farm || canAfford(ctx.stock, bakeryCost)) {
-      wishBuilding(g, 'farm', U.food * aiConfig.farmFactor * urgency, 'food: farm', {
-        essential: true,
-      });
-    } else {
-      g.demand.push({
-        action: null,
-        utility: U.food * urgency,
-        reason: 'save for the bakery',
-        key: 'save:bakery',
-        cost: bakeryCost,
-        reserve: true,
-      });
-    }
-  }
-  // A farm without a bakery feeds nobody: finish the chain.
-  if (ctx.count.farm > ctx.count.bakery && ctx.pending.bakery === 0) {
-    wishBuilding(
-      g,
-      'bakery',
-      U.food * aiConfig.bakeryFactor * Math.max(urgency, 1),
-      'food: bakery',
-      {
-        reserve: true,
-        essential: true,
-      },
-    );
+  if (urgency > 0 && fisheriesDone && ctx.count.farm < maxFarm && ctx.pending.farm === 0) {
+    wishBuilding(g, 'farm', U.food * aiConfig.farmFactor * urgency, 'food: farm', {
+      essential: true,
+    });
   }
 }
 

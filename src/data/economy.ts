@@ -9,7 +9,6 @@ export const economyConfig = {
     stone: 200,
     planks: 100,
     grain: 100,
-    bread: 100,
     fish: 100,
     olives: 50,
     oil: 50,

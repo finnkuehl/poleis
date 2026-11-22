@@ -17,7 +17,7 @@ describe('production', () => {
     const id = addBuilding(s, 'woodcutter', at(1, 2));
     const report = runProduction(s, 0);
     expect(s.players[0].goods.wood).toBe(2);
-    expect(report.delta).toEqual({ wood: 2, bread: 1 });
+    expect(report.delta).toEqual({ wood: 2, grain: 2 });
     expect(report.buildings.find((b) => b.buildingId === id)?.status).toEqual({
       kind: 'producing',
     });
@@ -29,7 +29,7 @@ describe('production', () => {
     const report = runProduction(s, 0);
     expect(s.players[0].goods.wood).toBe(0);
     expect(s.players[0].goods.planks).toBe(2);
-    expect(report.delta).toEqual({ planks: 2, bread: 1 });
+    expect(report.delta).toEqual({ planks: 2, grain: 2 });
   });
   it('sawmill without wood is missingInput', () => {
     const s = setup();
@@ -75,7 +75,7 @@ describe('production', () => {
     const report = runProduction(s, 0);
     expect(report.buildings.find((b) => b.buildingId === id)?.status.kind).toBe('noProduction');
   });
-  it('city center produces 1 bread by itself, without workers', () => {
+  it('city center produces 2 grain by itself, without workers', () => {
     const s = setup();
     s.cities[0].residents = 0;
     const center = s.buildings[0].id;
@@ -83,8 +83,17 @@ describe('production', () => {
     expect(report.buildings.find((b) => b.buildingId === center)?.status).toEqual({
       kind: 'producing',
     });
-    expect(s.players[0].goods.bread).toBe(1);
-    expect(report.delta).toEqual({ bread: 1 });
+    expect(s.players[0].goods.grain).toBe(2);
+    expect(report.delta).toEqual({ grain: 2 });
+  });
+  it('farm makes 4 grain with 2 workers', () => {
+    const s = setup();
+    const id = addBuilding(s, 'farm', at(1, 2));
+    const report = runProduction(s, 0);
+    expect(report.buildings.find((b) => b.buildingId === id)?.status).toEqual({
+      kind: 'producing',
+    });
+    expect(s.players[0].goods.grain).toBe(6); // 4 from the farm + 2 from the city center
   });
   it('smelter needs ore AND wood', () => {
     const s = setup({ ore: 2 });
@@ -98,7 +107,7 @@ describe('production', () => {
     expect(report.buildings.find((b) => b.buildingId === id)?.status.kind).toBe('producing');
     expect(s.players[0].goods.bronze).toBe(1);
     expect(s.players[0].goods.ore).toBe(0);
-    expect(report.delta).toEqual({ ore: -2, wood: -1, bronze: 1, bread: 1 });
+    expect(report.delta).toEqual({ ore: -2, wood: -1, bronze: 1, grain: 2 });
   });
   it('preview does not mutate and equals the run result', () => {
     const s = setup({ wood: 1 });

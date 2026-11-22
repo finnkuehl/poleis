@@ -28,7 +28,7 @@ describe('growthState', () => {
     expect(growthText(s)).toBe('Growing: +1 per turn');
   });
   it('limits growth to free housing', () => {
-    const stock = { ...emptyStock(), bread: 5 };
+    const stock = { ...emptyStock(), grain: 5 };
     expect(growthState('polis', { ...stats, housing: 7 }, stock)).toEqual({
       kind: 'growing',
       perTurn: 1,
@@ -40,14 +40,14 @@ describe('growthState', () => {
     const s = growthState('settlement', { ...stats, housing: 6 }, stock);
     expect(growthText(s)).toBe('Full – build houses to grow');
   });
-  it('is hungry when food in stock does not cover a turn (fish and bread count together)', () => {
+  it('is hungry when food in stock does not cover a turn (fish and grain count together)', () => {
     expect(growthText(growthState('settlement', stats, emptyStock()))).toBe(
       'Hungry – loses 1 resident per turn',
     );
-    expect(growthState('settlement', stats, { ...emptyStock(), fish: 1, bread: 2 }).kind).toBe(
+    expect(growthState('settlement', stats, { ...emptyStock(), fish: 1, grain: 2 }).kind).toBe(
       'growing',
     );
-    expect(growthState('settlement', stats, { ...emptyStock(), fish: 1, bread: 1 }).kind).toBe(
+    expect(growthState('settlement', stats, { ...emptyStock(), fish: 1, grain: 1 }).kind).toBe(
       'hungry',
     );
   });
@@ -119,7 +119,7 @@ describe('tradeRows', () => {
   });
   it('shows all goods on request, without drachmas', () => {
     const rows = tradeRows(emptyStock(), true, true);
-    expect(rows).toHaveLength(12);
+    expect(rows).toHaveLength(11);
     expect(rows.some((r) => r.good === 'drachmas')).toBe(false);
   });
   it('enables selling with the sell amount and buying with enough drachmas', () => {

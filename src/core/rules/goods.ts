@@ -1,6 +1,6 @@
 // Helper functions for goods and stocks.
 
-import { GOOD_IDS, type Goods, type GoodId, type Stock } from '../../data';
+import { GOOD_IDS, GOODS, type Goods, type GoodId, type Stock } from '../../data';
 
 /** A stock with 0 of every good. */
 export function emptyStock(): Stock {
@@ -40,4 +40,16 @@ export function scaleGoods(goods: Goods, factor: number): Goods {
     result[id] = Math.floor((goods[id] ?? 0) * factor);
   }
   return result;
+}
+
+/** Is this good food (eaten by residents and units)? Single source of truth: `GOODS[...].isFood`. */
+export function isFoodGood(good: GoodId): boolean {
+  return GOODS[good].isFood;
+}
+
+/** Total food in a stock (fish + grain, everything with `isFood`). */
+export function foodIn(stock: Stock): number {
+  let total = 0;
+  for (const id of GOOD_IDS) if (GOODS[id].isFood) total += stock[id];
+  return total;
 }

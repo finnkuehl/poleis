@@ -373,7 +373,7 @@ describe('ship combat', () => {
 describe('harbor', () => {
   function port(level: 'settlement' | 'polis' | 'metropolis' = 'polis') {
     const s = makeTestState(STRAIT, {
-      goods: { planks: 50, bronze: 50, stone: 50, bread: 50 },
+      goods: { planks: 50, bronze: 50, stone: 50, grain: 50 },
     });
     addCity(s, at(0, 2), { level, radius: 2 });
     const harbor = addBuilding(s, 'harbor', at(1, 2));
@@ -462,12 +462,12 @@ describe('ships see and eat like units', () => {
   });
 
   it('upkeep is 1 food per ship', () => {
-    const s = makeTestState(STRAIT, { goods: { bread: 10 } });
+    const s = makeTestState(STRAIT, { goods: { grain: 10 } });
     addCity(s, at(0, 0), { radius: 0 });
     addUnit(s, 'transport', at(3, 2));
     addUnit(s, 'trireme', at(3, 3));
     const t = endTurn(s);
-    expect(t.lastReport?.units.upkeepEaten).toEqual({ bread: 2 });
+    expect(t.lastReport?.units.upkeepEaten).toEqual({ grain: 2 });
   });
 });
 
