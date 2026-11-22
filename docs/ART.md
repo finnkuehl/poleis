@@ -176,6 +176,22 @@ are faint. Everything must stay smooth (60 fps) on a 40 × 40 map on a mid-range
   Tree art lives in `public/assets/terrain/` (same world scale as the buildings, no owner color).
 - **Units:** keep their token; trees and shrubs make room under it, the token sits on the ground
   with a soft shadow, and on a tile with a building the unit stands at the front of the tile.
+- **Mine in a rock niche** (after the next playtest): the mountain's flanks reach forward on both
+  sides of the mine, so the works sit in a niche cut into the massif; in front a scree slope with
+  boulders, never a flat grey floor.
+- **Coast mountains drop into the sea:** cliff faces plunge straight into the water with surf at
+  their foot, no beach in front.
+- **Fields on hills lie on top of the slopes:** a vineyard or olive grove on a hill does not flatten
+  it; the hill keeps its rolling shape (no terrace bank), its light and shade show through the
+  fields, and rows and trees follow the slopes.
+- **Fields join only their own kind** (farm with farm, vineyard with vineyard); between different
+  kinds a grass strip or hedge. The olive grove stands on green orchard grass, not on a sandy patch.
+- **Roads: worn dirt tracks** that bend smoothly through the tiles: earth with two wheel ruts, a
+  grassy middle strip, soft grass edges and a few stones; junctions merge softly; next to a city
+  center they become light stone paving.
+- **Units: richer single figures:** one bigger, more detailed figure per unit with a strong pose,
+  owner color on tunic, cloak and shield emblem, bronze helmet with crest, visible weapons, standing
+  on an ornate bronze token with an owner-colored enamel ring.
 - **Draw order:** terrain shapes and buildings are sorted together by row, so a mountain in front
   covers a building behind it and vice versa. Units stay on top.
 
