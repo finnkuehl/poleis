@@ -9,6 +9,7 @@ import { mapWorldBounds } from './bounds';
 import type { Rect } from './camera';
 import { hexSize } from './config';
 import { createEconomyLayers } from './economyLayers';
+import { roadGeometry } from './geometry';
 import { createGroundLayer } from './groundLayer';
 import { groundFootprints } from './groundworks';
 import { createOrderLayers, type OrderPath } from './orderLayers';
@@ -18,6 +19,11 @@ import { createUnitLayers } from './unitLayers';
 import { theme } from './theme';
 
 export { mapWorldBounds };
+
+/** Tiles `viewer` has explored (none if the player is unknown). */
+function exploredBy(state: GameState, viewer: PlayerId): readonly boolean[] {
+  return state.players.find((p) => p.id === viewer)?.explored ?? [];
+}
 
 export interface MapView {
   container: Container;
@@ -53,10 +59,13 @@ export function createMapView(map: MapState, art: ArtSet = NO_ART): MapView {
   /** Test option "no fog"; the ground footprints use the same filter as the buildings. */
   let revealAll = false;
 
+  // Terrain rows (trees, hills' texture, mountains) sort together with the buildings: a
+  // mountain in front covers a building behind it and the other way round
+  for (const row of terrain.rows) economy.sorted.addChild(row);
+
   container.addChild(
     terrain.ground,
     ground.layer,
-    terrain.details,
     ...economy.below,
     unitLayers.units,
     unitLayers.fog,
@@ -82,6 +91,9 @@ export function createMapView(map: MapState, art: ArtSet = NO_ART): MapView {
       if (ground.update(state, viewer)) {
         terrain.setFootprints(groundFootprints(state, viewer, revealAll, hexSize));
       }
+      // ... keeps its trees and shrubs off the roads, and shows nothing on unexplored tiles
+      terrain.setRoads(roadGeometry(state));
+      terrain.setExplored(revealAll ? null : exploredBy(state, viewer));
       orders.setColor(playerColorOf(state, viewer));
       unitLayers.update(state, viewer);
     },

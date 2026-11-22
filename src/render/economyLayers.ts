@@ -26,8 +26,14 @@ import { ellipsePoints, mixColor, tileHash } from './terrain';
 import { theme } from './theme';
 
 export interface EconomyLayers {
-  /** Layers below the units, in drawing order. */
+  /**
+   * Layers below the units, in drawing order. One of them is `sorted`: the building art, sorted
+   * by depthKey (other objects that must sort with the buildings, like the terrain rows, are
+   * added there too).
+   */
   below: Container[];
+  /** The container that sorts the building art by row (zIndex = depthKey). */
+  sorted: Container;
   /** Layers above the units (highlights, road preview), in drawing order. */
   above: Container[];
   /** Buildings (with rings, labels, badges) only on tiles `viewer` has explored. */
@@ -363,6 +369,7 @@ export function createEconomyLayers(art: ArtSet = NO_ART): EconomyLayers {
 
   return {
     below: [tint, border, roads, ground, objects, labels, badges],
+    sorted: objects,
     above: [highlights, preview],
     update(state, statuses, viewer) {
       drawTerritory(state);

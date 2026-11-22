@@ -1,5 +1,6 @@
 // Pure helpers for the painted terrain (no PixiJS, easy to test): a deterministic hash per
-// tile, color math, shore detection and the layout of trees, mounds and peaks.
+// tile, color math, noise, wavy edges, shore detection, footprints and the layout of trees
+// (hills and mountains: relief.ts).
 // Everything here only affects the look; it never changes game logic.
 import type { Hex, Point } from '../core/hex';
 import { tileIndex } from '../core/map';
@@ -358,76 +359,4 @@ export function forestTrees(
   // At least one tree, so a forest never looks empty
   if (trees.length === 0) trees.push({ kind: 'pine', x: 0, y: 0.05 * size, scale: 1 });
   return trees.sort((a, b) => a.y - b.y);
-}
-
-export interface MoundSpot {
-  /** Middle of the mound's base line, relative to the tile center (world px). */
-  x: number;
-  y: number;
-  /** Half width and height of the mound (world px). */
-  w: number;
-  h: number;
-}
-
-/** 2-3 rolling, overlapping mounds of one hills tile, sorted back to front. */
-export function hillMounds(rng: () => number, size: number): MoundSpot[] {
-  const j = (v: number): number => (rng() - 0.5) * v;
-  const mound = (x: number, y: number, w: number, h: number): MoundSpot => ({
-    x: (x + j(0.1)) * size,
-    y: (y + j(0.06)) * size,
-    w: (w + j(0.08)) * size,
-    h: (h + j(0.06)) * size,
-  });
-  const mounds = [mound(-0.12, 0.36, 0.62, 0.34), mound(0.3, 0.12, 0.48, 0.3)];
-  if (rng() < 0.75) mounds.push(mound(-0.24, -0.14, 0.42, 0.26));
-  return mounds.sort((a, b) => a.y - b.y);
-}
-
-export interface PeakSpot {
-  /** Middle of the peak's base line, relative to the tile center (world px). */
-  x: number;
-  y: number;
-  /** Half width of the base, height (world px), horizontal shift of the tip. */
-  hw: number;
-  h: number;
-  skew: number;
-  /** Snow cap on top? */
-  snow: boolean;
-}
-
-/** One big peak in front plus 1-2 smaller ones behind, sorted back to front. */
-export function mountainPeaks(rng: () => number, size: number): PeakSpot[] {
-  const j = (v: number): number => (rng() - 0.5) * v * size;
-  const peaks: PeakSpot[] = [];
-  const left = rng() < 0.5;
-  // Back peak, to one side
-  peaks.push({
-    x: (left ? -0.28 : 0.28) * size + j(0.08),
-    y: 0.08 * size + j(0.06),
-    hw: 0.4 * size + j(0.06),
-    h: 0.7 * size + j(0.08),
-    skew: j(0.1),
-    snow: rng() < 0.8,
-  });
-  // Low side peak on the other side (sometimes)
-  if (rng() < 0.6) {
-    peaks.push({
-      x: (left ? 0.36 : -0.36) * size + j(0.06),
-      y: 0.22 * size + j(0.06),
-      hw: 0.26 * size + j(0.05),
-      h: 0.38 * size + j(0.06),
-      skew: j(0.08),
-      snow: false,
-    });
-  }
-  // Main peak in front
-  peaks.push({
-    x: j(0.1),
-    y: 0.42 * size + j(0.04),
-    hw: 0.56 * size + j(0.06),
-    h: 0.94 * size + j(0.08),
-    skew: j(0.12),
-    snow: true,
-  });
-  return peaks.sort((a, b) => a.y - b.y);
 }

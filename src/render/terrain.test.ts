@@ -11,10 +11,8 @@ import {
   ellipsePoints,
   footprintRowsToRepaint,
   forestTrees,
-  hillMounds,
   insideFootprint,
   mixColor,
-  mountainPeaks,
   scaleColor,
   shoreMask,
   smoothNoise,
@@ -156,16 +154,6 @@ describe('layouts', () => {
           expect(distanceToEdges(t, shore, size)).toBeGreaterThanOrEqual(size * 0.3);
         }
       }
-    }
-  });
-  it('mounds and peaks are sorted back to front', () => {
-    for (let i = 0; i < 20; i++) {
-      const m = hillMounds(tileRng(i, 2), size);
-      const p = mountainPeaks(tileRng(i, 3), size);
-      for (let k = 1; k < m.length; k++) expect(m[k].y).toBeGreaterThanOrEqual(m[k - 1].y);
-      for (let k = 1; k < p.length; k++) expect(p[k].y).toBeGreaterThanOrEqual(p[k - 1].y);
-      // The front (last) peak is the big one with snow
-      expect(p[p.length - 1].snow).toBe(true);
     }
   });
 });

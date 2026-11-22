@@ -1,5 +1,5 @@
-// Ground under and between the buildings (docs/ART.md, "Grounded buildings"): yards, garden
-// beds, plazas, clearings, quarry pits, fields over the whole tile and the fishery's sandy yard.
+// Ground under and between the buildings (docs/ART.md, "Grounded buildings"): yards, plazas,
+// clearings, stony aprons, fields over most of their tile and the fishery's sandy yard.
 // One static Graphics in map space, between the terrain's flat ground and its standing details.
 // Repainted only when the shown buildings change (compared by a cheap key), never per frame.
 // Light comes from the upper left; shadows fall to the lower right.
@@ -40,10 +40,12 @@ import {
   organicBlob,
   outlinePoint,
   parallelLines,
+  footprintOf,
   patchCenter,
   patchRadii,
   polygonArea,
   scalePoints,
+  slopeOutline,
   translate,
   withinLimits,
   type GroundKind,
@@ -157,10 +159,14 @@ interface Site {
   /** How far ground may reach along each edge normal (see edgeLimits). */
   limits: number[];
   rng: () => number;
-  /** Side (-1 left, 1 right) for things placed beside the building (the garden bed). */
-  side: number;
   /** Center of the building's patch relative to the tile center (see patchCenter). */
   o: Point;
+  /** Hills or mountains under a building that is not a field: its patch is a slope patch. */
+  slope: 'hills' | 'mountains' | null;
+  /** The tile's terrain is hills or mountains (also for fields: their yard takes its colors). */
+  sloped: 'hills' | 'mountains' | null;
+  /** The footprint the terrain cuts its terrace for (the bank runs along its front). */
+  fp: { rx: number; ry: number };
 }
 
 function add(a: Point, b: Point, k = 1): Point {
@@ -213,26 +219,55 @@ function softPatch(
   p.fill(color, coreAlpha, translate(clampToLimits(shape, limits), c));
 }
 
-/** Corners of an iso diamond around `q` (half height `u`, twice as wide): top, right, bottom, left. */
-function diamond(q: Point, u: number): Point[] {
-  return [
-    { x: q.x, y: q.y - u },
-    { x: q.x + 2 * u, y: q.y },
-    { x: q.x, y: q.y + u },
-    { x: q.x - 2 * u, y: q.y },
-  ];
+/**
+ * A patch on hills or mountains: no round disc, but ground cut into the slope. Flat front along
+ * the terrace bank, ragged back and sides that fade strongly into the slope, a little of the
+ * slope shining through.
+ */
+function slopePatch(p: Painter, s: Site, rx: number, ry: number, color: number): void {
+  const S = G.slope;
+  const phase = [s.rng(), s.rng(), s.rng()].map((v) => v * Math.PI * 2);
+  S.featherGrow.forEach((grow, k) => {
+    const pts = clampToLimits(slopeOutline(rx, ry, s.fp, grow, phase), s.limits);
+    p.fill(color, S.featherAlpha[k], translate(pts, s.c));
+  });
+  p.fill(
+    color,
+    S.coreAlpha,
+    translate(clampToLimits(slopeOutline(rx, ry, s.fp, 1, phase), s.limits), s.c),
+  );
+}
+
+/** Color of a patch: on slopes from the terrain's own color family, else the plains color. */
+function patchColor(s: Site, plains: number, kind: 'earth' | 'stone' = 'earth'): number {
+  const S = G.slope;
+  if (s.sloped === 'mountains') return S.mountainColor;
+  if (s.sloped === 'hills') return kind === 'stone' ? S.hillStoneColor : S.hillColor;
+  return plains;
 }
 
 /**
- * Center (relative to the tile) for something beside the building: on `s.side` first, mirrored
- * if that does not fit into the tile. null if neither side fits.
+ * The ground of a patch: on plains the soft organic `shape`, on slopes a slope patch. Returns
+ * the radii details should be scattered in (smaller on slopes, near the building).
  */
-function besideSpot(s: Site, x: number, y: number, fits: (q: Point) => boolean): Point | null {
-  for (const side of [s.side, -s.side]) {
-    const q = { x: side * x * s.size, y: y * s.size };
-    if (fits(q)) return q;
+function patchBase(
+  p: Painter,
+  s: Site,
+  rx: number,
+  ry: number,
+  shape: readonly Point[],
+  color: number,
+  origin: Point = { x: 0, y: 0 },
+): { rx: number; ry: number } {
+  if (s.slope) {
+    slopePatch(p, s, rx, ry, color);
+    return {
+      rx: rx * G.slope.scale * G.slope.detailShare,
+      ry: ry * G.slope.scale * G.slope.detailShare,
+    };
   }
-  return null;
+  softPatch(p, s.c, shape, s.limits, color, G.coreAlpha, origin);
+  return { rx, ry };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -246,14 +281,20 @@ function paintYard(p: Painter, s: Site, rx: number, ry: number, litter?: YardLit
   // Everything is placed relative to the patch center; the tile limits stay as they are
   const c = add(s.c, o);
   const shape = translate(organicBlob(rx, ry, rng, G.wobble), o);
-  softPatch(p, s.c, shape, limits, Y.color, G.coreAlpha, o);
-  // Sunlit, worn middle a bit toward the upper left
-  const light = translate(scalePoints(shape, 0.55, o), { x: -0.12 * rx, y: -0.14 * ry });
-  p.fill(Y.lightColor, Y.lightAlpha, translate(clampToLimits(light, limits), s.c));
+  const color = patchColor(s, Y.color);
+  const d = patchBase(p, s, rx, ry, shape, color, o);
+  if (!s.sloped) {
+    // Sunlit, worn middle a bit toward the upper left (not on slopes: it would read as a disc)
+    const light = translate(scalePoints(shape, 0.55, o), { x: -0.12 * rx, y: -0.14 * ry });
+    p.fill(Y.lightColor, Y.lightAlpha, translate(clampToLimits(light, limits), s.c));
+  }
+  const worn = s.sloped ? G.slope.dustColor : Y.wornColor;
+  rx = d.rx;
+  ry = d.ry;
   const ring = G.detailRing;
   for (let i = 0; i < 2; i++) {
     const q = spotIn(rng, rx * 0.8, ry * 0.8, ring);
-    dab(p, Y.wornColor, Y.wornAlpha, c.x + q.x, c.y + q.y, 0.13 * size, 0.05 * size, rng);
+    dab(p, worn, Y.wornAlpha, c.x + q.x, c.y + q.y, 0.13 * size, 0.05 * size, rng);
   }
   for (let i = 0; i < 5; i++) {
     const q = spotIn(rng, rx * 0.9, ry * 0.9, ring);
@@ -281,45 +322,6 @@ function paintYard(p: Painter, s: Site, rx: number, ry: number, litter?: YardLit
   }
 }
 
-/** Vegetable / herb bed beside a house: dark soil, rows of greens, a low wattle fence in front. */
-function paintGarden(p: Painter, s: Site): void {
-  const Gd = G.garden;
-  const u = Gd.size * s.size;
-  const q = besideSpot(s, Gd.x, Gd.y, (q) =>
-    diamond(q, u * 1.2).every((pt) => withinLimits(pt, s.limits, 1)),
-  );
-  if (!q) return;
-  const g = add(s.c, q);
-  const [top, right, bottom, left] = diamond(g, u);
-  p.fill(Gd.soilRimColor, 0.8, diamond(g, u * 1.18));
-  p.fill(Gd.soilColor, 1, [top, right, bottom, left]);
-  // Rows along the A axis: a in [-1, 1] runs top-left -> bottom-right, b across the rows
-  const A = { x: u, y: u / 2 };
-  const B = { x: -u, y: u / 2 };
-  for (const b of [-0.55, 0, 0.55]) {
-    for (const a of [-0.66, -0.22, 0.22, 0.66]) {
-      const pt = add(add(g, A, a), B, b);
-      const r = 0.034 * s.size;
-      dab(p, Gd.cropDark, 1, pt.x, pt.y, r, r * 0.72, s.rng, 6);
-      dab(p, Gd.cropLight, 1, pt.x - r * 0.3, pt.y - r * 0.3, r * 0.55, r * 0.4, undefined, 5);
-    }
-  }
-  // Wattle fence along the two front sides, with posts
-  const fence = [left, bottom, right].map((pt) => ({ x: pt.x, y: pt.y + 0.6 }));
-  p.line(Gd.fenceColor, 0.95, Gd.fenceWidth, fence);
-  const postH = 0.05 * s.size;
-  const mid = (a: Point, b: Point): Point => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
-  for (const at of [
-    fence[0],
-    mid(fence[0], fence[1]),
-    fence[1],
-    mid(fence[1], fence[2]),
-    fence[2],
-  ]) {
-    p.line(Gd.fenceColor, 1, 0.8, [at, { x: at.x, y: at.y - postH }]);
-  }
-}
-
 /** Iso octagon (edges along the iso axes, plus horizontal and vertical ones): half axes rx, ry. */
 function isoOctagon(rx: number, ry: number): Point[] {
   const r = rx / Math.cos(Math.PI / 8);
@@ -336,7 +338,7 @@ function paintPlaza(p: Painter, s: Site, rx: number, ry: number): void {
   const { c, size, rng, limits } = s;
   // Trodden earth apron, so the paving does not sit on the grass like a sticker
   const apron = organicBlob(rx * P.apronGrow, ry * P.apronGrowY, rng, G.wobble);
-  softPatch(p, c, apron, limits, G.yard.color);
+  patchBase(p, s, rx * P.apronGrow, ry * P.apronGrow, apron, patchColor(s, G.yard.color));
   let paving = isoOctagon(rx, ry);
   for (let e = 0; e < 6; e++) {
     const a = (Math.PI / 3) * e;
@@ -383,19 +385,23 @@ function paintClearing(p: Painter, s: Site, rx: number, ry: number): void {
   const C = G.clearing;
   const { c, size, rng, limits } = s;
   const shape = organicBlob(rx, ry, rng, G.wobble * 1.3);
-  softPatch(p, c, shape, limits, C.color);
-  for (let i = 0; i < 2; i++) {
-    const q = spotIn(rng, rx * 0.7, ry * 0.7);
-    dab(p, C.darkColor, 0.4, c.x + q.x, c.y + q.y, 0.16 * size, 0.07 * size, rng, 8);
+  const d = patchBase(p, s, rx, ry, shape, s.sloped ? patchColor(s, C.color) : C.color);
+  if (!s.sloped) {
+    for (let i = 0; i < 2; i++) {
+      const q = spotIn(rng, rx * 0.7, ry * 0.7);
+      dab(p, C.darkColor, 0.4, c.x + q.x, c.y + q.y, 0.16 * size, 0.07 * size, rng, 8);
+    }
+    p.fill(
+      C.sunColor,
+      0.45,
+      translate(clampToLimits(scalePoints(shape, 0.45), limits), {
+        x: c.x - 0.2 * rx,
+        y: c.y - 0.2 * ry,
+      }),
+    );
   }
-  p.fill(
-    C.sunColor,
-    0.45,
-    translate(clampToLimits(scalePoints(shape, 0.45), limits), {
-      x: c.x - 0.2 * rx,
-      y: c.y - 0.2 * ry,
-    }),
-  );
+  rx = d.rx;
+  ry = d.ry;
   // Fallen leaves and wood chips
   for (let i = 0; i < 12; i++) {
     const q = spotIn(rng, rx * 1.05, ry * 1.05, G.detailRing * 0.7);
@@ -432,10 +438,12 @@ function paintClearing(p: Painter, s: Site, rx: number, ry: number): void {
  */
 function paintQuarry(p: Painter, s: Site, rx: number, ry: number): void {
   const Q = G.quarry;
-  const { c, rng, limits } = s;
-  softPatch(p, c, organicBlob(rx, ry, rng, G.wobble), limits, Q.color);
-  scatter(p, s, rx, ry, Q.rubbleCount, Q.rubbleColors, 0.018, 0.018);
-  scatter(p, s, rx, ry, Q.gravelCount, Q.gravelColors, 0.008, 0.006);
+  const shape = organicBlob(rx, ry, s.rng, G.wobble);
+  const d = patchBase(p, s, rx, ry, shape, patchColor(s, Q.color, 'stone'));
+  // On hills a dusty tan apron with tan gravel; elsewhere stone grey
+  const gravel = s.sloped === 'hills' ? G.slope.hillGravelColors : Q.gravelColors;
+  scatter(p, s, d.rx, d.ry, Q.rubbleCount, Q.rubbleColors, 0.018, 0.018);
+  scatter(p, s, d.rx, d.ry, Q.gravelCount, gravel, 0.008, 0.006);
 }
 
 /**
@@ -454,7 +462,7 @@ function scatter(
 ): void {
   const { c, size, rng } = s;
   for (let i = 0; i < count; i++) {
-    const pt = spotIn(rng, rx, ry, G.detailRing);
+    const pt = spotIn(rng, rx, ry, s.slope ? G.slope.detailRing : G.detailRing);
     const r = (r0 + rng() * dr) * size;
     dab(p, colors[i % colors.length], 1, c.x + pt.x, c.y + pt.y, r, r * 0.7, rng, 5);
   }
@@ -466,9 +474,9 @@ function scatter(
  */
 function paintMine(p: Painter, s: Site, rx: number, ry: number): void {
   const M = G.mine;
-  const { c, rng, limits } = s;
-  softPatch(p, c, organicBlob(rx, ry, rng, G.wobble), limits, M.color);
-  scatter(p, s, rx, ry, M.stoneCount, M.stoneColors, 0.016, 0.018);
+  const shape = organicBlob(rx, ry, s.rng, G.wobble);
+  const d = patchBase(p, s, rx, ry, shape, patchColor(s, M.color, 'stone'));
+  scatter(p, s, d.rx, d.ry, M.stoneCount, M.stoneColors, 0.016, 0.018);
 }
 
 /**
@@ -556,7 +564,9 @@ function fieldSite(map: MapState, s: Site, fields: ReadonlySet<number>): FieldSi
     true,
   );
   const parcels: FieldParcel[] = [];
-  fieldCells(rng, size, F.gap * size).forEach((cell, i) => {
+  // Farms and vineyards: an orderly farmstead in the middle of its fields; olive groves: free
+  const layout = s.kind === 'orchard' ? 'free' : 'farmstead';
+  fieldCells(rng, size, F.gap * size, layout).forEach((cell, i) => {
     const corners = cellCorners(cell);
     const clipped = clipToCell(area, cell, FIELD_CELL_REACH * size * 0.99);
     const poly = dedupe(
@@ -878,8 +888,8 @@ function wallLine(
 /** Is the point (relative to the tile) inside the field's yard (kept free of vines)? */
 function inFieldYard(f: FieldSite, pt: Point): boolean {
   const { rx, ry } = patchRadii(f.b.type, f.size);
-  const x = (pt.x - f.o.x) / (rx * 1.15);
-  const y = (pt.y - f.o.y) / (ry * 1.2);
+  const x = (pt.x - f.o.x) / (rx * 1.05);
+  const y = (pt.y - f.o.y) / (ry * 1.1);
   return x * x + y * y < 1;
 }
 
@@ -922,6 +932,8 @@ export function paintGround(
   const fields = fieldTiles(map, shown);
   const sites: Site[] = shown.map((b) => {
     const kind = groundKindOf(b.type);
+    const t = map.tiles[tileIndex(map, b.hex)];
+    const sloped = t === 'hills' || t === 'mountains' ? t : null;
     return {
       b,
       kind,
@@ -929,8 +941,10 @@ export function paintGround(
       size,
       limits: edgeLimits(map, b.hex, size, G.edgeMargin * size, G.shoreMargin * size),
       rng: tileRng(b.hex.q, b.hex.r, 140),
-      side: tileHash(b.hex.q, b.hex.r, 141) < 0.5 ? -1 : 1,
       o: patchCenter(b.type, size),
+      slope: isFieldKind(kind) ? null : sloped,
+      sloped,
+      fp: footprintOf(b.type, size),
     };
   });
   const fieldSites = sites.filter((s) => isFieldKind(s.kind)).map((s) => fieldSite(map, s, fields));
@@ -964,10 +978,6 @@ export function paintGround(
         break;
       case 'fishery':
         paintFishery(p, s, rx, ry, jettyEdge(map, s.b.hex));
-        break;
-      case 'houseYard':
-        paintYard(p, s, rx, ry);
-        paintGarden(p, s);
         break;
       default:
         // Plain yards and the small yard in the middle of a field

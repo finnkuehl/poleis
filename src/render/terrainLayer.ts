@@ -1,12 +1,15 @@
 // Painted terrain: built ONCE when the map view is created, never per frame.
 // `ground` (one Graphics, flat): tile fills with soft wavy borders where the terrain changes,
-//   large color washes that flow across tiles, color bleed between land types, sea blends,
-//   beaches, small cliffs, faint outlines, foam, waves and rocks in the surf.
-// `details` (a Container with one Graphics per map row, back to front): grass, flowers and
-//   pebbles, then hills, peaks, trees and boats. Footprints (see `setFootprints`) clear room for
-//   buildings; only the rows they touch are repainted.
+//   large color washes that flow across tiles, color bleed between land types, sea blends, the
+//   rolling hill country (relief.ts), beaches, small cliffs, faint outlines, foam, waves and
+//   rocks in the surf.
+// `rows` (one Graphics per map row, back to front): grass, flowers and pebbles, then trees, the
+//   texture on the hills, the mountain massifs, terraces and boats. The rows are sorted together
+//   with the buildings (zIndex = rowDepthKey), so a mountain of a lower row covers a building of
+//   the row above. Footprints, roads and the explored area change what stands on a tile; only
+//   the rows they touch are repainted.
 // Light comes from the upper left, so shadows fall to the lower right (docs/ART.md).
-import { Container, Graphics } from 'pixi.js';
+import { Graphics } from 'pixi.js';
 import { hexCorners, hexToPixel, pixelToHex, type Hex, type Point } from '../core/hex';
 import { hexAtIndex, tileIndex } from '../core/map';
 import type { MapState } from '../core/state';
@@ -17,7 +20,20 @@ import {
   subPolyline,
   wavyInsetLine,
   wavyTileOutline,
+  type RoadGeometry,
 } from './geometry';
+import { hillMounds, massifPlan, roadDistance, roadMasks, rowDepthKey } from './relief';
+import {
+  fillShape,
+  hillDetails,
+  massifStanding,
+  mountainFootDetails,
+  paintHillMounds,
+  terraceStanding,
+  type Decal,
+  type Shape,
+  type Standing,
+} from './reliefPaint';
 import {
   distanceToEdges,
   distanceToWavyEdges,
@@ -25,10 +41,8 @@ import {
   ellipsePoints,
   footprintRowsToRepaint,
   forestTrees,
-  hillMounds,
   insideFootprint,
   isWater,
-  mountainPeaks,
   smoothNoise,
   taperedStroke,
   tileHash,
@@ -36,8 +50,6 @@ import {
   waveAt,
   WAVE_SEGMENTS,
   type FootprintShape,
-  type MoundSpot,
-  type PeakSpot,
   type TreeSpot,
 } from './terrain';
 import { theme } from './theme';
@@ -57,14 +69,25 @@ export interface TileFootprint {
 export interface TerrainLayer {
   /** Flat painted ground (static). */
   ground: Graphics;
-  /** Decals and standing objects: one Graphics per map row, painted back to front. */
-  details: Container;
+  /**
+   * Decals and standing objects, one Graphics per map row (index = row), each with
+   * zIndex = rowDepthKey(row): add them to the container that sorts the buildings by depthKey.
+   */
+  rows: readonly Graphics[];
   /**
    * Clears room for buildings: decals and standing objects whose ground point lies inside a
-   * footprint ellipse (clipped to its hex) are left out. Repaints only the rows that changed;
-   * the same footprints again do nothing. [] brings everything back.
+   * footprint ellipse (clipped to its hex) are left out; on hills and mountains the tile gets a
+   * terrace edge in front of the footprint, and a mountain's massif moves to the back of the
+   * tile. Repaints only the rows that changed; the same footprints again do nothing.
    */
   setFootprints(footprints: readonly TileFootprint[]): void;
+  /** Trees, shrubs, rocks and tufts keep off the roads (tile indices, see roadGeometry). */
+  setRoads(roads: RoadGeometry): void;
+  /**
+   * Tiles not explored (false) get no decals or standing objects, so tall mountains or trees of
+   * a hidden tile cannot reach out of the fog. null = everything explored.
+   */
+  setExplored(explored: readonly boolean[] | null): void;
 }
 
 interface Tile {
@@ -81,30 +104,6 @@ interface Tile {
   waves: (number[] | null)[];
 }
 
-/** A filled polygon of a standing object. */
-interface Shape {
-  poly: number[];
-  color: number;
-  alpha: number;
-}
-
-/** A standing object (tree, mound, peak, shrub, boat) with its ground point in world px. */
-interface Standing {
-  x: number;
-  y: number;
-  shadow: number[] | null;
-  shadowAlpha: number;
-  shapes: Shape[];
-}
-
-/** A flat decal (grass tuft, flower, pebble) of one color group, ground point in world px. */
-interface Decal {
-  x: number;
-  y: number;
-  group: number;
-  poly: number[];
-}
-
 interface TilePlan {
   decals: Decal[];
   /** In paint order (back to front within the tile). */
@@ -115,10 +114,6 @@ function flat(points: readonly Point[]): number[] {
   const out: number[] = [];
   for (const p of points) out.push(p.x, p.y);
   return out;
-}
-
-function lerp(a: Point, b: Point, t: number): Point {
-  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
 }
 
 /** Points of a quadratic curve from a over control c to b (n segments, a excluded). */
@@ -653,6 +648,7 @@ function paintGround(g: Graphics, tiles: readonly Tile[], map: MapState, size: n
   paintWashes(g, tiles, size);
   paintSea(g, tiles, size);
   paintBleed(g, tiles, size);
+  paintHillMounds(g, hillMounds(map, size, shoreDistanceAt(map, tiles, size)), size);
   paintBeaches(g, tiles, size);
   paintOutlines(g, tiles, map);
   paintSurf(g, tiles, size);
@@ -663,22 +659,6 @@ function paintGround(g: Graphics, tiles: readonly Tile[], map: MapState, size: n
 // ---------------------------------------------------------------------------------------------
 // Details (planned once, painted per row)
 // ---------------------------------------------------------------------------------------------
-
-/** Color groups of the decals (index = Decal.group). */
-const DECAL_GROUPS: readonly { color: number; alpha: number }[] = [
-  { color: P.grassColor, alpha: P.grassAlpha },
-  { color: P.hillGrassColor, alpha: P.grassAlpha },
-  { color: P.screeColor, alpha: 1 },
-  { color: P.rockShade, alpha: 1 },
-  { color: P.rockLight, alpha: 1 },
-  ...P.flowerColors.map((color) => ({ color, alpha: 1 })),
-];
-const GRASS = 0;
-const HILL_GRASS = 1;
-const SCREE = 2;
-const BOULDER_DARK = 3;
-const BOULDER_LIGHT = 4;
-const FLOWER = 5;
 
 function treeStanding(fx: number, fy: number, tree: TreeSpot, size: number): Standing {
   const k = tree.scale * size;
@@ -742,127 +722,6 @@ function treeStanding(fx: number, fy: number, tree: TreeSpot, size: number): Sta
     x: fx,
     y: fy,
     shadow: ellipsePoints(fx + 0.13 * k, fy + 0.01 * k, rx, ry, 10),
-    shadowAlpha: P.shadowAlpha,
-    shapes,
-  };
-}
-
-function moundStanding(c: Point, m: MoundSpot, size: number): Standing {
-  const left = { x: c.x + m.x - m.w, y: c.y + m.y };
-  const right = { x: c.x + m.x + m.w, y: c.y + m.y };
-  const top = { x: c.x + m.x, y: c.y + m.y - m.h };
-  const shapes: Shape[] = [];
-  // Dome = quadratic curve from left to right over (x, y - 2h); its apex is `top`
-  const control = { x: top.x, y: c.y + m.y - 2 * m.h };
-  shapes.push({
-    poly: flat([left, ...quadPoints(left, control, right, 10)]),
-    color: P.moundLight,
-    alpha: 1,
-  });
-  // Sunlit crest: a thin crescent along the upper left of the dome
-  const crestStart = { x: left.x + 0.25 * m.w, y: left.y - 0.42 * m.h };
-  const crestEnd = { x: top.x + 0.12 * m.w, y: top.y + 0.02 * m.h };
-  shapes.push({
-    poly: flat([
-      crestStart,
-      ...quadPoints(crestStart, { x: left.x + 0.5 * m.w, y: top.y - 0.06 * m.h }, crestEnd, 4),
-      ...quadPoints(crestEnd, { x: left.x + 0.55 * m.w, y: top.y + 0.2 * m.h }, crestStart, 4),
-    ]),
-    color: P.moundCrest,
-    alpha: 1,
-  });
-  // Shaded right flank: right half of the dome, back along a softer inner curve
-  const halfControl = { x: top.x + m.w / 2, y: top.y };
-  const foot = { x: top.x + 0.18 * m.w, y: right.y };
-  const inner = { x: top.x + 0.12 * m.w, y: top.y + 0.5 * m.h };
-  shapes.push({
-    poly: flat([
-      top,
-      ...quadPoints(top, halfControl, right, 5),
-      foot,
-      ...quadPoints(foot, inner, top, 4),
-    ]),
-    color: theme.hillColor,
-    alpha: 1,
-  });
-  return {
-    x: c.x + m.x,
-    y: c.y + m.y,
-    shadow: ellipsePoints(
-      c.x + m.x + 0.3 * m.w,
-      c.y + m.y + 0.02 * size,
-      m.w * 0.95,
-      Math.min(0.085 * size, m.h * 0.3),
-      12,
-    ),
-    shadowAlpha: P.shadowAlpha * 0.75,
-    shapes,
-  };
-}
-
-/** A small olive shrub (dark base, lit top-left). */
-function shrubStanding(x: number, y: number, r: number, rng: () => number): Standing {
-  return {
-    x,
-    y,
-    shadow: null,
-    shadowAlpha: 0,
-    shapes: [
-      { poly: ellipsePoints(x, y, r, r * 0.72, 8, 0.12, rng), color: P.shrubDark, alpha: 1 },
-      {
-        poly: ellipsePoints(x - r * 0.25, y - r * 0.25, r * 0.62, r * 0.42, 7),
-        color: P.shrubColor,
-        alpha: 1,
-      },
-    ],
-  };
-}
-
-function peakStanding(c: Point, p: PeakSpot, size: number): Standing {
-  const rng = tileRng(Math.round(c.x + p.x), Math.round(c.y + p.y), 81);
-  const j = (v: number): number => (rng() - 0.5) * v;
-  const by = c.y + p.y;
-  const tip = { x: c.x + p.x + p.skew, y: by - p.h };
-  const left = { x: c.x + p.x - p.hw, y: by };
-  const right = { x: c.x + p.x + p.hw, y: by };
-  const foot = { x: c.x + p.x + 0.18 * p.hw + p.skew * 0.3, y: by };
-  const ridge = { x: (tip.x + foot.x) / 2 + j(0.12 * p.hw), y: (tip.y + foot.y) / 2 };
-  const leftMid = {
-    x: (tip.x + left.x) / 2 - 0.05 * p.hw + j(0.08 * p.hw),
-    y: (tip.y + left.y) / 2,
-  };
-  const rightMid = {
-    x: (tip.x + right.x) / 2 + 0.04 * p.hw + j(0.08 * p.hw),
-    y: (tip.y + right.y) / 2,
-  };
-  const shapes: Shape[] = [
-    { poly: flat([left, leftMid, tip, ridge, foot]), color: P.rockLight, alpha: 1 },
-    { poly: flat([tip, rightMid, right, foot, ridge]), color: theme.mountainColor, alpha: 1 },
-  ];
-  // A dark crevice running down the lit face
-  const top = lerp(tip, ridge, 0.3);
-  const bottom = lerp(left, foot, 0.45 + j(0.15));
-  const cw = 0.05 * p.hw;
-  shapes.push({
-    poly: [top.x, top.y, bottom.x + cw, bottom.y, bottom.x - cw, bottom.y],
-    color: theme.mountainColor,
-    alpha: 0.45,
-  });
-  if (p.snow) {
-    // Snow cap with a zigzag lower edge; its right side lies in the cool shade
-    const sl = lerp(tip, leftMid, 0.62);
-    const sr = lerp(tip, rightMid, 0.56);
-    const sj = lerp(tip, ridge, 0.7);
-    const z1 = { x: sl.x + (sj.x - sl.x) * 0.35, y: sl.y + (sj.y - sl.y) * 0.35 + 0.07 * p.h };
-    const z2 = { x: sl.x + (sj.x - sl.x) * 0.7, y: sl.y + (sj.y - sl.y) * 0.7 - 0.02 * p.h };
-    const z3 = { x: (sj.x + sr.x) / 2, y: (sj.y + sr.y) / 2 + 0.06 * p.h };
-    shapes.push({ poly: flat([tip, sl, z1, z2, sj]), color: theme.mountainPeakColor, alpha: 1 });
-    shapes.push({ poly: flat([tip, sj, z3, sr]), color: P.snowShade, alpha: 1 });
-  }
-  return {
-    x: c.x + p.x,
-    y: by,
-    shadow: ellipsePoints(c.x + p.x + 0.35 * p.hw, by + 0.02 * size, p.hw * 0.95, 0.08 * size, 12),
     shadowAlpha: P.shadowAlpha,
     shapes,
   };
@@ -972,9 +831,8 @@ function planTile(t: Tile, size: number): TilePlan {
   const c = t.center;
   const shoreDist = (p: Point): number => shoreDistance(t, p, size);
 
-  if (t.terrain === 'plains' || t.terrain === 'hills') {
+  if (t.terrain === 'plains') {
     const rng = tileRng(t.hex.q, t.hex.r, 20);
-    const plains = t.terrain === 'plains';
     // Random spot inside the tile, away from the beach; null if it does not fit
     const spot = (minShore: number): Point | null => {
       const p = { x: (rng() - 0.5) * 1.2 * size, y: (rng() - 0.5) * 1.1 * size };
@@ -982,7 +840,7 @@ function planTile(t: Tile, size: number): TilePlan {
       if (shoreDist(p) < minShore * size) return null;
       return { x: c.x + p.x, y: c.y + p.y };
     };
-    const tufts = plains ? 2 + Math.floor(rng() * 3) : 1 + Math.floor(rng() * 2);
+    const tufts = 2 + Math.floor(rng() * 3);
     for (let i = 0; i < tufts; i++) {
       const p = spot(0.26);
       if (!p) continue;
@@ -991,23 +849,22 @@ function planTile(t: Tile, size: number): TilePlan {
         const tipX = bx + side * 0.8 * k + (rng() - 0.5) * 0.6 * k;
         const tipY = p.y - (2.4 + rng() * 1.4 - Math.abs(side) * 0.5) * k;
         const poly = [bx - 0.55 * k, p.y, bx + 0.55 * k, p.y, tipX, tipY];
-        decals.push({ x: p.x, y: p.y, group: plains ? GRASS : HILL_GRASS, poly });
+        decals.push({ x: p.x, y: p.y, color: P.grassColor, alpha: P.grassAlpha, poly });
       }
     }
-    if (plains) {
-      const flowerCount = Math.floor(rng() * 4);
-      for (let i = 0; i < flowerCount; i++) {
-        const p = spot(0.24);
-        if (!p) continue;
-        const color = Math.floor(rng() * P.flowerColors.length);
-        const r = 1.1 * k;
-        decals.push({
-          x: p.x,
-          y: p.y,
-          group: FLOWER + color,
-          poly: [p.x, p.y - r, p.x + r, p.y, p.x, p.y + r, p.x - r, p.y],
-        });
-      }
+    const flowerCount = Math.floor(rng() * 4);
+    for (let i = 0; i < flowerCount; i++) {
+      const p = spot(0.24);
+      if (!p) continue;
+      const color = P.flowerColors[Math.floor(rng() * P.flowerColors.length)];
+      const r = 1.1 * k;
+      decals.push({
+        x: p.x,
+        y: p.y,
+        color,
+        alpha: 1,
+        poly: [p.x, p.y - r, p.x + r, p.y, p.x, p.y + r, p.x - r, p.y],
+      });
     }
   }
 
@@ -1025,13 +882,15 @@ function planTile(t: Tile, size: number): TilePlan {
         decals.push({
           x: p.x,
           y: p.y,
-          group: BOULDER_DARK,
+          color: P.rockShade,
+          alpha: 1,
           poly: ellipsePoints(p.x, p.y, r, r * 0.66, 7, 0.2, rng),
         });
         decals.push({
           x: p.x,
           y: p.y,
-          group: BOULDER_LIGHT,
+          color: P.rockLight,
+          alpha: 1,
           poly: ellipsePoints(p.x - 0.25 * r, p.y - 0.22 * r, r * 0.62, r * 0.38, 6),
         });
       }
@@ -1048,23 +907,18 @@ function planTile(t: Tile, size: number): TilePlan {
     );
     for (const tree of trees) standing.push(treeStanding(c.x + tree.x, c.y + tree.y, tree, size));
   } else if (t.terrain === 'hills') {
-    const rng = tileRng(t.hex.q, t.hex.r, 31);
-    for (const m of hillMounds(rng, size)) standing.push(moundStanding(c, m, size));
-    // Shrubs and spill trees stand on the mounds, back to front
-    const onTop: Standing[] = [];
-    const count = 2 + Math.floor(rng() * 3);
-    for (let i = 0; i < count; i++) {
-      const p = { x: (rng() - 0.5) * 1.1 * size, y: (rng() - 0.5) * 1.0 * size };
-      const r = (0.06 + rng() * 0.03) * size;
-      const shapeRng = tileRng(t.hex.q, t.hex.r, 33 + i);
-      if (distanceToEdges(p, ALL_EDGES, size) < 0.14 * size) continue;
-      if (shoreDist(p) < 0.28 * size) continue;
-      onTop.push(shrubStanding(c.x + p.x, c.y + p.y, r, shapeRng));
+    // Dry grass, maquis, olive trees and limestone on the slopes (the mounds are in the ground)
+    const details = hillDetails(c, size, tileRng(t.hex.q, t.hex.r, 31), (p, margin) => {
+      if (distanceToEdges(p, ALL_EDGES, size) < 0.07 * size) return false;
+      return shoreDist(p) >= margin * size + P.beachDepth * size;
+    });
+    decals.push(...details.decals);
+    const items = [...details.standing];
+    for (const tree of spillTrees(t, size)) {
+      items.push(treeStanding(c.x + tree.x, c.y + tree.y, tree, size));
     }
-    for (const tree of spillTrees(t, size))
-      onTop.push(treeStanding(c.x + tree.x, c.y + tree.y, tree, size));
-    onTop.sort((a, b) => a.y - b.y);
-    standing.push(...onTop);
+    items.sort((a, b) => a.y - b.y);
+    standing.push(...items);
     // Loose scree spilling over from neighboring mountains
     for (let e = 0; e < 6; e++) {
       if (t.across[e] !== 'mountains') continue;
@@ -1075,43 +929,24 @@ function planTile(t: Tile, size: number): TilePlan {
         decals.push({
           x: p.x,
           y: p.y,
-          group: SCREE,
+          color: P.screeColor,
+          alpha: 1,
           poly: ellipsePoints(p.x, p.y, r, r * 0.6, 5, 0.25, srng),
         });
       }
     }
   } else if (t.terrain === 'mountains') {
-    const rng = tileRng(t.hex.q, t.hex.r, 32);
-    const peaks = mountainPeaks(rng, size);
-    // Loose rocks on the ground (mostly hidden behind the peaks, visible at the edges)
-    for (let i = 0; i < 5; i++) {
-      const r = (0.035 + rng() * 0.03) * size;
-      const x = c.x + (rng() - 0.5) * 1.2 * size;
-      const y = c.y + (0.1 + rng() * 0.5) * size;
-      const shapeRng = tileRng(t.hex.q, t.hex.r, 34 + i);
-      if (distanceToEdges({ x: x - c.x, y: y - c.y }, ALL_EDGES, size) < r * 2) continue;
-      decals.push({ x, y, group: SCREE, poly: ellipsePoints(x, y, r, r * 0.6, 5, 0.25, shapeRng) });
-    }
-    for (const p of peaks) standing.push(peakStanding(c, p, size));
+    // Scree and boulders at the foot (the massif itself depends on footprints: see paintRow)
+    const foot = mountainFootDetails(c, size, tileRng(t.hex.q, t.hex.r, 32), (p) => {
+      if (distanceToEdges(p, ALL_EDGES, size) < 0.06 * size) return false;
+      return shoreDist(p) >= 0.3 * size;
+    });
+    decals.push(...foot.decals);
+    standing.push(...foot.standing.sort((a, b) => a.y - b.y));
   } else if (t.terrain === 'plains') {
     const items: Standing[] = [];
-    for (const tree of spillTrees(t, size))
+    for (const tree of spillTrees(t, size)) {
       items.push(treeStanding(c.x + tree.x, c.y + tree.y, tree, size));
-    // A low rolling mound now and then next to hills
-    for (let e = 0; e < 6; e++) {
-      if (t.across[e] !== 'hills') continue;
-      const rng = tileRng(t.hex.q, t.hex.r, 200 + e);
-      if (rng() >= P.spillMoundChance) continue;
-      const p = edgePoint(t, e, 0.3 + rng() * 0.4, (0.16 + rng() * 0.08) * size);
-      const rel = { x: p.x - c.x, y: p.y - c.y };
-      if (shoreDist(rel) < 0.32 * size) continue;
-      const mound = {
-        x: rel.x,
-        y: rel.y,
-        w: (0.22 + rng() * 0.08) * size,
-        h: (0.1 + rng() * 0.05) * size,
-      };
-      items.push(moundStanding(c, mound, size));
     }
     items.sort((a, b) => a.y - b.y);
     standing.push(...items);
@@ -1127,30 +962,101 @@ function planTile(t: Tile, size: number): TilePlan {
   return { decals, standing };
 }
 
-/** Paints one map row: its decals first, then the standing objects tile by tile. */
+/** What a row needs to know about the current footprints, roads and explored tiles. */
+interface RowState {
+  footprints: ReadonlyMap<number, FootprintShape>;
+  roads: readonly number[];
+  explored: readonly boolean[] | null;
+}
+
+/** Trees, shrubs and rocks keep this far (fraction of the hex size) from the middle of a road. */
+const ROAD_CLEAR = 0.24;
+/** Grass tufts, flowers and pebbles keep this far. */
+const ROAD_CLEAR_DECAL = 0.15;
+
+/**
+ * Paints one map row: its decals first, then tile by tile the standing objects (with the
+ * mountain massifs and the terraces under buildings on slopes).
+ */
 function paintRow(
   g: Graphics,
+  map: MapState,
+  tiles: readonly Tile[],
   plans: readonly TilePlan[],
-  cleared: (x: number, y: number) => boolean,
+  state: RowState,
+  size: number,
 ): void {
   g.clear();
-  const decalPolys: number[][][] = DECAL_GROUPS.map(() => []);
-  for (const plan of plans) {
-    for (const d of plan.decals) if (!cleared(d.x, d.y)) decalPolys[d.group].push(d.poly);
-  }
-  DECAL_GROUPS.forEach(({ color, alpha }, i) => fillAll(g, decalPolys[i], color, alpha));
-  for (const plan of plans) {
-    const visible = plan.standing.filter((s) => !cleared(s.x, s.y));
-    if (visible.length === 0) continue;
+  const { footprints, roads, explored } = state;
+  /** Is a ground point free (no footprint, no road nearby)? */
+  const free = (x: number, y: number, roadClear: number): boolean => {
+    const h = pixelToHex({ x, y }, size);
+    const i = tileIndex(map, h);
+    if (i < 0) return true;
+    const c = hexToPixel(h, size);
+    const rel = { x: x - c.x, y: y - c.y };
+    const fp = footprints.get(i);
+    if (fp && insideFootprint(rel, fp, size)) return false;
+    return roadDistance(rel, roads[i], size) >= roadClear * size;
+  };
+  const shown = (t: Tile): boolean => explored === null || explored[t.index] === true;
+
+  const decals = new FillGroups();
+  tiles.forEach((t, k) => {
+    if (!shown(t)) return;
+    for (const d of plans[k].decals) {
+      if (free(d.x, d.y, ROAD_CLEAR_DECAL)) decals.add(d.color, d.alpha, d.poly);
+    }
+  });
+  decals.fill(g);
+
+  tiles.forEach((t, k) => {
+    if (!shown(t)) return;
+    const fp = footprints.get(t.index) ?? null;
+    const visible = plans[k].standing.filter((s) => free(s.x, s.y, ROAD_CLEAR));
+    const slope = fp !== null && (t.terrain === 'hills' || t.terrain === 'mountains');
+    if (slope) {
+      visible.push(...terraceStanding(t.center, fp, t.terrain, size));
+      visible.sort((a, b) => a.y - b.y);
+    }
+    if (t.terrain === 'mountains') {
+      // The massif stands behind everything else on its tile
+      visible.unshift(massifStanding(massifPlan(map, t.hex, size, fp), size, 760));
+    }
+    if (visible.length === 0) return;
     // All ground shadows of the tile first, so no shadow lies on an object
     const shadows = new FillGroups();
     for (const s of visible) if (s.shadow) shadows.add(P.shadowColor, s.shadowAlpha, s.shadow);
     shadows.fill(g);
-    for (const s of visible) {
-      for (const shape of s.shapes)
-        g.poly(shape.poly).fill({ color: shape.color, alpha: shape.alpha });
-    }
+    for (const s of visible) for (const shape of s.shapes) fillShape(g, shape);
+  });
+}
+
+/** Tile indices whose road mask, explored flag or footprint changed (null = all). */
+function changedTiles<T>(prev: readonly T[], next: readonly T[]): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < next.length; i++) if (prev[i] !== next[i]) out.push(i);
+  return out;
+}
+
+/** Rows to repaint for changed tiles: their own row and the rows above and below. */
+function rowsAround(tiles: readonly number[], width: number, height: number): number[] {
+  const rows = new Set<number>();
+  for (const i of tiles) {
+    const row = Math.floor(i / width);
+    for (let r = row - 1; r <= row + 1; r++) if (r >= 0 && r < height) rows.add(r);
   }
+  return [...rows].sort((a, b) => a - b);
+}
+
+/** World point -> distance to the shore of the tile it lies in (Infinity off the map / inland). */
+function shoreDistanceAt(map: MapState, tiles: readonly Tile[], size: number) {
+  return (p: Point): number => {
+    const i = tileIndex(map, pixelToHex(p, size));
+    if (i < 0) return Infinity;
+    const t = tiles[i];
+    return shoreDistance(t, { x: p.x - t.center.x, y: p.y - t.center.y }, size);
+  };
 }
 
 /** Creates the static terrain layers for a map. */
@@ -1160,30 +1066,30 @@ export function createTerrainLayer(map: MapState, size: number): TerrainLayer {
   paintGround(ground, tiles, map, size);
 
   const plans = tiles.map((t) => planTile(t, size));
+  const rowTiles: Tile[][] = [];
   const rowPlans: TilePlan[][] = [];
   for (let r = 0; r < map.height; r++) {
+    rowTiles.push(tiles.slice(r * map.width, (r + 1) * map.width));
     rowPlans.push(plans.slice(r * map.width, (r + 1) * map.width));
   }
-  let footprints = new Map<number, FootprintShape>();
-  const cleared = (x: number, y: number): boolean => {
-    if (footprints.size === 0) return false;
-    const h = pixelToHex({ x, y }, size);
-    const fp = footprints.get(tileIndex(map, h));
-    if (!fp) return false;
-    const c = hexToPixel(h, size);
-    return insideFootprint({ x: x - c.x, y: y - c.y }, fp, size);
+  const state: RowState = {
+    footprints: new Map<number, FootprintShape>(),
+    roads: new Array<number>(map.tiles.length).fill(0),
+    explored: null,
   };
-  const details = new Container();
-  const rows = rowPlans.map((plan) => {
+  const paint = (r: number): void => {
+    paintRow(rows[r], map, rowTiles[r], rowPlans[r], state, size);
+  };
+  const rows = rowPlans.map((_, r) => {
     const g = new Graphics();
-    paintRow(g, plan, cleared);
-    details.addChild(g);
+    g.zIndex = rowDepthKey(r);
     return g;
   });
+  for (let r = 0; r < rows.length; r++) paint(r);
 
   return {
     ground,
-    details,
+    rows,
     setFootprints(list) {
       const next = new Map<number, FootprintShape>();
       for (const fp of list) {
@@ -1197,9 +1103,25 @@ export function createTerrainLayer(map: MapState, size: number): TerrainLayer {
             : { rx: fp.rx, ry: fp.ry },
         );
       }
-      const dirty = footprintRowsToRepaint(footprints, next, map.width, map.height);
-      footprints = next;
-      for (const r of dirty) paintRow(rows[r], rowPlans[r], cleared);
+      const dirty = footprintRowsToRepaint(state.footprints, next, map.width, map.height);
+      state.footprints = next;
+      for (const r of dirty) paint(r);
+    },
+    setRoads(roads) {
+      const next = roadMasks(map, roads);
+      const dirty = rowsAround(changedTiles(state.roads, next), map.width, map.height);
+      state.roads = next;
+      for (const r of dirty) paint(r);
+    },
+    setExplored(explored) {
+      const prev = state.explored;
+      const next = explored === null ? null : [...explored];
+      let changed: number[];
+      if (prev === null && next === null) changed = [];
+      else if (prev === null || next === null) changed = tiles.map((t) => t.index);
+      else changed = changedTiles(prev, next);
+      state.explored = next;
+      for (const r of rowsAround(changed, map.width, map.height)) paint(r);
     },
   };
 }

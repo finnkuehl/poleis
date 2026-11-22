@@ -120,20 +120,150 @@ export const theme = {
     /** Soft ground shadows of trees, hills and peaks (light comes from the upper left) */
     shadowColor: 0x1d2b36,
     shadowAlpha: 0.22,
-    /** Hills: lit and shaded side of the rolling mounds (olive-ochre), small olive shrubs */
+    /** Hills in the small start-menu map preview: lit and shaded side of a mound */
     moundLight: 0xd2c26d,
-    /** Light grassy crest on the upper left of each mound */
-    moundCrest: 0xe4d888,
     moundShade: 0x968842,
+    /**
+     * Hills (docs/ART.md "Hills and mountains"): golden Mediterranean hill country. Broad mounds
+     * fill each hill tile and sit across the edges toward neighboring hill tiles (and as
+     * foothills toward mountains), so hill tiles join into one landscape. Sizes are fractions of
+     * the hex size; a mound is `w` half wide and `h` high, its base reaches `depth` x w forward.
+     */
+    hills: {
+      /** The big mound under the middle of the tile (a unit token sits on its gentle front slope) */
+      centerW: 0.8,
+      centerH: 0.34,
+      /** Its base lies this far below the tile center */
+      centerY: 0.3,
+      /** A smaller mound at the back of the tile */
+      backW: 0.6,
+      backH: 0.28,
+      /** A mound on most edges to a neighboring hill tile (straddles the edge; chance per edge) */
+      edgeW: 0.62,
+      edgeH: 0.28,
+      edgeChance: 0.7,
+      /** Foothill on an edge to a mountain tile, pushed this far into the hill tile */
+      footW: 0.5,
+      footH: 0.3,
+      footShift: 0.22,
+      /** Base depth (front bulge) as a share of the half width */
+      depth: 0.34,
+      /** Random size change (+-share) */
+      jitter: 0.16,
+      /** Mounds keep this far from the beach (wavy shore distance) */
+      shoreMargin: 0.36,
+      /** Lit color of the mounds (the shading texture darkens it to the lower right): golden, green-gold, warm */
+      tones: [0xe2c771, 0xd8c76d, 0xe6c26c],
+      /** Light sunlit rim along the upper left of each crest */
+      crestColor: 0xf6e7a8,
+      crestAlpha: 0.6,
+      /** Soft cast shadow to the lower right of each mound */
+      shadowAlpha: 0.13,
+      /** Dry-grass strokes on the slopes (count per tile, light and dark straw, alpha) */
+      grassCount: 9,
+      grassLight: 0xe9d184,
+      grassDark: 0x9c8644,
+      grassAlpha: 0.75,
+      /** Dark green maquis shrubs (count range per tile) */
+      shrubMin: 2,
+      shrubMax: 5,
+      /** A few olive trees (chance of 1 and of a second one per tile): trunk, silvery canopy */
+      oliveChance: 0.6,
+      oliveSecondChance: 0.3,
+      oliveTrunk: 0x5c4a3a,
+      oliveDark: 0x5f6c3c,
+      oliveColor: 0x87975a,
+      oliveLight: 0xb2bd82,
+      /** Pale limestone rocks (max per tile): lit top, shaded side */
+      rockMax: 2,
+      rockLight: 0xe0d8c6,
+      rockShade: 0xa99f8b,
+      /** Nothing tall in this radius around the tile center: a unit token stands there */
+      tokenClear: 0.3,
+    },
+    /** Maquis shrubs on hills (dark base, lit top-left) */
     shrubColor: 0x6f7d3a,
     shrubDark: 0x4a5a26,
     /** Mountains: small loose rocks on the ground */
     screeColor: 0x7f766b,
-    /** Mountains: lit and shaded rock faces, snow and its cool shadow side */
+    /** Mountains: lit and shaded rock (also the start-menu preview and the rocks in the surf), snow */
     rockLight: 0xc4b9a6,
     rockShade: 0x766c61,
     snowColor: 0xf8f7f1,
     snowShade: 0xc6d1da,
+    /**
+     * Mountains (docs/ART.md "Hills and mountains"): one big faceted massif per tile. Toward a
+     * neighboring mountain tile its slopes run up to a shared saddle on the edge (ridges from
+     * peak to peak), where three mountain tiles meet the corner is raised too, so tiles join into
+     * ranges. Heights are fractions of the hex size.
+     */
+    mountains: {
+      /**
+       * Peak height range (a smooth noise over the map makes whole ranges higher or lower); on a
+       * tile with a building the massif is lower and sits at the back
+       */
+      peakMin: 0.82,
+      peakMax: 1.32,
+      buildingPeak: 0.82,
+      /** Saddle height on an edge between two mountain tiles, and of a corner inside a range */
+      saddleMin: 0.5,
+      saddleMax: 0.72,
+      cornerMin: 0.42,
+      cornerMax: 0.62,
+      /** Foot of the massif toward other terrain: share of the way from the center to the edge */
+      footInset: 0.84,
+      /** ... toward water (keeps the pebble beach and cliffs free) */
+      shoreInset: 0.62,
+      /** Shoulders halfway up every slope: random extra height (+-) and sideways shift */
+      shoulderBump: 0.12,
+      shoulderShift: 0.1,
+      /** Rock faces by how much sun they get: lit, middle, shaded, dark (light from the upper left) */
+      faceColors: [0xdcd0b9, 0xbaac95, 0x958873, 0x766a5c],
+      /** Sunlight (0..1) above which a face gets the lit, middle and shaded color */
+      faceLevels: [0.7, 0.5, 0.3],
+      /** Thin darker strata lines across the faces */
+      strataColor: 0x5a5046,
+      strataAlpha: 0.3,
+      /** Snow above this share of the peak height (peaks lower than snowMinPeak get none) */
+      snowLine: 0.8,
+      snowMinPeak: 1.0,
+      /** Soft shadow of the massif on the ground to the lower right */
+      shadowAlpha: 0.22,
+      /** Scree at the foot (stones per tile) and a few boulders */
+      screeCount: 9,
+      boulderMax: 3,
+    },
+    /**
+     * Terrace under a building on hills or mountains: the flat ground is cut into the slope; along
+     * the middle of the front of the building's footprint runs a low earth bank with grass hanging
+     * over it (hills) or a dry-stone wall (mountains), highest in the middle and running out into
+     * the slope at both ends (share of the front it spans, height, how ragged its top is).
+     */
+    terrace: {
+      earthSpan: 0.6,
+      stoneSpan: 0.56,
+      height: 0.075,
+      stoneHeight: 0.065,
+      jitter: 0.018,
+      earthColor: 0xb0904f,
+      earthShade: 0x82683a,
+      grassColor: 0xd6bd6a,
+      stoneColor: 0xa89e8c,
+      stoneLight: 0xc4baa8,
+      stoneShade: 0x857b6b,
+      jointColor: 0x6a6153,
+      /** Soft shadow on the ground at the foot of the bank */
+      shadowAlpha: 0.18,
+      /**
+       * Behind a building on hills the slope rises: a broad hill crest whose foot lies this share
+       * of the footprint behind the center, as wide as this share of the footprint, this high
+       */
+      backFoot: 0.62,
+      backWidth: 0.95,
+      backHeight: 0.3,
+      /** Footprints taller than this (fraction of the hex size) are fields: no crest behind them */
+      fieldRy: 0.75,
+    },
     /** Beach on land tiles along the water: dry sand, wet sand at the waterline, pebbles below mountains */
     sandColor: 0xe8d29a,
     sandWetColor: 0xd3b878,
@@ -408,6 +538,36 @@ export const theme = {
     artWorldUnit: 0.008275,
     /** The patch is the art's ground circle grown by this much (sideways, front-back): a ring of ground */
     artPatchGrow: [1.25, 1.6],
+    /**
+     * Patches on hills and mountains (not fields): ground cut into the slope instead of a disc.
+     * The terrain draws a terrace bank (hills) or dry-stone edge (mountains) along the middle of
+     * the footprint's front; the patch's front follows it, back and sides fade into the slope.
+     */
+    slope: {
+      /** Back and sides: this share of the plains size, this ragged (share of the radius) */
+      scale: 0.72,
+      wobble: 0.28,
+      /** The front follows the bank: this share of the footprint ... */
+      bankShare: 0.95,
+      /** ... over this share of the front half (like the terrace), fading out over this much beside it */
+      frontSpan: 0.58,
+      frontFade: 0.1,
+      /** Strong soft fade into the slope: back and sides grown by these factors, alphas; core alpha */
+      featherGrow: [1.5, 1.25],
+      featherAlpha: [0.08, 0.16],
+      coreAlpha: 0.6,
+      /** Hills: trodden dry grass and dusty earth, only a little lighter than the hill gold */
+      hillColor: 0xdabf7a,
+      dustColor: 0xc2a46c,
+      /** Quarry on hills: a dusty tan apron with tan gravel */
+      hillStoneColor: 0xd2b885,
+      hillGravelColors: [0xbca47a, 0xe2d2a8],
+      /** Mountains: scree grey-brown like the foot of the massif */
+      mountainColor: 0xb2a58e,
+      /** Small details (rubble, stones) lie mostly near the building: within this share, from this ring */
+      detailShare: 0.85,
+      detailRing: 0.3,
+    },
     /** Soft shadows of small things on the ground (stumps, shrubs, walls, hedges) */
     shadowColor: 0x1d2b36,
     shadowAlpha: 0.24,
@@ -425,24 +585,6 @@ export const theme = {
       sootColor: 0x4d4640,
       sootAlpha: 0.4,
       strawColor: 0xe2c25e,
-    },
-    /** A house's yard is a bit smaller; its garden bed sits beside it */
-    houseYard: { rx: 0.82, ry: 0.54 },
-    /**
-     * Garden bed beside a house: an iso diamond (half height `size`, twice as wide) to the front
-     * left or right, centered `x` / `y` from the tile center; rows of vegetables, a wattle fence.
-     */
-    garden: {
-      size: 0.12,
-      x: 0.42,
-      y: 0.4,
-      soilColor: 0x7a5636,
-      soilRimColor: 0xa07a50,
-      cropDark: 0x4f7a2c,
-      cropLight: 0x86ad48,
-      fenceColor: 0x8a6a44,
-      /** Fence line width in px */
-      fenceWidth: 0.7,
     },
     /** Paved plaza (an iso octagon) on a trodden-earth apron, with flagstone joints */
     plaza: {
@@ -538,8 +680,20 @@ export const theme = {
       parcelInset: 0.03,
       /** Gentle warp of the parcel grid (bowed edges, shifted corners) */
       warp: 0.05,
-      /** Small trodden yard in the middle for the farmhouse / press */
+      /** Small trodden yard in the middle (fallback size; normally from artGroundRadius) */
       yard: { rx: 0.4, ry: 0.27 },
+      /**
+       * The yard of a farm or vineyard is its building's ground circle grown only this much
+       * (sideways, front-back): the fields begin right at the farmstead
+       */
+      yardGrow: [1, 1.1],
+      /** Farmstead layout: the cut lines pass within this much of the middle */
+      farmsteadJitter: 0.04,
+      /** Chance of 3 parcels (back and one side as one) and of 5 (the front one split again) */
+      farmsteadThree: 0.2,
+      farmsteadFive: 0.3,
+      /** ... that second cut lies this far out from the middle */
+      farmsteadOuterCut: 0.42,
       /** Furrows: spacing, darker line and lighter ridge (width px, alpha, shade factor), faint */
       furrowSpacing: 0.085,
       furrowWidth: 1,

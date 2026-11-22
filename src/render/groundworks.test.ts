@@ -42,6 +42,7 @@ import {
   patchCenter,
   patchRadii,
   polygonArea,
+  slopeOutline,
   withinLimits,
   type OutlineSample,
 } from './groundworks';
@@ -107,6 +108,40 @@ describe('patches fitted to the art', () => {
       expect(fp.rx).toBeGreaterThanOrEqual(rx + Math.abs(o.x));
       expect(fp.ry).toBeGreaterThanOrEqual(ry + Math.abs(o.y));
     }
+  });
+});
+
+describe('slopeOutline (patches on hills and mountains)', () => {
+  const S = theme.ground.slope;
+  const { rx, ry } = patchRadii('quarry', size);
+  const fp = footprintOf('quarry', size);
+  const phase = [0.3, 1.7, 4.1];
+  const pts = slopeOutline(rx, ry, fp, 1, phase);
+  const angle = (p: Point): number => Math.atan2(p.y, p.x);
+  const ellipse = (a: number, ax: number, ay: number): number =>
+    1 / Math.sqrt((Math.cos(a) / ax) ** 2 + (Math.sin(a) / ay) ** 2);
+
+  it('runs along the terrace bank in front (just inside the footprint front)', () => {
+    const front = pts.filter((p) => Math.abs(angle(p) - Math.PI / 2) < 0.25 * Math.PI);
+    expect(front.length).toBeGreaterThan(2);
+    for (const p of front) {
+      const r = Math.hypot(p.x, p.y);
+      expect(r).toBeCloseTo(ellipse(angle(p), fp.rx, fp.ry) * S.bankShare, 5);
+    }
+  });
+
+  it('is smaller than on plains at the back and sides, ragged, and only those grow', () => {
+    const back = pts.filter((p) => p.y < -1);
+    const ratios = back.map((p) => Math.hypot(p.x, p.y) / ellipse(angle(p), rx, ry));
+    for (const k of ratios) expect(k).toBeLessThan(1);
+    // Ragged: not a scaled ellipse
+    expect(Math.max(...ratios) - Math.min(...ratios)).toBeGreaterThan(0.1);
+    const grown = slopeOutline(rx, ry, fp, 1.5, phase);
+    const i = pts.findIndex((p) => p.y < -1);
+    expect(Math.hypot(grown[i].x, grown[i].y)).toBeCloseTo(1.5 * Math.hypot(pts[i].x, pts[i].y), 5);
+    // The front stays on the bank when the soft rim grows
+    const j = pts.findIndex((p) => Math.abs(angle(p) - Math.PI / 2) < 0.1);
+    expect(grown[j]).toEqual(pts[j]);
   });
 });
 
@@ -374,6 +409,40 @@ describe('field parcels', () => {
         }
       }
     }
+  });
+
+  it('farmstead layout: 3-5 parcels around the building in the middle', () => {
+    const F = theme.ground.field;
+    const counts = new Set<number>();
+    for (let q = 0; q < 40; q++) {
+      const cells = fieldCells(tileRng(q, 3), size, 2, 'farmstead');
+      counts.add(cells.length);
+      expect(cells.length).toBeGreaterThanOrEqual(3);
+      expect(cells.length).toBeLessThanOrEqual(5);
+      // The cut lines run through the farmstead: the first parcels all reach the middle
+      const near = F.farmsteadJitter * size + 2;
+      for (const c of cells.slice(0, Math.min(cells.length, 4) - (cells.length === 5 ? 1 : 0))) {
+        const da = c.a0 <= 0 && c.a1 >= 0 ? 0 : Math.min(Math.abs(c.a0), Math.abs(c.a1));
+        const db = c.b0 <= 0 && c.b1 >= 0 ? 0 : Math.min(Math.abs(c.b0), Math.abs(c.b1));
+        expect(Math.max(da, db)).toBeLessThanOrEqual(near);
+      }
+      for (let i = 0; i < cells.length; i++) {
+        for (let j = i + 1; j < cells.length; j++) {
+          const [u, v] = [cells[i], cells[j]];
+          const apart = u.a1 <= v.a0 || v.a1 <= u.a0 || u.b1 <= v.b0 || v.b1 <= u.b0;
+          expect(apart).toBe(true);
+        }
+      }
+    }
+    // All three variants come up
+    expect([...counts].sort()).toEqual([3, 4, 5]);
+  });
+
+  it('a farm yard is only as big as the farmstead (the fields begin at it)', () => {
+    const r = theme.ground.artGroundRadius.farm;
+    const { rx } = patchRadii('farm', size);
+    expect(rx / size).toBeCloseTo(0.0117 * r * theme.ground.field.yardGrow[0], 2);
+    expect(rx).toBeLessThan(patchRadii('storehouse', size).rx);
   });
 
   it('a parcel is the part of the field inside its cell', () => {

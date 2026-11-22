@@ -15,7 +15,7 @@ const G = theme.ground;
 
 /**
  * The ground drawn under a building:
- * - 'yard': trodden earth; 'houseYard': a smaller yard plus a vegetable/herb garden bed
+ * - 'yard': trodden earth
  * - 'plaza': paved square with flagstone joints, on a trodden-earth apron
  * - 'clearing': forest floor with leaf litter and stumps
  * - 'quarry': stony apron with a stepped cut-stone pit; 'mine': rock apron with a spoil heap
@@ -24,16 +24,7 @@ const G = theme.ground;
  *   drawn scene per water direction, see artLayout.ts `buildingArtId`)
  */
 export type GroundKind =
-  | 'yard'
-  | 'houseYard'
-  | 'plaza'
-  | 'clearing'
-  | 'quarry'
-  | 'mine'
-  | 'farm'
-  | 'vineyard'
-  | 'orchard'
-  | 'fishery';
+  'yard' | 'plaza' | 'clearing' | 'quarry' | 'mine' | 'farm' | 'vineyard' | 'orchard' | 'fishery';
 
 /** Ground kind of every building. */
 export const GROUND_KIND: Readonly<Record<BuildingId, GroundKind>> = {
@@ -41,7 +32,7 @@ export const GROUND_KIND: Readonly<Record<BuildingId, GroundKind>> = {
   storehouse: 'yard',
   borderTower: 'yard',
   barracks: 'yard',
-  house: 'houseYard',
+  house: 'yard',
   woodcutter: 'clearing',
   quarry: 'quarry',
   farm: 'farm',
@@ -91,9 +82,12 @@ function artRadiusOf(type: BuildingId): number | undefined {
 export function patchRadii(type: BuildingId, size: number): { rx: number; ry: number } {
   const r = artRadiusOf(type);
   if (r !== undefined) {
-    // A circle of radius r on the art's 2:1 ground: sqrt(2) r wide, half as high
+    // A circle of radius r on the art's 2:1 ground: sqrt(2) r wide, half as high. The yard of
+    // a farm or vineyard is only as big as its building: the fields begin right at its edge.
     const u = G.artWorldUnit * size * r * Math.SQRT2;
-    return { rx: u * G.artPatchGrow[0], ry: (u / 2) * G.artPatchGrow[1] };
+    const kind = GROUND_KIND[type];
+    const grow = kind === 'farm' || kind === 'vineyard' ? G.field.yardGrow : G.artPatchGrow;
+    return { rx: u * grow[0], ry: (u / 2) * grow[1] };
   }
   const kind = GROUND_KIND[type];
   const base =
@@ -107,11 +101,9 @@ export function patchRadii(type: BuildingId, size: number): { rx: number; ry: nu
             ? G.mine
             : kind === 'fishery'
               ? G.fishery
-              : kind === 'houseYard'
-                ? G.houseYard
-                : isFieldKind(kind)
-                  ? G.field.yard
-                  : G.yard;
+              : isFieldKind(kind)
+                ? G.field.yard
+                : G.yard;
   return { rx: base.rx * size, ry: base.ry * size };
 }
 
@@ -126,6 +118,49 @@ export function patchCenter(type: BuildingId, size: number): Point {
   // The art's ground axes: a -> (1, 0.5), b -> (-1, 0.5) per world unit
   const u = G.artWorldUnit * size;
   return { x: (c[0] - c[1]) * u, y: ((c[0] + c[1]) / 2) * u };
+}
+
+/**
+ * Outline of a patch on hills or mountains (relative to the tile center; `rx`, `ry`: its plains
+ * size, `fp`: the building's footprint): the front follows the terrace bank the terrain draws
+ * along the front of the footprint (the bank hides that edge); back and sides are smaller than
+ * on plains, ragged (three waves of phase `phase`), grown by `grow` for the soft fade.
+ */
+export function slopeOutline(
+  rx: number,
+  ry: number,
+  fp: { rx: number; ry: number },
+  grow: number,
+  phase: readonly number[],
+): Point[] {
+  const S = G.slope;
+  const n = 32;
+  const from = ((1 - S.frontSpan) / 2) * Math.PI;
+  const to = from + S.frontSpan * Math.PI;
+  const fade = S.frontFade * Math.PI;
+  const pts: Point[] = [];
+  for (let i = 0; i < n; i++) {
+    const t = (Math.PI * 2 * i) / n;
+    const cos = Math.cos(t);
+    const sin = Math.sin(t);
+    const ellipse = (ax: number, ay: number): number =>
+      1 / Math.sqrt((cos / ax) ** 2 + (sin / ay) ** 2);
+    const ragged =
+      1 +
+      S.wobble *
+        (0.5 * Math.sin(3 * t + phase[0]) +
+          0.3 * Math.sin(5 * t + phase[1]) +
+          0.2 * Math.sin(9 * t + phase[2]));
+    const back = ellipse(rx * S.scale, ry * S.scale) * ragged * grow;
+    const front = ellipse(fp.rx, fp.ry) * S.bankShare;
+    // 1 along the bank, fading to 0 beside it (the bank only spans the middle of the front)
+    const d = t < from ? from - t : t > to ? t - to : 0;
+    const k = Math.max(0, 1 - d / fade);
+    const w = t <= Math.PI + fade ? k * k * (3 - 2 * k) : 0;
+    const r = back * (1 - w) + front * w;
+    pts.push({ x: cos * r, y: sin * r });
+  }
+  return pts;
 }
 
 /** Same shape as `TileFootprint` in terrainLayer.ts: an ellipse around the tile center. */
@@ -628,18 +663,73 @@ export interface FieldCell {
 }
 
 /**
- * Cuts the tile's field area into 2-4 parcels along the iso ground axes: cut lines near the
- * center, `gap` px balks between them. The cells reach far past the tile; the outline trims them.
+ * How a field tile is cut into parcels:
+ * - 'farmstead' (farm, vineyard): an orderly 3-5 parcels around the building in the middle; the
+ *   cut lines run through the farmstead, so the fields begin right at its yard (back, left,
+ *   right and front parcel, sometimes the front one split once more, or two of them as one).
+ * - 'free' (olive grove): 2-4 parcels with cut lines anywhere near the middle.
  */
-export function fieldCells(rng: () => number, size: number, gap: number): FieldCell[] {
+export type FieldLayout = 'farmstead' | 'free';
+
+/**
+ * Cuts the tile's field area into parcels along the iso ground axes, `gap` px balks between
+ * them. The cells reach far past the tile; the outline trims them.
+ */
+export function fieldCells(
+  rng: () => number,
+  size: number,
+  gap: number,
+  layout: FieldLayout = 'free',
+): FieldCell[] {
   const big = FIELD_CELL_REACH * size;
   // A line a = const is 1 / |grad a| = 1 / 1.118 px per iso unit away from the next one
   const h = (gap * Math.hypot(1, 0.5)) / 2;
+  type Range = [number, number];
+  const full: Range = [-big, big];
+  if (layout === 'farmstead') {
+    const F = G.field;
+    const cutA = (rng() - 0.5) * 2 * F.farmsteadJitter * size;
+    const cutB = (rng() - 0.5) * 2 * F.farmsteadJitter * size;
+    const lowA: Range = [-big, cutA - h];
+    const highA: Range = [cutA + h, big];
+    const lowB: Range = [-big, cutB - h];
+    const highB: Range = [cutB + h, big];
+    const k = rng();
+    // Quadrants around the farmstead: back (a, b < cut), left, right, front (a, b > cut)
+    const quads: [Range, Range][] = [
+      [lowA, lowB],
+      [lowA, highB],
+      [highA, lowB],
+      [highA, highB],
+    ];
+    let cells: [Range, Range][];
+    if (k < F.farmsteadThree) {
+      // Three: the back and one side parcel are one
+      cells = rng() < 0.5 ? [[lowA, full], quads[2], quads[3]] : [[full, lowB], quads[1], quads[3]];
+    } else if (k < F.farmsteadThree + F.farmsteadFive) {
+      // Five: the front parcel is split once more, further out
+      const split = cutA + F.farmsteadOuterCut * size;
+      cells = [
+        quads[0],
+        quads[1],
+        quads[2],
+        [[cutA + h, split - h], highB],
+        [[split + h, big], highB],
+      ];
+    } else cells = quads;
+    const flip = rng() < 0.5;
+    // Neighboring parcels get different furrow directions
+    return cells.map(([[a0, a1], [b0, b1]], i) => ({
+      a0,
+      a1,
+      b0,
+      b1,
+      dir: (i === 0 || i === 3) !== flip ? ISO_A : ISO_B,
+    }));
+  }
   const cutA = (rng() - 0.5) * 0.3 * size;
   const cutB = (rng() - 0.5) * 0.3 * size;
   const count = 2 + Math.floor(rng() * 3);
-  type Range = [number, number];
-  const full: Range = [-big, big];
   const lowA: Range = [-big, cutA - h];
   const highA: Range = [cutA + h, big];
   const lowB: Range = [-big, cutB - h];
