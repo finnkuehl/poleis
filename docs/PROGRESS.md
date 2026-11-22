@@ -2,7 +2,7 @@
 
 ## Next
 
-1. **Gameplay pass** (plan agreed with the user): PR 1 "Simpler economy" (done, `v0.6.1`) → PR 2 "Armies cost money, cities shoot back" (done, `v0.6.2`) → PR 3 "One-tap controls" (branch `gameplay-controls`, PR for review).
+1. **Gameplay pass** (plan agreed with the user): PR 1 "Simpler economy" (done, `v0.6.1`) → PR 2 "Armies cost money, cities shoot back" (done, `v0.6.2`) → PR 3 "One-tap controls" (done, `v0.6.3`). The gameplay pass is complete.
 2. **Rest of M7**: sound, animations, tutorial hints, PWA; seafaring AI later. Check phone smoothness first.
 
 **Handover for a new session:** see `docs/HANDOVER.md`.
@@ -29,7 +29,7 @@
 
 - **Gameplay pass, PR 2 – Armies cost money, cities shoot back** (`v0.6.2`, PR #14): every unit costs 1 food and 1 drachma per turn (unpaid or hungry units lose 2 HP); each city may have 1 / 3 / 6 watchtowers as Settlement / Polis / Metropolis (the border tower is now called watchtower); from turn 15 on (the end of the AI peace time), at the start of a player's turn every city center (3 / 4 / 5 damage by level) and watchtower (2) hits one enemy within 2 tiles, the city's capturer first, without counterattack (shots never cancel a capture; the passive test-mode enemy fires from turn 1); scouts can no longer capture cities. The AI trains within its money, counts city fire when attacking, keeps scouts away from enemy fire and expands by settlers when its start is cramped.
 
-- **Gameplay pass, PR 3 – One-tap controls** (branch `gameplay-controls`, not merged yet): a tap moves a unit, gives a long move order or attacks right away (no pop-ups); attackable enemies show the expected result ("−3", "−3 ☠", "−3 ↩2"); Undo (bottom bar) takes back the last move if it revealed nothing new; the next unit is selected automatically; the Road button is gone – roads are in the build menu and the Build-here list, and an unconnected building offers "Connect with road".
+- **Gameplay pass, PR 3 – One-tap controls** (`v0.6.3`, PR #15): a tap moves a unit, gives a long move order or attacks right away (no pop-ups); attackable enemies show the expected result ("−3", "−3 ☠", "−3 ↩2"); Undo (bottom bar) takes back the last move if it revealed nothing new; the next unit is selected automatically; the Road button is gone – roads are in the build menu and the Build-here list, and an unconnected building offers "Connect with road".
 
 ## Known limitations
 
