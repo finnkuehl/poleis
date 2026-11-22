@@ -364,17 +364,6 @@ export async function createGame(
     showOrderPaths();
   }
 
-  /** Working and free residents of one city. */
-  function cityWorkers(cityId: number): { working: number; free: number } {
-    const assigned = assignWorkers(state, PLAYER, connectedBuildingIds(state, PLAYER));
-    let working = 0;
-    for (const b of state.buildings) {
-      if (b.owner === PLAYER && cityIdOf(state, b) === cityId) working += assigned[b.id] ?? 0;
-    }
-    const residents = state.cities.find((c) => c.id === cityId)?.residents ?? 0;
-    return { working, free: Math.max(0, residents - working) };
-  }
-
   /** Residents and housing summed over the player's cities. */
   function people(): { residents: number; housing: number } {
     let residents = 0;
@@ -474,7 +463,6 @@ export async function createGame(
           level: city.level,
           stats: cityStats(afterProduction, cityId, production),
           check,
-          workers: cityWorkers(cityId),
           stock: stockOf(afterProduction),
           onAdvance: check.to ? () => askAdvance(cityId) : undefined,
         });

@@ -22,7 +22,6 @@ import {
   previewProduction,
   workerSummary,
   workersNeeded,
-  cityIdOf,
   type BuildingStatus,
   type TurnReport,
   type WorkerSummary,
@@ -36,8 +35,6 @@ export interface CityInfo {
   housing: number;
   /** Housing minus residents. */
   freeHousing: number;
-  /** Residents minus the workers all (unpaused) buildings of the city need; negative = short. */
-  slack: number;
 }
 
 const INF = 1 << 20;
@@ -55,6 +52,11 @@ export interface AiContext {
   foodNeed: number;
   workers: WorkerSummary;
   cities: CityInfo[];
+  /**
+   * Residents of the whole civilization minus the workers all its unpaused buildings need
+   * (one shared workforce); negative = short.
+   */
+  slack: number;
   ownBuildings: Building[];
   /** Number of own buildings per type. */
   count: Record<BuildingId, number>;
@@ -171,15 +173,15 @@ export function buildContext(state: GameState, player: PlayerId): AiContext {
     Math.floor((foodProd * populationConfig.residentsPerFood) / Math.max(1, ownCities.length)),
   );
   const foodSafe = foodStock >= aiConfig.foodStockSafe;
+  let usableResidents = 0;
   const cities: CityInfo[] = ownCities.map((city) => {
     const h = housing(state, city.id);
-    let needed = 0;
-    for (const b of ownBuildings) {
-      if (!b.paused && cityIdOf(state, b) === city.id) needed += workersNeeded(b);
-    }
-    const residents = foodSafe ? city.residents : Math.min(city.residents, sustainable);
-    return { city, housing: h, freeHousing: h - city.residents, slack: residents - needed };
+    usableResidents += foodSafe ? city.residents : Math.min(city.residents, sustainable);
+    return { city, housing: h, freeHousing: h - city.residents };
   });
+  let neededWorkers = 0;
+  for (const b of ownBuildings) if (!b.paused) neededWorkers += workersNeeded(b);
+  const slack = usableResidents - neededWorkers;
 
   const unitCount =
     state.units.filter((u) => u.owner === player).length +
@@ -235,6 +237,7 @@ export function buildContext(state: GameState, player: PlayerId): AiContext {
     skip: new Set<string>(),
     workers,
     cities,
+    slack,
     ownBuildings,
     count,
     pending,

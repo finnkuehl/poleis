@@ -119,15 +119,16 @@ function sitesFor(g: Gen, type: BuildingId): Map<number, Site> {
   return result;
 }
 
-/** How much a worker building suffers from a lack of free workers in its city. */
-function workerFactor(ctx: AiContext, ci: CityInfo, type: BuildingId): number {
+/** How much a worker building suffers from a lack of free workers (shared by all cities). */
+function workerFactor(ctx: AiContext, type: BuildingId): number {
   // The wonder is worth building before its crew is there (more housing and food follow).
   if (type === 'wonder') return 1;
   const need = BUILDINGS[type].workers;
-  if (need === 0 || ci.slack >= need) return 1;
-  const growing = ci.freeHousing > 0 && ctx.foodProd - ctx.foodNeed >= 1;
+  if (need === 0 || ctx.slack >= need) return 1;
+  const freeHousing = ctx.cities.reduce((sum, c) => sum + c.freeHousing, 0);
+  const growing = freeHousing > 0 && ctx.foodProd - ctx.foodNeed >= 1;
   if (BUILDINGS[type].category === 'food') return aiConfig.foodNoWorkersFactor;
-  if (growing && ci.slack + Math.min(ci.freeHousing, aiConfig.futureWorkerHousing) >= need)
+  if (growing && ctx.slack + Math.min(freeHousing, aiConfig.futureWorkerHousing) >= need)
     return aiConfig.growingFactor;
   return aiConfig.noFreeWorkersFactor;
 }
@@ -179,7 +180,7 @@ function wishBuilding(
     const cost = addGoodsTo(BUILDINGS[type].cost, roadGoods(site.roadCost));
     const candidate: Candidate = {
       action: { type: 'build', building: type, hex: site.hex },
-      utility: base * w * workerFactor(ctx, ci, type),
+      utility: base * w * workerFactor(ctx, type),
       reason,
       key: key(type, site.hex),
       cost,
@@ -258,13 +259,13 @@ function houseWishes(g: Gen): void {
     // No spare workers for a wished building: more housing means more workers.
     const crew =
       ci.city.level === 'metropolis' && wonderUnfinished(ctx) ? BUILDINGS.wonder.workers : 1;
-    const needsWorkers = ci.slack < crew && ci.freeHousing <= aiConfig.needsWorkersMaxFreeHousing;
+    const needsWorkers = ctx.slack < crew && ci.freeHousing <= aiConfig.needsWorkersMaxFreeHousing;
     if (ci.freeHousing > buffer && !needsWorkers) continue;
     const prepare =
       ci.city.level === 'settlement' && ci.housing < aiConfig.preparePolisHousing
         ? aiConfig.preparePolisFactor
         : 1;
-    const short = ci.slack < 0 ? aiConfig.workerShortHouseFactor : 1;
+    const short = ctx.slack < 0 ? aiConfig.workerShortHouseFactor : 1;
     wishBuilding(g, 'house', U.house * prepare * short, 'housing', { wish: 'house', city: ci });
   }
 }

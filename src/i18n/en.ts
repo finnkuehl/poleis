@@ -91,7 +91,6 @@ export const en = {
   },
   cityPanel: {
     residents: 'Residents',
-    workers: 'Working {working} · Free {free}',
     growing: 'Growing: +{n} per turn',
     full: 'Full – build houses to grow',
     hungry: 'Hungry – loses {residents} per turn',

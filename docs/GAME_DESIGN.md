@@ -117,13 +117,13 @@ Woodcutter ─Wood─┴► Smelter ──Bronze──► Units, wonder
 - **Roads** only on walkable land in the player's own territory (plains, forest, hills – not mountains, not water). A road may pass through the player's own buildings at no cost.
 - **Demolishing** buildings and roads is allowed, **without refund**. The city center cannot be demolished.
 - **Production order:** raw-material buildings (no inputs) produce first, then processing buildings – so freshly cut wood can become planks in the same turn. If goods run short, older buildings go first.
-- **Workers** go only to connected buildings, in this order: food (farm, fishery), then raw materials, then processing; older buildings first within a group. A building only gets workers if its **whole crew** can be filled – otherwise it gets none and the workers go on to the next building, so no worker is wasted.
+- **One shared workforce:** all residents of a civilization work in any connected building of that civilization, in whichever city it stands (like the shared stock). Workers go only to connected buildings, in this order: food (farm, fishery), then raw materials, then processing, then city buildings; older buildings first within a group, across all cities. A building only gets workers if its **whole crew** can be filled – otherwise it gets none and the workers go on to the next building, so no worker is wasted.
 - **Pause:** the player can pause any building; a paused building gets no workers and produces nothing, so its workers go to the next building in line.
-- **Low priority per good** (decided after M5, toggle in the 📊 Overview): buildings that produce a good marked "low priority" get workers only after all other buildings of their city are staffed. They keep producing with leftover workers, so production slows instead of stopping. The setting is per civilization and also applies to buildings built later.
+- **Low priority per good** (decided after M5, toggle in the 📊 Overview): buildings that produce a good marked "low priority" get workers only after all other buildings of the civilization are staffed. They keep producing with leftover workers, so production slows instead of stopping. The setting is per civilization and also applies to buildings built later.
 
 ## 6. Population & city levels
 
-- Residents live in the city center and houses (housing) and work in buildings automatically (order: food first, then raw materials, then processing).
+- Residents live in the city center and houses (housing) and work in any connected building of the civilization automatically (shared workforce, order: food first, then raw materials, then processing, then city buildings).
 - **Consumption:** 1 food per 2 residents per turn (rounded up).
 - **Growth:** If food is covered and there is free housing → +1 resident per turn; **+1 more** on a Polis or Metropolis whose needs are all met.
 - **Starvation:** If food is missing → −1 resident per turn.
@@ -138,7 +138,7 @@ Woodcutter ─Wood─┴► Smelter ──Bronze──► Units, wonder
 Every city of a civilization has its own level; the stock is shared.
 
 **Detailed rules (decided in M3)**
-- **Start:** a new city has **4 residents** (its city center is full). Residents live in the city center and the houses in that city's territory and work in that city's buildings.
+- **Start:** a new city has **4 residents** (its city center is full). Residents live in the city center and the houses in that city's territory (housing, growth and level stay per city), but work in any connected building of the civilization.
 - **The city center feeds a little by itself:** it produces **2 grain per turn** without workers, which feeds its first 4 residents. A city never gets stuck – a fishery or a farm can always be staffed again.
 - **Eating:** fish is eaten first, then grain (grain is kept back for settlers and horsemen). If food runs short, residents eat what is there and the city loses 1 resident; a city never drops below 1 resident.
 - **Growth** needs only food and free housing; missing oil or wine never stops or reverses growth, it only removes the +1 growth bonus and the +50 % taxes.
