@@ -3,7 +3,7 @@ import { Container, Graphics, Text, type Sprite } from 'pixi.js';
 import { hexCorners, hexToPixel, type Hex, type Point } from '../core/hex';
 import { hexAtIndex } from '../core/map';
 import type { BuildingStatus } from '../core/rules/production';
-import type { GameState } from '../core/state';
+import type { GameState, PlayerId } from '../core/state';
 import { BUILDINGS, type BuildingId, type CityLevel } from '../data';
 import { createArtObject, NO_ART, type ArtSet } from './art';
 import {
@@ -15,6 +15,7 @@ import {
   type ArtPlacement,
 } from './artLayout';
 import { hexSize } from './config';
+import { buildingsShownTo } from './fog';
 import { edgeMaskOf, insetRuns, roadGeometry, territoryEdges, type InsetRun } from './geometry';
 import { playerColorOf } from './playerColor';
 import { badgeKind, cityRingStyle } from './style';
@@ -26,7 +27,10 @@ export interface EconomyLayers {
   below: Container[];
   /** Layers above the units (highlights, road preview), in drawing order. */
   above: Container[];
-  update(state: GameState, statuses: Record<number, BuildingStatus>): void;
+  /** Buildings (with rings, labels, badges) only on tiles `viewer` has explored. */
+  update(state: GameState, statuses: Record<number, BuildingStatus>, viewer: PlayerId): void;
+  /** Test option: buildings on every tile (no fog). Takes effect on the next update. */
+  setRevealAll(value: boolean): void;
   setHighlights(hexes: readonly Hex[]): void;
   setPathPreview(path: readonly Hex[] | null, newTiles: readonly Hex[]): void;
 }
@@ -251,14 +255,22 @@ export function createEconomyLayers(art: ArtSet = NO_ART): EconomyLayers {
       .fill(theme.badgeMarkColor);
   }
 
-  function drawBuildings(state: GameState, statuses: Record<number, BuildingStatus>): void {
+  /** Test option: show buildings on unexplored tiles too. */
+  let revealAll = false;
+
+  function drawBuildings(
+    state: GameState,
+    statuses: Record<number, BuildingStatus>,
+    viewer: PlayerId,
+  ): void {
     ground.clear();
     badges.clear();
     const seen = new Set<number>();
     const seenCities = new Set<number>();
     const cityById = new Map(state.cities.map((c) => [c.id, c]));
     const radius = hexSize * theme.plateRadiusFactor;
-    for (const b of state.buildings) {
+    // Buildings on unexplored tiles get no visuals at all (removed below like demolished ones)
+    for (const b of buildingsShownTo(state, viewer, revealAll)) {
       seen.add(b.id);
       const p = hexToPixel(b.hex, hexSize);
       const color = playerColorOf(state, b.owner);
@@ -337,10 +349,13 @@ export function createEconomyLayers(art: ArtSet = NO_ART): EconomyLayers {
   return {
     below: [tint, border, roads, ground, objects, labels, badges],
     above: [highlights, preview],
-    update(state, statuses) {
+    update(state, statuses, viewer) {
       drawTerritory(state);
       drawRoads(state);
-      drawBuildings(state, statuses);
+      drawBuildings(state, statuses, viewer);
+    },
+    setRevealAll(value) {
+      revealAll = value;
     },
     setHighlights(hexes) {
       highlights.clear();

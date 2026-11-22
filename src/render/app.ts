@@ -27,7 +27,7 @@ export interface Renderer {
   /** Red outlines on attack targets; [] clears. */
   setAttackTargets(hexes: readonly Hex[]): void;
   selectTile(h: Hex | null): void;
-  /** Test option: shows the whole map (no fog, all units); takes effect on the next setState. */
+  /** Test option: shows the whole map (no fog, all units and buildings); takes effect on the next setState. */
   setRevealAll(value: boolean): void;
   /** Highlights valid tiles; [] clears. */
   setHighlights(hexes: readonly Hex[]): void;

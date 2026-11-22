@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { at, makeTestState } from '../core/testing';
 import { tileIndex } from '../core/map';
+import type { Building } from '../core/state';
 import {
+  buildingsShownTo,
   fogEdgeMask,
   fogShade,
   fogSignature,
@@ -73,5 +75,41 @@ describe('fogShade', () => {
         expect(Math.abs(fogShade(x + 55, y) - v)).toBeLessThan(0.25);
       }
     }
+  });
+});
+
+describe('buildingsShownTo', () => {
+  function withBuildings() {
+    // Nothing explored yet; the viewer (0) has explored only the tile of building 2
+    const state = makeTestState(['pppp', 'pppp'], { explored: false });
+    const building = (id: number, owner: number, col: number, row: number): Building => ({
+      id,
+      type: 'house',
+      owner,
+      hex: at(col, row),
+      paused: false,
+    });
+    state.buildings = [
+      building(1, 1, 0, 0), // enemy, unexplored
+      building(2, 1, 2, 0), // enemy, explored (remembered even when not visible)
+      building(3, 0, 3, 1), // own, always shown
+    ];
+    state.players[0].explored[tileIndex(state.map, at(2, 0))] = true;
+    return state;
+  }
+
+  it('hides buildings on tiles the viewer has not explored', () => {
+    const ids = buildingsShownTo(withBuildings(), 0, false).map((b) => b.id);
+    expect(ids).toEqual([2, 3]);
+  });
+
+  it('shows every building with the reveal test option', () => {
+    const state = withBuildings();
+    expect(buildingsShownTo(state, 0, true)).toBe(state.buildings);
+  });
+
+  it('shows no foreign buildings to a viewer without exploration data', () => {
+    const ids = buildingsShownTo(withBuildings(), 7, false).map((b) => b.id);
+    expect(ids).toEqual([]);
   });
 });
