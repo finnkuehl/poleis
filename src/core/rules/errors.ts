@@ -43,6 +43,7 @@ export type RuleErrorCode =
   | 'foreignTerritory'
   | 'tooCloseToCity'
   | 'wonderLimit'
+  | 'towerLimit'
   | 'gameOver';
 
 export interface RuleError {
@@ -55,6 +56,8 @@ export interface RuleError {
   level?: CityLevel;
   /** supplyNotReady: the supply good, what is produced per turn and what is needed per turn. */
   good?: GoodId;
+  /** towerLimit: the most watchtowers the city may have. */
+  max?: number;
   made?: number;
   needed?: number;
 }

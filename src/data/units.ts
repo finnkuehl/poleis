@@ -72,7 +72,8 @@ export const UNITS: Record<UnitId, UnitDef> = {
     cost: { planks: 2, drachmas: 5 },
     residents: 0,
     minLevel: 'settlement',
-    canCapture: true,
+    // Scouts can never capture a city (docs/GAME_DESIGN.md, section 7).
+    canCapture: false,
     icon: '🧭',
   },
   // Founds a new city. Cannot attack and cannot capture cities.

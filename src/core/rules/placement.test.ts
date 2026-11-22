@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { at, addBuilding, addCity, addRoad, makeTestState } from '../testing';
-import { checkPlacement, validPlacements } from './placement';
+import { checkPlacement, towerTotals, towerUsage, validPlacements } from './placement';
 
 const rich = { wood: 50, stone: 50, planks: 50 };
 
@@ -95,5 +95,58 @@ describe('level-gated placement', () => {
     addCity(s, at(0, 1), { radius: 1 });
     expect(checkPlacement(s, 0, 'temple', at(0, 0))?.code).toBe('levelTooLow');
     expect(checkPlacement(s, 0, 'temple', at(2, 0))?.code).toBe('notOwnTerritory');
+  });
+});
+
+describe('watchtower limit per city', () => {
+  const row = ['ppppppppp'];
+  const code = (s: ReturnType<typeof makeTestState>, x: number) =>
+    checkPlacement(s, 0, 'borderTower', at(x, 0))?.code ?? null;
+
+  it('a settlement may have 1 watchtower', () => {
+    const s = makeTestState(row, { goods: rich });
+    const city = addCity(s, at(0, 0), { radius: 8 });
+    expect(code(s, 3)).toBeNull();
+    addBuilding(s, 'borderTower', at(3, 0));
+    s.tileCity.fill(city);
+    expect(code(s, 4)).toBe('towerLimit');
+    expect(checkPlacement(s, 0, 'borderTower', at(4, 0))?.max).toBe(1);
+    expect(towerUsage(s, 0, city)).toEqual({ used: 1, max: 1 });
+  });
+
+  it('a polis may have 3 and a metropolis 6', () => {
+    const s = makeTestState(row, { goods: rich });
+    const city = addCity(s, at(0, 0), { radius: 8, level: 'polis' });
+    s.tileCity.fill(city);
+    for (const x of [2, 3, 4]) {
+      expect(code(s, x)).toBeNull();
+      addBuilding(s, 'borderTower', at(x, 0));
+    }
+    expect(code(s, 5)).toBe('towerLimit');
+    s.cities[0].level = 'metropolis';
+    expect(towerUsage(s, 0, city).max).toBe(6);
+    expect(code(s, 5)).toBeNull();
+  });
+
+  it('towers of other cities do not count', () => {
+    const s = makeTestState(row, { goods: rich });
+    const a = addCity(s, at(0, 0), { radius: 3 });
+    const b = addCity(s, at(8, 0), { radius: 3 });
+    addBuilding(s, 'borderTower', at(2, 0));
+    expect(s.tileCity[2]).toBe(a);
+    expect(code(s, 1)).toBe('towerLimit');
+    expect(code(s, 6)).toBeNull();
+    expect(towerTotals(s, 0)).toEqual({ used: 1, max: 2, hasRoom: true });
+    void b;
+  });
+
+  it('a captured city over its limit keeps its towers but cannot build more', () => {
+    const s = makeTestState(row, { goods: rich });
+    const city = addCity(s, at(0, 0), { radius: 8 });
+    s.tileCity.fill(city);
+    for (const x of [2, 3, 4]) addBuilding(s, 'borderTower', at(x, 0));
+    expect(towerUsage(s, 0, city)).toEqual({ used: 3, max: 1 });
+    expect(code(s, 5)).toBe('towerLimit');
+    expect(s.buildings.filter((b) => b.type === 'borderTower')).toHaveLength(3);
   });
 });

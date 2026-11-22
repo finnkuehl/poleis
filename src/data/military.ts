@@ -4,7 +4,10 @@
 export const militaryConfig = {
   // Food every unit eats per turn (after the residents; fish first, then grain).
   upkeepFood: 1,
-  // HP every unit loses per turn if the food does not last for all units.
+  // Drachmas ("pay") every unit costs per turn. If food or drachmas do not last for all units,
+  // every unit loses `starvationDamage` HP (once, even if both are short).
+  upkeepDrachmas: 1,
+  // HP every unit loses per turn if the food or the pay does not last for all units.
   starvationDamage: 2,
   // HP healed per turn by a unit that neither moved nor attacked.
   healIdle: 2,

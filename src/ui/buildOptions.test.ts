@@ -77,4 +77,12 @@ describe('buildOptionsFor', () => {
     const house = buildOptionsFor(s, 0, at(2, 0)).find((o) => o.id === 'house');
     expect(house?.gain).toBeUndefined();
   });
+
+  it('shows a muted watchtower row with the count when the city is at its limit', () => {
+    const s = makeTestState(['pppp'], { goods: rich });
+    addCity(s, at(0, 0));
+    addBuilding(s, 'borderTower', at(1, 0));
+    const tower = buildOptionsFor(s, 0, at(2, 0)).find((o) => o.id === 'borderTower');
+    expect(tower).toMatchObject({ state: 'limit', used: 1, max: 1 });
+  });
 });

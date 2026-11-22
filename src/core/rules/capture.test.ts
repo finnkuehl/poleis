@@ -6,7 +6,7 @@ import { endTurn } from '../turn';
 import type { GameState } from '../state';
 
 /** 7x5 plains; enemy (player 1) city at (4,2) with a farm, human unit next to it. */
-function world(type: 'spearman' | 'settler' = 'spearman') {
+function world(type: 'spearman' | 'settler' | 'scout' = 'spearman') {
   const s = makeTestState(['ppppppp', 'ppppppp', 'ppppppp', 'ppppppp', 'ppppppp'], {
     ownAll: false,
   });
@@ -81,6 +81,13 @@ describe('capturing', () => {
 
   it('settlers cannot capture', () => {
     const { s, unit } = world('settler');
+    const on = move(s, unit, at(4, 2));
+    expect(on.units[0].capturing).toBeNull();
+    expect(endTurn(on).cities[0].owner).toBe(1);
+  });
+
+  it('scouts cannot capture', () => {
+    const { s, unit } = world('scout');
     const on = move(s, unit, at(4, 2));
     expect(on.units[0].capturing).toBeNull();
     expect(endTurn(on).cities[0].owner).toBe(1);

@@ -76,10 +76,29 @@ export function settlerCount(ctx: AiContext): number {
   );
 }
 
+/** Free plains (no building, no road) in the territory of the city's owner around this city. */
+export function freePlainsOf(ctx: AiContext, city: City): number {
+  const map = ctx.state.map;
+  const built = new Set(ctx.state.buildings.map((b) => tileIndex(map, b.hex)));
+  let n = 0;
+  for (let i = 0; i < map.tiles.length; i++) {
+    if (ctx.state.tileCity[i] !== city.id || ctx.state.territory[i] !== ctx.player) continue;
+    if (map.tiles[i] === 'plains' && !ctx.state.roads[i] && !built.has(i)) n += 1;
+  }
+  return n;
+}
+
+/** Has the city (almost) no free plains left? Then it cannot grow where it stands. */
+export function isCramped(ctx: AiContext, city: City): boolean {
+  return freePlainsOf(ctx, city) < M.crampedFreePlains;
+}
+
 /** May a settler be sent out from this city now (all conditions except the site)? */
 export function mayExpandFrom(ctx: AiContext, city: City): boolean {
   if (ctx.cities.length + settlerCount(ctx) >= M.maxCities[ctx.personality]) return false;
   if (city.residents < M.expandMinResidents) return false;
+  // A cramped city expands whatever the food surplus is and whether it waits to advance.
+  if (isCramped(ctx, city)) return true;
   const waiting = ctx.cities.some((c) => {
     const check = advanceCheck(ctx.state, c.city.id, ctx.production);
     return check !== null && check.to !== null && check.residents.ok && !check.canAdvance;

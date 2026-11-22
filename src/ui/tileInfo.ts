@@ -594,6 +594,8 @@ export function createTileInfoPanel(root: HTMLElement, onClose: () => void): Til
     const sub = el('span', 'build-item__effect');
     if (o.state === 'locked' && o.level) {
       sub.textContent = fill(en.ui.fromLevel, { level: en.levels[o.level] });
+    } else if (o.state === 'limit') {
+      sub.textContent = fill(en.ui.towerLimitReached, { used: o.used ?? 0, max: o.max ?? 0 });
     } else if (o.state === 'unaffordable' && o.missing) {
       sub.className = 'build-item__missing';
       sub.textContent = formatMissing(o.missing);
@@ -603,7 +605,7 @@ export function createTileInfoPanel(root: HTMLElement, onClose: () => void): Til
         sub.appendChild(goodText(part.good, `${part.amount} ${en.goods[part.good]}`));
       });
     }
-    if (o.gain !== undefined && o.state !== 'locked') {
+    if (o.gain !== undefined && o.state !== 'locked' && o.state !== 'limit') {
       if (sub.childNodes.length > 0) sub.appendChild(document.createTextNode(' · '));
       sub.appendChild(el('span', 'build-item__gain', formatTileGain(o.gain)));
     }

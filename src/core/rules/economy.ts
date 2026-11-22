@@ -135,7 +135,13 @@ export function economyOverview(state: GameState, player: PlayerId): EconomyOver
 
   // 3. Unit upkeep.
   const upkeep = runUpkeep(sim, player, stock);
-  for (const id of GOOD_IDS) addConsumed(id, 'units', undefined, upkeep.upkeepEaten[id] ?? 0);
+  for (const id of GOOD_IDS)
+    addConsumed(
+      id,
+      'units',
+      undefined,
+      (upkeep.upkeepEaten[id] ?? 0) + (id === 'drachmas' ? upkeep.upkeepPaid : 0),
+    );
 
   const goods: GoodFlow[] = [];
   for (const id of GOOD_IDS) {

@@ -94,8 +94,8 @@ describe('i18n/format', () => {
     expect(formatMoves(0.5)).toBe('0.5');
     expect(formatUnitsReady(1)).toBe('1 unit is ready');
     expect(formatUnitsReady(3)).toBe('3 units are ready');
-    expect(formatUnitsLost(1)).toBe('1 unit was lost to hunger');
-    expect(formatUnitsLost(2)).toBe('2 units were lost to hunger');
+    expect(formatUnitsLost(1)).toBe('1 unit was lost (hunger or missing pay)');
+    expect(formatUnitsLost(2)).toBe('2 units were lost (hunger or missing pay)');
     expect(formatCaptured(['Argos'])).toBe('You captured Argos!');
     expect(formatCaptured(['Argos', 'Delphi'])).toBe('You captured 2 cities!');
     const base = { damage: 5, counter: 0, defenderDies: false, attackerDies: false };

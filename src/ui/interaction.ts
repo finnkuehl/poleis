@@ -30,6 +30,7 @@ import {
   previewProduction,
   runProduction,
   territoryGain,
+  towerTotals,
   validPlacements,
   workersNeeded,
   type BuildingStatus,
@@ -218,7 +219,7 @@ export async function createGame(
       panel.hide();
       menuOpen = true;
       bottomBar.setMode('build');
-      menu.open(stockOf(state), highestLevel(state));
+      menu.open(stockOf(state), highestLevel(state), towerTotals(state, PLAYER));
     },
     onRoad: () => {
       economySheet.close();

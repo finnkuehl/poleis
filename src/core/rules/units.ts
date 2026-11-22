@@ -121,7 +121,11 @@ export function spawnUnits(state: GameState, player: PlayerId): number {
   return spawned;
 }
 
-/** Units eat after the residents. Missing food hurts every unit; dead units are removed. */
+/**
+ * Units eat after the residents and are paid in drachmas. If the food or the pay does not last
+ * for all units, every unit loses HP once (not twice if both are short); dead units are removed.
+ * Units in training are not in `state.units` yet and cost nothing; passengers do cost.
+ */
 export function runUpkeep(
   state: GameState,
   player: PlayerId,
@@ -138,12 +142,17 @@ export function runUpkeep(
       left -= eat;
     }
   }
-  const starving = left > 0;
+  const hungry = left > 0;
+  const payDue = own.length * militaryConfig.upkeepDrachmas;
+  const upkeepPaid = Math.min(stock.drachmas, payDue);
+  stock.drachmas -= upkeepPaid;
+  const unpaid = upkeepPaid < payDue;
+  const starving = hungry || unpaid;
   let lost = 0;
   if (starving) {
     for (const u of own) u.hp -= militaryConfig.starvationDamage;
-    // Passengers of a ship that starved to death are lost with it.
+    // Passengers of a ship that was lost are lost with it.
     lost = pruneUnits(state);
   }
-  return { upkeepEaten, starving, lost };
+  return { upkeepEaten, upkeepPaid, hungry, unpaid, starving, lost };
 }

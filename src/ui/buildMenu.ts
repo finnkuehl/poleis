@@ -19,7 +19,14 @@ const CATEGORY_ORDER: readonly BuildingCategory[] = ['city', 'food', 'raw', 'pro
 export function createBuildMenu(
   root: HTMLElement,
   h: { onPick(id: BuildingId): void; onClose(): void },
-): { open(stock: Stock, cityLevel: CityLevel): void; close(): void } {
+): {
+  open(
+    stock: Stock,
+    cityLevel: CityLevel,
+    towers?: { used: number; max: number; hasRoom: boolean },
+  ): void;
+  close(): void;
+} {
   const sheet = el('section', 'sheet build-menu');
   sheet.hidden = true;
   sheet.setAttribute('aria-label', en.ui.buildMenuTitle);
@@ -70,9 +77,14 @@ export function createBuildMenu(
     return item;
   }
 
-  function entry(id: BuildingId, stock: Stock): HTMLButtonElement {
+  function entry(
+    id: BuildingId,
+    stock: Stock,
+    towers?: { used: number; max: number; hasRoom: boolean },
+  ): HTMLButtonElement {
     const def = BUILDINGS[id];
-    const affordable = canAfford(stock, def.cost);
+    const full = id === 'borderTower' && towers !== undefined && !towers.hasRoom;
+    const affordable = canAfford(stock, def.cost) && !full;
     const item = button(`build-item${affordable ? '' : ' is-muted'}`, '');
     item.disabled = !affordable;
     const icon = el('span', 'build-item__icon');
@@ -97,7 +109,19 @@ export function createBuildMenu(
     body.appendChild(cost);
     if (def.workers > 0)
       body.appendChild(el('span', 'build-item__workers', workersText(def.workers)));
-    if (!affordable) {
+    if (id === 'borderTower' && towers) {
+      body.appendChild(
+        el(
+          'span',
+          'build-item__level',
+          fill(full ? en.ui.towerLimitReached : en.ui.towerCount, {
+            used: towers.used,
+            max: towers.max,
+          }),
+        ),
+      );
+    }
+    if (!full && !canAfford(stock, def.cost)) {
       body.appendChild(
         el('span', 'build-item__missing', formatMissing(missingGoods(stock, def.cost))),
       );
@@ -108,7 +132,7 @@ export function createBuildMenu(
   }
 
   return {
-    open(stock, cityLevel) {
+    open(stock, cityLevel, towers) {
       const scrollTop = list.scrollTop;
       list.replaceChildren();
       for (const category of CATEGORY_ORDER) {
@@ -120,7 +144,9 @@ export function createBuildMenu(
         group.appendChild(el('h3', 'build-menu__heading', en.categories[category]));
         for (const id of ids) {
           group.appendChild(
-            levelReached(cityLevel, BUILDINGS[id].minLevel) ? entry(id, stock) : lockedEntry(id),
+            levelReached(cityLevel, BUILDINGS[id].minLevel)
+              ? entry(id, stock, towers)
+              : lockedEntry(id),
           );
         }
         list.appendChild(group);

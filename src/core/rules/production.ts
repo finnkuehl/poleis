@@ -35,9 +35,15 @@ export interface UnitsReport {
   spawned: number;
   /** Food eaten by the units. */
   upkeepEaten: Goods;
-  /** Not enough food for all units: every unit took damage. */
+  /** Drachmas paid as soldiers' pay. */
+  upkeepPaid: number;
+  /** Not enough food for all units. */
+  hungry: boolean;
+  /** Not enough drachmas to pay all units. */
+  unpaid: boolean;
+  /** Food or pay was short: every unit took damage (once). */
   starving: boolean;
-  /** Units that died of hunger. */
+  /** Units that died of hunger or unpaid. */
   lost: number;
 }
 
@@ -130,7 +136,15 @@ function simulate(state: GameState, player: PlayerId, stock: Stock): TurnReport 
     delta,
     buildings: reports,
     cities: [],
-    units: { spawned: 0, upkeepEaten: {}, starving: false, lost: 0 },
+    units: {
+      spawned: 0,
+      upkeepEaten: {},
+      upkeepPaid: 0,
+      hungry: false,
+      unpaid: false,
+      starving: false,
+      lost: 0,
+    },
     captured: [],
     orders: [],
   };
