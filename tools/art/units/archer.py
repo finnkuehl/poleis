@@ -13,8 +13,8 @@ def build():
     c = U.UnitCanvas("archer")
     U.token(c, seed=11)
     x, y = c.P(2, -2, 0)
-    U.ground_shadow(c, x, y, 10)
-    U.person(c, x + 4, y, h=68, tunic=U.WOOL, hem=-40, beard=False, helmet="phrygian", hold="bow",
+    U.ground_shadow(c, x + 6, y, 18, length=20)
+    U.person(c, x + 8, y, h=78, tunic=U.WOOL, hem=-33, beard=False, helmet="phrygian", hold="bow",
              quiver=True, accents=("cap",))
     return c
 

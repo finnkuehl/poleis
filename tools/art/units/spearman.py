@@ -12,9 +12,9 @@ import units_lib as U  # noqa: E402
 def build():
     c = U.UnitCanvas("spearman")
     U.token(c, seed=7)
-    x, y = c.P(0, 0, 0)
-    U.ground_shadow(c, x, y, 10)
-    U.person(c, x, y, h=70, helmet="pilos", hold="spear", shield="round", accents=("shield",))
+    x, y = c.P(1, 1, 0)
+    U.ground_shadow(c, x, y, 18, length=20)
+    U.person(c, x - 2, y, h=76, helmet="pilos", hold="spear", shield="round", accents=("shield",))
     return c
 
 

@@ -12,9 +12,9 @@ import units_lib as U  # noqa: E402
 def build():
     c = U.UnitCanvas("hoplite")
     U.token(c, seed=5)
-    x, y = c.P(0, 0, 0)
-    U.ground_shadow(c, x, y, 12)
-    U.person(c, x, y, h=70, armor="cuirass", legs="greaves", helmet="corinthian", cloak=U.WOOL,
+    x, y = c.P(1, 1, 0)
+    U.ground_shadow(c, x, y, 22, length=22)
+    U.person(c, x, y, h=76, armor="cuirass", legs="greaves", helmet="corinthian", cloak=U.WOOL,
              hold="spear", shield="aspis", accents=("shield", "crest"))
     return c
 

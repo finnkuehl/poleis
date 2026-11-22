@@ -29,13 +29,14 @@ TOKEN_H = 8.5                   # side height of the token
 TOKEN_LIP = 1.6                 # grass lip at the top of the side; the rest is the owner band
 
 # materials (bbox gradients across a part: lit left -> shaded right)
-SKIN = [(0, "#f6d3ad"), (0.25, "#e8b48a"), (0.6, "#c98f66"), (0.9, "#9c6644"), (1, "#7f5238")]
-LINEN = [(0, "#fffdf6"), (0.25, "#f3ebd8"), (0.6, "#ddd1b6"), (0.9, "#b3a688"), (1, "#9a8e72")]
-WOOL = [(0, "#c49866"), (0.3, "#a57749"), (0.7, "#7f5634"), (1, "#5a3a22")]
-LEATHER = [(0, "#c08a55"), (0.3, "#9c6a3c"), (0.7, "#774c2a"), (1, "#56351c")]
-FELT = [(0, "#f1dca2"), (0.4, "#d8b56c"), (0.8, "#b08a48"), (1, "#8f6c34")]
-METAL = [(0, BRONZE["hi"]), (0.18, BRONZE["lit"]), (0.5, BRONZE["base"]), (0.82, BRONZE["shade"]), (1, BRONZE["dark"])]
-CLOTH_ACCENT = [(0, ACCENT["lit"]), (0.35, ACCENT["light"]), (0.7, ACCENT["shade"]), (1, ACCENT["dark"])]
+# (0: warm rim light, then lit, base, cool shade, core shadow, 1: cool reflected light)
+SKIN = [(0, "#ffe6c8"), (0.1, "#f6cca2"), (0.42, "#dca77c"), (0.78, "#a8735e"), (0.93, "#7c5248"), (1, "#97767a")]
+LINEN = [(0, "#ffffff"), (0.1, "#fbf6e8"), (0.42, "#ece2ca"), (0.78, "#b9b5aa"), (0.93, "#8e8e90"), (1, "#a9adb6")]
+WOOL = [(0, "#ecc596"), (0.1, "#cb9e6a"), (0.42, "#a57749"), (0.78, "#74523e"), (0.93, "#4f382c"), (1, "#6b5a5c")]
+LEATHER = [(0, "#e2ad74"), (0.1, "#c08a55"), (0.42, "#9c6a3c"), (0.78, "#6e4830"), (0.93, "#4a3020"), (1, "#665050")]
+FELT = [(0, "#fff1c4"), (0.1, "#f1dca2"), (0.42, "#d8b56c"), (0.78, "#a88b5a"), (0.93, "#7c6644"), (1, "#958670")]
+METAL = [(0, "#fff2cc"), (0.1, "#f0c67c"), (0.42, "#c69048"), (0.78, "#865a34"), (0.93, "#523622"), (1, "#7d6c62")]
+CLOTH_ACCENT = [(0, ACCENT["lit"]), (0.12, ACCENT["lit"]), (0.45, ACCENT["light"]), (0.8, ACCENT["shade"]), (0.94, ACCENT["dark"]), (1, ACCENT["mid"])]
 HAIR = "#4a3222"
 HAIR_HI = "#7a5a40"
 
@@ -150,42 +151,46 @@ def ground_shadow(c, x, y, w, length=None, opacity=0.38):
 
 
 # ---------------------------------------------------------------------------
-# People (painted miniatures), drawn in screen space; feet at (x, y), height h = feet -> head top
+# People (chunky painted miniatures), drawn in screen space; feet at (x, y), h = feet -> head top
 # ---------------------------------------------------------------------------
-LLEG = "M-9,-42 L-1.6,-42 C-1.4,-34 -1.6,-28 -2.4,-24 C-1.6,-16 -2.2,-8 -3,-2 L-1.8,1.5 L-10.4,1.5 L-9.2,-2 C-10.6,-9 -11.2,-17 -9.8,-24 C-10.8,-29 -10.4,-36 -9,-42Z"
-RLEG = "M0.4,-42 L9,-42 C10,-36 10.2,-30 9.2,-25 C10.2,-18 9.6,-9 8.8,-2 L10,0 L1.2,0 L2.2,-2 C1.2,-9 0.8,-17 1.6,-25 C0.6,-30 0.2,-36 0.4,-42Z"
-LGREAVE = "M-10.4,-23 C-11,-16 -10.5,-8 -9.4,-3 L-3.2,-3 C-2.4,-9 -2,-16 -2.6,-23Z"
-RGREAVE = "M1.7,-24 C1.1,-17 1.5,-9 2.3,-3 L8.9,-3 C9.7,-9 10.1,-17 9.3,-24Z"
-LSANDAL = "M-10.8,1.6 L-1.5,1.6 L-2.3,-1.6 L-9.7,-1.6Z"
-RSANDAL = "M0.9,0.4 L10.3,0.4 L9.1,-2 L1.9,-2Z"
-TUNIC = "M-11.5,-73 C-13.5,-62 -12,-50 -13.5,{hem} C-6,{hem2} 6,{hem2} 13.5,{hem} C12,-50 13.5,-62 11.5,-73 C6,-76 -6,-76 -11.5,-73Z"
-CUIRASS = "M-12.5,-72 C-13.5,-64 -11.5,-56 -9.5,-51 L9.5,-51 C11.5,-56 13.5,-64 12.5,-72 C6,-75 -6,-75 -12.5,-72Z"
-SKIRT = "M-9.5,-51 L9.5,-51 L11.8,-39 L-11.8,-39Z"
-CLOAK = "M-12,-73 C-15.5,-62 -17,-46 -15.5,-30 L-6,-28 L8,-28 L16,-31 C18,-46 17,-62 12,-73Z"
-CLOAK_FLOW = "M-11,-74 C-4,-77.5 8,-77.5 13,-73.5 C21,-70 30,-63 37,-52 C31,-52.5 27.5,-49 23.5,-43 C21,-50 17,-56 12,-58 L-8,-60Z"
-NECK = "M-2.6,-79 L2.6,-79 L3.2,-73 L-3.2,-73Z"
-HAIR_CAP = "M-6.6,-85 C-7.4,-93 -3.4,-96 0.6,-96 C5.2,-96 7.6,-92.5 6.9,-85.5 C6,-89.5 3.5,-91.2 0.4,-91.2 C-3,-91.2 -5.6,-89.4 -6.6,-85Z"
-BEARD = "M-5.2,-84 C-5.4,-79.5 -2.4,-76.6 0.4,-76.6 C3.4,-76.6 6,-79.5 5.8,-84 C4.2,-82 2.2,-81.4 0.4,-81.4 C-1.6,-81.4 -3.6,-82 -5.2,-84Z"
-CORINTHIAN = "M-7,-80.5 C-7.6,-88.6 -4.6,-94 0.4,-94 C5.4,-94 8,-88.6 7.4,-80.5 C6.4,-77 4.2,-76.4 3.2,-78.4 L2.8,-83 L-2.2,-83 L-2.6,-78.4 C-3.8,-76.4 -6,-77 -7,-80.5Z"
-CREST = "M-3,-93 C-6,-106 6,-110.5 13.5,-103 C16.5,-99 16,-92 13.2,-86.5 C11.6,-92.6 7,-98.4 0,-95.4Z"
-PILOS = "M-7.2,-86 C-7,-93 -3.6,-100.6 0.5,-103.6 C4.6,-100.6 8,-93 7.6,-86 C3,-88.6 -2.6,-88.6 -7.2,-86Z"
-PHRYGIAN = "M-7,-84 C-8,-93 -4.2,-98.8 1.6,-99.8 C6.4,-100.8 9.6,-98 7.4,-94.4 C6.8,-93.2 7.4,-89.6 7.4,-84 C7.2,-80 6.6,-78 5.6,-77.2 L5,-84.6 C2,-87 -2,-87 -4.8,-84.6 L-5.4,-77.2 C-6.4,-78 -7,-80 -7,-84Z"
+# Local figure units: feet at y=0, top of the head at y=-100. Proportions of a board-game
+# miniature: big head (~1/4), broad shoulders, thick limbs - they read at a 32 px token.
+LLEG = "M-12,-33 L-2,-33 C-1.6,-24 -2,-14 -2.6,-5 L-1.2,0 L-13.4,0 L-12.4,-5 C-13.4,-14 -13.6,-24 -12,-33Z"
+RLEG = "M3,-33 L13,-33 C14.4,-24 14.2,-14 13.4,-5 L14.6,0 L2.4,0 L3.6,-5 C3,-14 2.6,-24 3,-33Z"
+LGREAVE = "M-13.4,-21 C-13.8,-14 -13.2,-8 -12.6,-3.6 L-2.4,-3.6 C-2,-9 -1.8,-15 -2.2,-21Z"
+RGREAVE = "M2.9,-21 C2.7,-15 2.9,-9 3.3,-3.6 L13.6,-3.6 C14.2,-9 14.4,-15 14,-21Z"
+LSANDAL = "M-15,2 L-0.4,2 L-1.4,-3.2 L-13.6,-3.2Z"
+RSANDAL = "M1.4,2 L16,2 L14.8,-3.2 L2.6,-3.2Z"
+TUNIC = "M-15.5,-67 C-18,-58 -16,-46 -18.5,{hem} C-8,{hem2} 9,{hem2} 19.5,{hem} C17,-46 19,-58 16.5,-67 C9,-71 -8,-71 -15.5,-67Z"
+CUIRASS = "M-17,-67.5 C-18.6,-58 -16,-50 -13.6,-44.6 L14.6,-44.6 C17,-50 19.6,-58 18,-67.5 C9,-71.6 -8,-71.6 -17,-67.5Z"
+SKIRT = "M-13.8,-45 L14.8,-45 L18,-30.5 L-17,-30.5Z"
+CLOAK = "M-16,-68 C-22,-56 -24,-36 -21,-17 L-8,-15 L10,-15 L22,-18 C25,-36 23,-56 17,-68Z"
+CLOAK_FLOW = "M-14,-69 C-6,-73.4 10,-73.4 17,-68.6 C28,-64.6 40,-55.6 50,-40 C42,-41 37,-36 31,-28 C27,-38 22,-46 15,-50 L-10,-52Z"
+NECK = "M-5,-72 L6,-72 L6.8,-65 L-5.8,-65Z"
+FACE = '<ellipse cx="0.5" cy="-83" rx="11" ry="12.6" fill="{skin}"/>'
+HAIR_CAP = "M-11.2,-81 C-12.6,-94 -5,-99.6 1,-99.6 C8,-99.6 13.4,-94 12.2,-81 C10.6,-88 6,-91.6 0.6,-91.6 C-4.6,-91.6 -9.4,-88.6 -11.2,-81Z"
+BEARD = "M-9.6,-80 C-10,-72 -4.6,-67.2 0.6,-67.2 C6,-67.2 10.8,-72 10.4,-80 C7.6,-76.6 4,-75.6 0.6,-75.6 C-2.8,-75.6 -6.8,-76.6 -9.6,-80Z"
+CORINTHIAN = "M-12.4,-77 C-13.6,-92 -7,-100.4 1,-100.4 C9,-100.4 15.2,-92 13.8,-77 C12.2,-70.6 8,-69.2 6.4,-72.4 L5.6,-79.6 L-3.4,-79.6 L-4.4,-72.4 C-6.4,-69.2 -10.8,-70.6 -12.4,-77Z"
+CREST = "M-10,-101 C-11,-114 6,-121 19,-112.6 C23,-108 23,-99.6 19.6,-92.6 C16.6,-101 10,-106.4 0,-104.2 C-4.4,-103.6 -7.6,-102.4 -10,-101Z"
+PILOS = "M-12.6,-82 C-12.2,-95 -6,-107 1,-113 C8,-107 14.2,-95 13.8,-82 C6,-86.4 -4.8,-86.4 -12.6,-82Z"
+PHRYGIAN = "M-12.2,-79 C-13.8,-94 -7,-104 2.6,-105.6 C11,-107 16.6,-102 13,-96 C11.8,-94.2 13,-88 12.8,-79 C12.6,-72 11.6,-69 9.8,-68 L8.8,-80 C3.4,-84.4 -3.4,-84.4 -8.4,-80 L-9.4,-68 C-11.2,-69 -12.2,-72 -12.2,-79Z"
 
 
-def person(c, x, y, h=70, *, tunic=LINEN, hem=-37, armor=None, legs="bare", stride=0.0,
+def person(c, x, y, h=80, *, tunic=LINEN, hem=-30, armor=None, legs="bare", stride=0.0,
            beard=True, helmet=None, cloak=None, cloak_flow=False, hold=None, shield=None,
-           quiver=False, accents=(), wide=1.12, seed=1):
-    """A standing/walking person seen from the front, feet at screen point (x, y).
+           quiver=False, accents=(), wide=1.15, seed=1):
+    """A chunky board-game miniature seen from the front, feet at screen point (x, y).
 
-    tunic: a material stop list (LINEN, WOOL ...) or "accent"; hem: tunic hem height (-37 knee).
+    h: feet -> top of the head in px (the head is ~1/4 of it; crests, hats, spears rise above).
+    tunic: a material stop list (LINEN, WOOL ...) or "accent"; hem: tunic hem height (-30 knee).
     armor: None | "cuirass" (bronze muscle cuirass + leather skirt).
     legs: "bare" | "greaves". stride: 0 standing .. 1 striding (legs apart).
-    helmet: None | "corinthian" | "pilos" | "petasos" | "phrygian".
+    helmet: None | "corinthian" (+ tall crest) | "pilos" | "petasos" | "phrygian".
     cloak: None | material list | "accent";  cloak_flow: blown out to the right (running).
-    hold: None | "spear" | "staff" | "bow".  shield: None | "aspis" (big) | "round" (small).
+    hold: None | "spear" | "staff" | "bow".  shield: None | "aspis" (huge) | "round" (small).
     quiver: arrows on the back. accents: names of parts in the owner colour:
             "cloak", "crest", "shield", "cap" (helmet/hat), "tunic".
-    wide: horizontal stretch - chunky board-game proportions read better at 32 px.
+    wide: horizontal stretch for chunky proportions.
     """
     k = h / 100.0
     tf = f"translate({f(x)} {f(y)}) scale({f(k * wide)} {f(k)})"
@@ -207,111 +212,127 @@ def person(c, x, y, h=70, *, tunic=LINEN, hem=-37, armor=None, legs="bare", stri
     def art(markup):
         c.add(f'<g transform="{tf}">{markup}</g>')
 
+    rim = "#fff4dc"
     # behind the body: cloak, quiver
     if cloak is not None:
         cf = mat(cloak, "ucloak")
         if cloak_flow:
-            part(CLOAK_FLOW, cf, "cloak", '<path d="M14,-70 C20,-64 25,-58 29,-51 M10,-66 C14,-60 17,-55 20,-47" fill="none" stroke="#000" stroke-width="1" opacity="0.2"/>')
+            part(CLOAK_FLOW, cf, "cloak", '<path d="M18,-64 C27,-58 35,-50 42,-41 M13,-58 C20,-52 25,-46 29,-37" fill="none" stroke="#000" stroke-width="1.6" opacity="0.2"/>'
+                 f'<path d="M-6,-71.6 C6,-73.4 14,-71 22,-66" fill="none" stroke="{rim}" stroke-width="1.4" opacity="0.6"/>')
         else:
-            part(CLOAK, cf, "cloak", '<path d="M-5,-62 C-7,-48 -7,-36 -6,-29 M5,-62 C7,-48 8,-36 8,-29" fill="none" stroke="#000" stroke-width="1" opacity="0.2"/>')
+            part(CLOAK, cf, "cloak", '<path d="M-9,-56 C-11,-42 -11,-28 -10,-16 M10,-56 C12,-42 13,-28 12,-16" fill="none" stroke="#000" stroke-width="1.6" opacity="0.2"/>')
     if quiver:
         lt = grad(c, "uleather", LEATHER)
-        art(f'<path d="M8,-58 L13.5,-86 L18,-85 L13,-57Z" fill="{lt}"/>'
-            '<path d="M13.6,-86 L12.6,-93 M15,-86 L15.2,-94 M16.6,-85.6 L18,-92.6" stroke="#6b4423" stroke-width="0.7"/>'
-            '<path d="M11.6,-93 L13.2,-96 L13.8,-92.4Z M14.4,-94 L15.8,-97.2 L16,-93.6Z M17.2,-92.6 L19.2,-95.6 L18.8,-92Z" fill="#f2ead6"/>')
+        art(f'<path d="M12,-48 L21,-90 L28.4,-88 L19.6,-46Z" fill="{lt}"/>'
+            '<path d="M21.6,-90 L20.4,-99 M24.6,-89.4 L25,-100 M27.4,-88.6 L29.6,-98" stroke="#6b4423" stroke-width="1.1"/>'
+            '<path d="M19,-99 L21.2,-104 L22.4,-98.4Z M23.6,-100 L25.6,-105.4 L26.4,-99.8Z M28,-98 L31,-102.6 L30.8,-97.4Z" fill="#f2ead6"/>'
+            '<path d="M14,-52 L22.4,-88" stroke="#000" stroke-width="1.2" opacity="0.2"/>')
     # legs (striding: left leg swings out, right leg back)
-    rot_l, rot_r = 14 * stride, -7 * stride
-    for d, sandal, greave, rot, pivot in ((LLEG, LSANDAL, LGREAVE, rot_l, (-5, -42)), (RLEG, RSANDAL, RGREAVE, rot_r, (5, -42))):
+    rot_l, rot_r = 13 * stride, -7 * stride
+    for d, sandal, greave, rot, pivot in ((LLEG, LSANDAL, LGREAVE, rot_l, (-7, -33)), (RLEG, RSANDAL, RGREAVE, rot_r, (8, -33))):
         g = [f'<g transform="rotate({f(rot)} {pivot[0]} {pivot[1]})">', f'<path d="{d}" fill="{skin}"/>']
         if legs == "greaves":
             g.append(f'<path d="{greave}" fill="{metal}"/>')
-        g.append(f'<path d="{sandal}" fill="#5e3b22"/>')
+        g.append(f'<path d="{sandal}" fill="#5e3b22"/><path d="{sandal}" fill="none" stroke="#8a5a34" stroke-width="0.8" opacity="0.7"/>')
         g.append("</g>")
         art("".join(g))
-    art('<path d="M-9.6,-22 C-10.4,-15 -10,-8 -9,-3" fill="none" stroke="#fff" stroke-width="0.9" opacity="0.35"/>')
-    # tunic, armour
-    tunic_d = TUNIC.format(hem=hem, hem2=hem + 1.5)
-    part(tunic_d, mat(tunic, "utunic"), "tunic", f'<rect x="-12" y="-54" width="24" height="2.2" fill="#6a4426"/>'
-         f'<path d="M-6,-51 C-6.5,-45 -7,{hem + 4} -7.5,{hem + 1} M0,-51 L0.2,{hem + 1} M6,-51 C6.5,-45 7,{hem + 4} 7.5,{hem + 1}" fill="none" stroke="#000" stroke-width="0.8" opacity="0.18"/>')
+    # tunic, armour (with AO on the legs under the hem)
+    art(f'<rect x="-14" y="{f(hem)}" width="29" height="7" fill="#2b1a10" opacity="0.18"/>')
+    part(TUNIC.format(hem=hem, hem2=hem + 2), mat(tunic, "utunic"), "tunic",
+         f'<rect x="-17.4" y="-49.6" width="35.6" height="3.4" fill="#6a4426"/><rect x="-17.4" y="-49.6" width="35.6" height="0.9" fill="#a8744a"/>'
+         f'<path d="M-9,-45 C-9.6,-40 -10,{hem + 5} -10.6,{hem + 1.5} M1,-45 L1.2,{hem + 1.5} M10,-45 C10.6,-40 11,{hem + 5} 11.6,{hem + 1.5}" fill="none" stroke="#000" stroke-width="1.2" opacity="0.16"/>'
+         f'<path d="M-15,-64 C-16.6,-56 -15.4,-48 -17,-34" fill="none" stroke="{rim}" stroke-width="1.4" opacity="0.55"/>')
     if armor == "cuirass":
         lt = grad(c, "uleather", LEATHER)
-        art(f'<path d="{SKIRT}" fill="{lt}"/>' + "".join(f'<rect x="{f(-11 + i * 2.75)}" y="-50" width="0.45" height="11" fill="#3e2514" opacity="0.6"/>' for i in range(1, 8)))
+        art(f'<path d="{SKIRT}" fill="{lt}"/>' + "".join(f'<rect x="{f(-15.6 + i * 3.8)}" y="-44" width="0.8" height="13.4" fill="#3e2514" opacity="0.6"/>' for i in range(1, 9)))
         art(f'<path d="{CUIRASS}" fill="{metal}"/>'
-            f'<path d="M-6.5,-65 C-3.5,-62.5 3.5,-62.5 6.5,-65 M0,-63 L0,-53.5 M-5,-57.5 C-2,-56 2,-56 5,-57.5" fill="none" stroke="{BRONZE["dark"]}" stroke-width="0.8" opacity="0.55"/>'
-            f'<path d="M-11.6,-70 C-12.4,-63 -11,-57 -9.6,-52.5" fill="none" stroke="{BRONZE["hi"]}" stroke-width="1.2" opacity="0.85"/>')
+            f'<path d="M-9,-62 C-4.6,-58.6 5.6,-58.6 10,-62 M0.5,-60 L0.5,-47 M-7,-53 C-2.6,-51 3.6,-51 8,-53" fill="none" stroke="{BRONZE["dark"]}" stroke-width="1.1" opacity="0.5"/>'
+            f'<path d="M-15.6,-65 C-16.8,-57 -15,-50 -13.2,-46" fill="none" stroke="{rim}" stroke-width="1.6" opacity="0.8"/>'
+            f'<rect x="-14.6" y="-46.6" width="29.2" height="2.4" fill="{BRONZE["dark"]}" opacity="0.5"/>')
     # arms + held items
     if hold == "bow":
         wood = "#6b4423"
-        art(f'<path d="M-11.5,-73 C-16,-73.4 -22,-73 -27.5,-72 L-27.5,-67.6 C-22,-68.2 -16,-68.4 -11,-67.6Z" fill="{skin}"/>'
-            f'<path d="M8,-73.6 C13,-75.6 18.6,-74.6 21,-71.6 C18.4,-69.4 12,-69 5.6,-70.6 L5.6,-73.6Z" fill="{skin}"/>'
-            f'<path d="M-27,-97 C-37.6,-86 -37.6,-56 -27,-45" fill="none" stroke="{wood}" stroke-width="2.4" stroke-linecap="round"/>'
-            f'<path d="M-27.6,-95 C-36.4,-85 -36.4,-57 -27.6,-47" fill="none" stroke="#a8744a" stroke-width="0.8" opacity="0.8"/>'
-            '<path d="M-27,-97 L4.6,-72 L-27,-45" fill="none" stroke="#efe6cc" stroke-width="0.55"/>'
-            '<path d="M-34,-72 L7,-72" stroke="#7a5a3a" stroke-width="0.9"/><path d="M-36.6,-72 L-33,-73.8 L-33,-70.2Z" fill="#b0793a"/>'
-            '<path d="M3,-72 L8,-74.4 M3,-72 L8,-69.6" stroke="#c8392f" stroke-width="1"/>'
-            f'<ellipse cx="-28.6" cy="-69.8" rx="2.6" ry="2.8" fill="{skin}"/><ellipse cx="4.6" cy="-72" rx="2.6" ry="2.6" fill="{skin}"/>')
+        art(f'<path d="M-14.5,-66.6 C-22,-67 -30,-66.4 -36,-65 L-36,-58 C-30,-59 -22,-59.6 -14,-59Z" fill="{skin}"/>'
+            f'<path d="M13,-67 C21,-69.6 28,-67 30.4,-62 C26,-58.6 16,-58.4 6,-60.6 L6,-66Z" fill="{skin}"/>'
+            f'<path d="M-36,-99 C-54,-84 -54,-39 -36,-24" fill="none" stroke="{wood}" stroke-width="4.2" stroke-linecap="round"/>'
+            f'<path d="M-37.4,-96 C-51.6,-82 -51.6,-41 -37.4,-27" fill="none" stroke="#c08a55" stroke-width="1.3" opacity="0.85"/>'
+            '<path d="M-36,-99 L5,-63 L-36,-24" fill="none" stroke="#f3ead0" stroke-width="0.9"/>'
+            '<path d="M-48,-62.6 L9,-62.6" stroke="#7a5a3a" stroke-width="1.6"/><path d="M-53,-62.6 L-46.6,-65.6 L-46.6,-59.6Z" fill="#b0793a"/>'
+            '<path d="M5,-62.6 L11.6,-66.4 M5,-62.6 L11.6,-58.8" stroke="#c8392f" stroke-width="1.8"/>'
+            f'<circle cx="-37.4" cy="-61.6" r="4.8" fill="{skin}"/><circle cx="5" cy="-63" r="4.6" fill="{skin}"/>')
     else:
         if hold in ("spear", "staff"):
-            top = -112 if hold == "spear" else -100
-            art(f'<rect x="-17.2" y="{top}" width="1.7" height="{f(-top + 1)}" fill="{WOOD["dark"]}"/><rect x="-17.2" y="{top}" width="0.6" height="{f(-top + 1)}" fill="{WOOD["lit"]}"/>')
+            top = -113 if hold == "spear" else -104
+            art(f'<rect x="-23.2" y="{top}" width="3.6" height="{f(-top + 2)}" fill="{WOOD["dark"]}"/><rect x="-23.2" y="{top}" width="1.3" height="{f(-top + 2)}" fill="#c99a6a"/>')
             if hold == "spear":
-                art(f'<path d="M-16.35,-124 L-13.8,-112.5 L-16.35,-110 L-18.9,-112.5Z" fill="{BRONZE["lit"]}"/><path d="M-16.35,-124 L-13.8,-112.5 L-16.35,-110Z" fill="{BRONZE["shade"]}"/>')
+                art(f'<path d="M-21.4,-125 C-18.4,-119 -17.6,-115 -18.4,-111.6 L-21.4,-109.6 L-24.4,-111.6 C-25.2,-115 -24.4,-119 -21.4,-125Z" fill="{BRONZE["lit"]}"/>'
+                    f'<path d="M-21.4,-125 C-18.4,-119 -17.6,-115 -18.4,-111.6 L-21.4,-109.6Z" fill="{BRONZE["shade"]}"/>')
             else:
-                art(f'<circle cx="-16.35" cy="{top}" r="2.2" fill="{WOOD["base"]}"/><circle cx="-17" cy="{top - 0.6}" r="0.8" fill="{WOOD["lit"]}"/>')
-        art(f'<path d="M-12.5,-71.5 C-15.5,-66 -17,-61 -17.4,-57.5 L-13.4,-56 C-12.8,-60 -11.4,-65 -8.5,-69Z" fill="{skin}"/>'
-            f'<path d="M-19.4,-59 C-19.6,-55.4 -14,-54.6 -13.4,-58 C-13.2,-60.6 -19,-61.6 -19.4,-59Z" fill="{skin}"/>'
-            f'<path d="M8.5,-69 C11.4,-65 12.8,-60 13.4,-56 L17.4,-57.5 C17,-61 15.5,-66 12.5,-71.5Z" fill="{skin}"/>'
-            f'<path d="M13.4,-58 C13.6,-54.6 19.2,-54.8 19.4,-58.4 C19.2,-61 13.6,-61 13.4,-58Z" fill="{skin}"/>')
-    # neck + head
-    art(f'<path d="{NECK}" fill="{skin}"/><ellipse cx="0.3" cy="-86" rx="6.3" ry="7.5" fill="{skin}"/>'
-        f'<ellipse cx="6.2" cy="-85.6" rx="1.2" ry="2" fill="#b47a54"/>'
-        '<ellipse cx="-2.3" cy="-86.6" rx="0.8" ry="0.55" fill="#2a1d14"/><ellipse cx="2.9" cy="-86.6" rx="0.8" ry="0.55" fill="#2a1d14"/>'
-        '<path d="M0.6,-86 L-0.4,-82.6 L1.2,-82.4" fill="none" stroke="#a46a46" stroke-width="0.6"/>')
+                art(f'<circle cx="-21.4" cy="{top}" r="3.6" fill="{WOOD["base"]}"/><circle cx="-22.6" cy="{top - 1}" r="1.3" fill="#c99a6a"/>')
+        art(f'<path d="M-15.5,-66 C-21,-63 -24,-56 -25,-48 L-17.6,-46 C-17,-52 -15,-58 -11.5,-62Z" fill="{skin}"/>'
+            f'<path d="M-16.6,-64.4 C-20.8,-61 -23,-55 -23.8,-49" fill="none" stroke="{rim}" stroke-width="1.2" opacity="0.7"/>'
+            f'<circle cx="-21.4" cy="-46.6" r="4.8" fill="{skin}"/>'
+            f'<path d="M16.5,-66 C22,-63 25,-56 26,-48 L18.6,-46 C18,-52 16,-58 12.5,-62Z" fill="{skin}"/>'
+            f'<circle cx="22.4" cy="-46.6" r="4.6" fill="{skin}"/>')
+    # neck + big head
+    art(f'<path d="{NECK}" fill="{skin}"/>' + FACE.format(skin=skin)
+        + f'<ellipse cx="11.6" cy="-82" rx="2.2" ry="3.4" fill="#b47a5e"/>'
+        '<ellipse cx="-4" cy="-84.4" rx="1.5" ry="1.2" fill="#2a1d14"/><ellipse cx="5.2" cy="-84.4" rx="1.5" ry="1.2" fill="#2a1d14"/>'
+        '<path d="M-6.6,-88 L-2,-88.8 M3,-88.8 L7.6,-88" stroke="#4a3222" stroke-width="1.1" stroke-linecap="round"/>'
+        '<path d="M1.2,-83 L-0.4,-78.4 L2,-78" fill="none" stroke="#a46a46" stroke-width="1"/>'
+        f'<path d="M-9.6,-88 C-10.6,-82 -9.6,-76 -6.6,-72.6" fill="none" stroke="{rim}" stroke-width="1.3" opacity="0.6"/>'
+        '<ellipse cx="0.5" cy="-69" rx="10" ry="2.6" fill="#2b1a10" opacity="0.2"/>')
     if beard:
-        art(f'<path d="{BEARD}" fill="{HAIR}"/>')
+        art(f'<path d="{BEARD}" fill="{HAIR}"/><path d="M-7,-76 C-5,-71 -2,-69 0.6,-68.6" fill="none" stroke="{HAIR_HI}" stroke-width="1"/>')
+    else:
+        art('<path d="M-2.4,-75 C-0.6,-74 2.2,-74 3.8,-75" fill="none" stroke="#a46a46" stroke-width="0.9"/>')
     if helmet in (None, "petasos"):
-        art(f'<path d="{HAIR_CAP}" fill="{HAIR}"/><path d="M-5.4,-87.6 C-5.4,-91 -2.6,-93.6 0.6,-93.8" fill="none" stroke="{HAIR_HI}" stroke-width="0.9"/>')
+        art(f'<path d="{HAIR_CAP}" fill="{HAIR}"/><path d="M-9.4,-85 C-9.4,-92 -4.6,-96.6 1,-96.8" fill="none" stroke="{HAIR_HI}" stroke-width="1.4"/>')
     if helmet == "corinthian":
         art(f'<path d="{CORINTHIAN}" fill="{metal}"/>'
-            f'<path d="M-6,-83.5 C-6.2,-89 -3.4,-92.4 0.2,-92.6" fill="none" stroke="{BRONZE["hi"]}" stroke-width="1" opacity="0.9"/>'
-            '<path d="M-2.2,-83 L-2.4,-88 M2.8,-83 L2.8,-88" stroke="#2a1d14" stroke-width="1"/>')
-        part(CREST, grad(c, "ucrest", [(0, "#e0503e"), (0.6, "#b23a30"), (1, "#7a2420")]), "crest",
-             '<path d="M-2,-96.4 C1,-102.4 7,-104 12,-100" fill="none" stroke="#fff" stroke-width="0.8" opacity="0.4"/>'
-             f'<path d="M-1,-93.2 L0,-96 L2,-95.8 L1.6,-93.4Z" fill="{BRONZE["shade"]}"/>')
+            '<ellipse cx="-3.8" cy="-84.6" rx="3.2" ry="1.9" fill="#1d140e"/><ellipse cx="6.6" cy="-84.6" rx="3.2" ry="1.9" fill="#1d140e"/>'
+            f'<path d="M-10.6,-80 C-11.4,-90 -6,-97.6 1,-98" fill="none" stroke="{rim}" stroke-width="1.6" opacity="0.85"/>'
+            f'<path d="M-12.4,-77 C-10.8,-71 -7,-70 -4.4,-72.4" fill="none" stroke="{BRONZE["dark"]}" stroke-width="0.9" opacity="0.6"/>')
+        part(CREST, grad(c, "ucrest", [(0, "#ff8a6a"), (0.1, "#e0503e"), (0.6, "#b23a30"), (1, "#6a2020")]), "crest",
+             '<path d="M-7,-104 C-2,-113 10,-115.6 17.6,-108" fill="none" stroke="#fff" stroke-width="1.3" opacity="0.4"/>'
+             '<path d="M-5,-103.6 C0,-107 8,-108 14,-104 M-3,-102 C3,-104 9,-104.6 15,-100" fill="none" stroke="#000" stroke-width="0.8" opacity="0.18"/>'
+             f'<path d="M-1.4,-100.2 L-0.4,-104.4 L3,-104.2 L2.4,-100.2Z" fill="{BRONZE["shade"]}"/>')
     elif helmet == "pilos":
-        part(PILOS, metal, "cap", f'<path d="M-7.6,-86.6 C-3,-89.4 3.4,-89.4 8,-86.6 L7.8,-84.8 C3.4,-87.4 -3,-87.4 -7.4,-84.8Z" fill="{BRONZE["shade"]}"/>'
-             f'<path d="M-5.6,-88 C-5,-94 -2.2,-99.4 0.3,-101.6" fill="none" stroke="{BRONZE["hi"]}" stroke-width="0.9" opacity="0.9"/>')
+        part(PILOS, metal, "cap", f'<path d="M-13.2,-82.8 C-5,-87.6 6,-87.6 14.4,-82.8 L14,-80 C6,-84.6 -5,-84.6 -12.8,-80Z" fill="{BRONZE["shade"]}"/>'
+             f'<path d="M-9.6,-86 C-8.6,-96 -4,-105 0.6,-109.6" fill="none" stroke="{rim}" stroke-width="1.6" opacity="0.9"/>')
     elif helmet == "petasos":
         felt = grad(c, "ufelt", FELT)
-        hat = (f'<g transform="rotate(-7 0.4 -91)"><ellipse cx="0.4" cy="-90.6" rx="14" ry="3.6" fill="{felt}"/>'
-               f'<path d="M-5.6,-90.6 C-5.7,-95.8 -2.6,-98 0.5,-98 C3.9,-98 6.7,-95.8 6.5,-90.6Z" fill="{felt}"/>'
-               '<path d="M-5.6,-91.8 C-2,-93.2 3,-93.2 6.5,-91.8 L6.5,-90.4 C3,-91.6 -2,-91.6 -5.6,-90.4Z" fill="#6a4426"/>'
-               '<path d="M-13,-91.4 C-8,-93.6 4,-94 13.6,-91.6" fill="none" stroke="#fff6d8" stroke-width="0.7" opacity="0.7"/></g>')
+        brim = '<ellipse cx="0.6" cy="-92" rx="24" ry="6.2" fill="{f}"/><path d="M-9.6,-92 C-9.8,-100 -4.6,-104.4 0.8,-104.4 C6.6,-104.4 11.6,-100 11.2,-92Z" fill="{f}"/>'
         if "cap" in accents:
-            c.accent(f'<g transform="{tf}"><g transform="rotate(-7 0.4 -91)"><ellipse cx="0.4" cy="-90.6" rx="14" ry="3.6" fill="{acc}"/><path d="M-5.6,-90.6 C-5.7,-95.8 -2.6,-98 0.5,-98 C3.9,-98 6.7,-95.8 6.5,-90.6Z" fill="{acc}"/></g></g>')
+            c.accent(f'<g transform="{tf}"><g transform="rotate(-6 0.6 -92)">{brim.format(f=acc)}</g></g>')
         else:
-            art(hat)
+            art(f'<g transform="rotate(-6 0.6 -92)">{brim.format(f=felt)}</g>')
+        art('<g transform="rotate(-6 0.6 -92)"><path d="M-9.6,-94 C-3,-96.4 5,-96.4 11.2,-94 L11.2,-91.6 C5,-93.8 -3,-93.8 -9.6,-91.6Z" fill="#6a4426"/>'
+            f'<path d="M-22.4,-93 C-12,-97.4 8,-98 24.4,-93.2" fill="none" stroke="{rim}" stroke-width="1.2" opacity="0.8"/>'
+            '<path d="M-20,-89.2 C-8,-86 10,-86 22,-89.4" fill="none" stroke="#000" stroke-width="1.2" opacity="0.2"/></g>')
     elif helmet == "phrygian":
         part(PHRYGIAN, acc if "cap" in accents else grad(c, "uwool", WOOL), "cap",
-             '<path d="M-5.6,-90 C-5,-95 -1.6,-97.8 2.6,-98.6" fill="none" stroke="#fff" stroke-width="0.8" opacity="0.45"/>'
-             '<path d="M-4.8,-84.6 C-2,-87 2,-87 5,-84.6" fill="none" stroke="#000" stroke-width="0.7" opacity="0.3"/>')
+             f'<path d="M-9.6,-88 C-8.6,-97 -3,-102 4,-103.4" fill="none" stroke="{rim}" stroke-width="1.4" opacity="0.6"/>'
+             '<path d="M-8.4,-80 C-3.4,-84.4 3.4,-84.4 8.8,-80" fill="none" stroke="#000" stroke-width="1.1" opacity="0.3"/>')
     # shield in front
     if shield:
-        cx_, cy_, rx_, ry_ = (8, -54, 15.5, 19) if shield == "aspis" else (12.5, -55, 8.6, 10.2)
+        cx_, cy_, rx_, ry_ = (9, -50, 24.5, 27.5) if shield == "aspis" else (21, -48, 11.5, 13.5)
+        art(f'<ellipse cx="{f(cx_ + 2.4)}" cy="{f(cy_ + 2)}" rx="{rx_}" ry="{ry_}" fill="#1d140e" opacity="0.22"/>')
         if "shield" in accents:
-            sg = c.rad("ushield", 0.35, 0.3, 0.8, [(0, ACCENT["lit"]), (0.6, ACCENT["mid"]), (1, ACCENT["dark"])], bbox=True)
+            sg = c.rad("ushield", 0.32, 0.28, 0.85, [(0, ACCENT["lit"]), (0.45, ACCENT["light"]), (0.8, ACCENT["shade"]), (1, ACCENT["dark"])], bbox=True)
             c.accent(f'<g transform="{tf}"><ellipse cx="{cx_}" cy="{cy_}" rx="{rx_}" ry="{ry_}" fill="{sg}"/></g>')
         else:
             art(f'<ellipse cx="{cx_}" cy="{cy_}" rx="{rx_}" ry="{ry_}" fill="{metal}"/>')
-        rim = 2.4 if shield == "aspis" else 1.6
-        art(f'<ellipse cx="{cx_}" cy="{cy_}" rx="{rx_}" ry="{ry_}" fill="none" stroke="{BRONZE["base"]}" stroke-width="{rim}"/>'
-            f'<path d="M{f(cx_ - rx_ * 0.82)},{f(cy_ - ry_ * 0.4)} A{rx_},{ry_} 0 0 1 {f(cx_ - rx_ * 0.2)},{f(cy_ - ry_ * 0.97)}" fill="none" stroke="{BRONZE["hi"]}" stroke-width="{f(rim * 0.45)}"/>'
-            f'<path d="M{f(cx_ + rx_ * 0.9)},{f(cy_ + ry_ * 0.25)} A{rx_},{ry_} 0 0 1 {f(cx_ + rx_ * 0.2)},{f(cy_ + ry_ * 0.97)}" fill="none" stroke="{BRONZE["dark"]}" stroke-width="{f(rim * 0.5)}" opacity="0.8"/>')
+        rw = 4.2 if shield == "aspis" else 2.6
+        art(f'<ellipse cx="{cx_}" cy="{cy_}" rx="{f(rx_ - rw / 2)}" ry="{f(ry_ - rw / 2)}" fill="none" stroke="{BRONZE["base"]}" stroke-width="{rw}"/>'
+            f'<path d="M{f(cx_ - rx_ * 0.86)},{f(cy_ - ry_ * 0.36)} A{rx_},{ry_} 0 0 1 {f(cx_ - rx_ * 0.18)},{f(cy_ - ry_ * 0.97)}" fill="none" stroke="{rim}" stroke-width="{f(rw * 0.45)}" opacity="0.9"/>'
+            f'<path d="M{f(cx_ + rx_ * 0.92)},{f(cy_ + ry_ * 0.22)} A{rx_},{ry_} 0 0 1 {f(cx_ + rx_ * 0.18)},{f(cy_ + ry_ * 0.97)}" fill="none" stroke="{BRONZE["dark"]}" stroke-width="{f(rw * 0.55)}" opacity="0.85"/>')
         if shield == "aspis":
-            # painted emblem in cream: a stylised lambda-like chevron, and a boss
-            art(f'<path d="M{f(cx_ - 6)},{f(cy_ + 7)} L{f(cx_)},{f(cy_ - 8)} L{f(cx_ + 6)},{f(cy_ + 7)}" fill="none" stroke="#f4ead2" stroke-width="2.4" stroke-linejoin="round" opacity="0.92"/>')
+            # painted emblem in cream: a bold chevron
+            art(f'<path d="M{f(cx_ - 10)},{f(cy_ + 11)} L{f(cx_)},{f(cy_ - 12)} L{f(cx_ + 10)},{f(cy_ + 11)}" fill="none" stroke="#f4ead2" stroke-width="5" stroke-linejoin="round" opacity="0.95"/>'
+                f'<path d="M{f(cx_ - 10)},{f(cy_ + 11)} L{f(cx_)},{f(cy_ - 12)} L{f(cx_ + 10)},{f(cy_ + 11)}" fill="none" stroke="#000" stroke-width="1" stroke-linejoin="round" opacity="0.12" transform="translate(1 1)"/>')
         else:
-            art(f'<circle cx="{cx_}" cy="{cy_}" r="2" fill="{BRONZE["lit"]}"/><circle cx="{f(cx_ - 0.5)}" cy="{f(cy_ - 0.5)}" r="0.7" fill="{BRONZE["hi"]}"/>')
+            art(f'<circle cx="{cx_}" cy="{cy_}" r="3.4" fill="{BRONZE["lit"]}"/><circle cx="{f(cx_ - 1)}" cy="{f(cy_ - 1)}" r="1.2" fill="{rim}"/>')
 
 
 # ---------------------------------------------------------------------------
@@ -373,42 +394,53 @@ def horse(c, x, y, h=40, coat=HORSE_BAY, mane="#2b1c12", saddle=True, accents=("
     return (x + 2 * k, y - 58.5 * k)
 
 
-def rider(c, x, y, h=34, accents=("cloak",), helmet="crest"):
-    """Rider seated on a horse, facing left (profile), seat at screen point (x, y).
-    Holds a javelin raised; cloak streams behind (ACCENT if 'cloak' in accents)."""
-    k = h / 50.0
-    tf = f"translate({f(x)} {f(y)}) scale({f(k)})"
+def rider(c, x, y, h=40, accents=("cloak",), helmet="crest"):
+    """Chunky rider seated on a horse, facing left (profile), seat at screen point (x, y).
+    h = seat -> helmet top in px. Javelin raised; cloak streams behind (ACCENT if 'cloak' in
+    accents; 'crest' may be an accent too)."""
+    k = h / 52.0
+    tf = f"translate({f(x)} {f(y)}) scale({f(k * 1.1)} {f(k)})"
     skin = grad(c, "uskin", SKIN)
     metal = grad(c, "umetal", METAL)
     tun = grad(c, "utunic", LINEN)
+    rim = "#fff4dc"
 
     def art(m):
         c.add(f'<g transform="{tf}">{m}</g>')
 
-    cloak = "M2,-40 C10,-40 18,-34 24,-22 C19,-23 16,-20 13,-15 C11,-22 8,-28 2,-30Z"
+    cloak = "M3,-29 C13,-30 24,-22 32,-7 C25,-8 21,-5 17,1 C14,-8 9,-14 3,-16Z"
     if "cloak" in accents:
         c.accent(f'<g transform="{tf}"><path d="{cloak}" fill="{grad(c, "uacc", CLOTH_ACCENT)}"/></g>')
+        art('<path d="M8,-26 C15,-22 21,-15 25,-7" fill="none" stroke="#000" stroke-width="1.2" opacity="0.2"/>')
     else:
         art(f'<path d="{cloak}" fill="{grad(c, "ucloak", WOOL)}"/>')
-    # javelin (behind the arm), leg, torso, arm, head
-    art(f'<path d="M-24,-62 L8,-12" stroke="{WOOD["dark"]}" stroke-width="1.3"/><path d="M-27.4,-67.4 L-22.6,-62.6 L-24.6,-60.6Z" fill="{BRONZE["lit"]}"/>'
-        f'<path d="M-4,-2 C-6,4 -7,12 -9,20 L-4.4,21 C-2.4,13 0.6,6 2.6,0Z" fill="{skin}"/><path d="M-10.4,19.6 L-3.6,19.6 L-4,22.6 L-11.4,22.6Z" fill="#5e3b22"/>'
-        f'<path d="M-7,0 C-8,-6 -7,-14 -6,-18 L6,-18 C7,-12 7,-6 6,0 C3,2 -4,2 -7,0Z" fill="{tun}"/>'
-        f'<path d="M-6.4,-17 C-7,-26 -6,-32 -3,-36 L5,-36 C7,-31 7.4,-24 6.4,-17Z" fill="{metal}"/>'
-        f'<path d="M-5.6,-20 C-6,-26 -5.2,-31 -2.6,-34.6" fill="none" stroke="{BRONZE["hi"]}" stroke-width="0.9"/>'
-        f'<path d="M-3,-33 C-8,-34 -13,-38 -17,-43 L-14,-46 C-11,-42 -6,-39 0,-38Z" fill="{skin}"/>'
-        f'<circle cx="-16.6" cy="-45.4" r="2.2" fill="{skin}"/>'
-        f'<path d="M-2,-38 L3,-38 L3.4,-34 L-2.4,-34Z" fill="{skin}"/>'
-        f'<ellipse cx="0" cy="-43" rx="5.2" ry="6" fill="{skin}"/>'
-        f'<ellipse cx="-3.4" cy="-43.6" rx="0.6" ry="0.5" fill="#2a1d14"/>')
+    # javelin behind the raised arm
+    art(f'<path d="M10,-26 L-27,-61" stroke="{WOOD["dark"]}" stroke-width="2.4" stroke-linecap="round"/><path d="M10,-26 L-27,-61" stroke="#c99a6a" stroke-width="0.8"/>'
+        f'<path d="M-32,-66 L-24.6,-61.6 L-27.6,-58.4Z" fill="{BRONZE["lit"]}"/>')
+    # thigh + shin hanging along the horse's flank
+    art(f'<path d="M3,-1 C-4,0 -10,1 -12.6,5 L-12,19 L-5,19 L-5.6,9 C-2,6 3,4 6,2Z" fill="{skin}"/>'
+        f'<path d="M-13.6,18 L-4.4,18 L-4.6,22.4 L-15,22.4Z" fill="#5e3b22"/>'
+        f'<path d="M-11.6,7 L-11.2,17" stroke="{rim}" stroke-width="1" opacity="0.6"/>')
+    # torso: tunic + cuirass
+    art(f'<path d="M-9,1 C-10,-5 -9,-11 -8,-15 L8,-15 C9,-10 9,-4 8,1 C4,3 -5,3 -9,1Z" fill="{tun}"/>'
+        f'<path d="M-8.6,-14 C-9.6,-22 -8.6,-29 -4.6,-32.4 L6.6,-32.4 C9,-28 9.6,-21 8.6,-14Z" fill="{metal}"/>'
+        f'<path d="M-7.6,-16 C-8.4,-22 -7.6,-28 -4.4,-31" fill="none" stroke="{rim}" stroke-width="1.3" opacity="0.85"/>'
+        f'<rect x="-8.6" y="-16" width="17.2" height="2" fill="{BRONZE["dark"]}" opacity="0.5"/>')
+    # arm raised forward with the javelin
+    art(f'<path d="M-3,-30 C-9,-33 -13,-38 -17,-45 L-11.6,-48.4 C-8.6,-42 -4,-38 2,-35Z" fill="{skin}"/>'
+        f'<circle cx="-15.6" cy="-47.6" r="4" fill="{skin}"/>')
+    # head in profile + helmet with crest
+    art(f'<circle cx="-0.6" cy="-41" r="9" fill="{skin}"/><path d="M-9.4,-42 L-11.8,-38.6 L-9,-37.4Z" fill="{skin}"/>'
+        '<ellipse cx="-5.4" cy="-42" rx="1.3" ry="1.1" fill="#2a1d14"/>')
     if helmet == "crest":
-        art(f'<path d="M-5.6,-41 C-6.4,-47 -3.6,-50.6 0.6,-50.6 C4.8,-50.6 6.6,-47.6 6,-42 L6.4,-38 L3,-37.6 L2.6,-41.6 L-2,-42 L-2.2,-39 Z" fill="{metal}"/>'
-            '<path d="M-4.6,-42.4 C-4.8,-47 -2.4,-49.6 0.6,-49.8" fill="none" stroke="#fff3cf" stroke-width="0.8" opacity="0.8"/>')
-        crest = "M-4,-49.6 C-3,-57 8,-59 13,-52 C14,-49 13,-45 11,-42 C9.6,-47 5,-50.6 -1,-50.4Z"
+        art(f'<path d="M-9.8,-42 C-10.6,-50 -5.4,-54.6 0,-54.6 C6.4,-54.6 10.4,-50 9.4,-42 L10.4,-35 L5.4,-34 L4.2,-40.4 L-6.4,-41.6Z" fill="{metal}"/>'
+            f'<path d="M-8.6,-43.6 C-8.8,-50 -4.6,-53.4 0,-53.6" fill="none" stroke="{rim}" stroke-width="1.3" opacity="0.85"/>')
+        crest = "M-8.6,-52.6 C-7,-63 8,-66 16,-57.4 C18.6,-53 18,-47.6 15.4,-43.4 C13.6,-50 7.4,-54.6 -0.6,-54.6Z"
         if "crest" in accents:
             c.accent(f'<g transform="{tf}"><path d="{crest}" fill="{grad(c, "uacc", CLOTH_ACCENT)}"/></g>')
         else:
-            art(f'<path d="{crest}" fill="{grad(c, "ucrest", [(0, "#e0503e"), (0.6, "#b23a30"), (1, "#7a2420")])}"/>')
+            art(f'<path d="{crest}" fill="{grad(c, "ucrest", [(0, "#ff8a6a"), (0.1, "#e0503e"), (0.6, "#b23a30"), (1, "#6a2020")])}"/>'
+                '<path d="M-5.6,-56 C-2,-61.6 7,-63 13,-57.6" fill="none" stroke="#fff" stroke-width="1.1" opacity="0.4"/>')
 
 
 def cart(c, u0, u1, z0, z1, wheel_u, wheel_r, cover_h, accents=("cover",)):

@@ -13,9 +13,9 @@ def build():
     c = U.UnitCanvas("horseman")
     U.token(c, seed=15)
     x, y = c.P(0, 0, 0)
-    U.ground_shadow(c, x + 3, y + 3, 24, length=18)
-    sx, sy = U.horse(c, x + 3, y + 4, h=50)
-    U.rider(c, sx, sy, h=30, accents=("cloak",))
+    U.ground_shadow(c, x + 3, y + 4, 34, length=16)
+    sx, sy = U.horse(c, x + 4, y + 6, h=58)
+    U.rider(c, sx, sy, h=40, accents=("cloak",))
     return c
 
 

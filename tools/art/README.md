@@ -237,7 +237,7 @@ def build():
     U.token(c, seed=3)                   # first; top="water" for ships
     x, y = c.P(0, 0, 0)                  # token centre = where the feet go
     U.ground_shadow(c, x, y, 10)
-    U.person(c, x, y, h=70, helmet="pilos", hold="spear", shield="round", accents=("shield",))
+    U.person(c, x, y, h=76, helmet="pilos", hold="spear", shield="round", accents=("shield",))
     return c
 ```
 
@@ -248,19 +248,24 @@ def build():
   local x = u, y = z) and `c.m_flat(z)` (ground). `from_uv(u, v)` converts to `c.at(a, b)`.
 - `token(c, top="grass"|"water", seed)` – always first; defines the clip `c.url("top")`.
 - `ground_shadow(c, x, y, w, length)` – contact + cast shadow under a figure.
-- `person(c, x, y, h=70, tunic=LINEN|WOOL|"accent", hem, armor=None|"cuirass",
+- `person(c, x, y, h=80, tunic=LINEN|WOOL|"accent", hem, armor=None|"cuirass",
   legs="bare"|"greaves", stride, beard, helmet=None|"corinthian"|"pilos"|"petasos"|"phrygian",
   cloak=None|material|"accent", cloak_flow, hold=None|"spear"|"staff"|"bow", shield=None|"aspis"|
-  "round", quiver, accents=("shield", "crest", "cloak", "cap", "tunic"), wide=1.12)` – a painted
-  miniature, front view, feet at (x, y). `h` is feet → top of the head.
+  "round", quiver, accents=("shield", "crest", "cloak", "cap", "tunic"), wide=1.15)` – a chunky
+  painted miniature (head ~1/4 of the height, broad shoulders, thick limbs), front view, feet at
+  (x, y). `h` is feet → top of the head; 70–80 fills the token. Crests, hats and spears rise
+  above it – keep everything inside the canvas (y ≥ 2).
 - `horse(c, x, y, h, coat=HORSE_BAY|DONKEY, saddle, accents=("saddle",))` → seat point;
-  `rider(c, seat_x, seat_y, h, accents=("cloak",))`.
+  `rider(c, seat_x, seat_y, h, accents=("cloak",))` (h ≈ 58 / 40 fill the token).
 - `cart(c, u0, u1, z0, z1, wheel_u, wheel_r, cover_h)` – two-wheeled cart with an owner cover.
 - Ships: `ship_hull(c, L, W, hd, sheer_bow, sheer_stern, colours, deck)` → near gunwale points;
   `sail(c, u0, u1, z_foot, z_yard)` (owner colour), `oars(c, near, u_from, u_to, n)`,
   `ship_amphora(...)`, and the complete `transport_details` / `trireme_details`.
 - Materials: `SKIN`, `LINEN`, `WOOL`, `LEATHER`, `FELT`, `METAL`, `CLOTH_ACCENT`, `HORSE_BAY`, `DONKEY`.
 
-Silhouettes must differ at 32 px: hoplite = big round shield + crest; spearman = small shield +
-conical cap; scout = wide hat + flying cloak; archer = drawn bow; settler = covered cart;
+Figures are **chunky board-game miniatures**: at a 32 px token they need ~60 % of the token
+width, limbs of several px and the same light as the buildings (warm lit side with a rim light,
+cool shade, a reflected edge – built into the material ramps `SKIN`, `LINEN`, `METAL` ...).
+Silhouettes must differ at 32 px: hoplite = huge round aspis + tall crest; spearman = small shield +
+conical cap + upright spear; scout = wide hat + flying cloak; archer = drawn bow; settler = covered cart;
 horseman = horse; transport = square sail; trireme = long low hull with oars.

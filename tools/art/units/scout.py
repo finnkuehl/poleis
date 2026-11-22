@@ -12,9 +12,9 @@ import units_lib as U  # noqa: E402
 def build():
     c = U.UnitCanvas("scout")
     U.token(c, seed=9)
-    x, y = c.P(-2, 2, 0)
-    U.ground_shadow(c, x, y, 11)
-    U.person(c, x, y, h=68, hem=-42, beard=False, stride=1.0, helmet="petasos", cloak="accent",
+    x, y = c.P(-3, 4, 0)
+    U.ground_shadow(c, x, y, 18, length=24)
+    U.person(c, x - 2, y, h=76, hem=-34, beard=False, stride=1.0, helmet="petasos", cloak="accent",
              cloak_flow=True, hold="staff", accents=("cloak",))
     return c
 
