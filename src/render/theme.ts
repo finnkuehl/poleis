@@ -160,7 +160,9 @@ export const theme = {
    * Largest texture an SVG is rasterized to (px, longer side). The game picks the size that stays
    * sharp at maximum zoom (up to this cap); lower = less memory, softer art when zoomed in.
    */
-  artMaxTexturePx: 384,
+  // 320 keeps the full art set at about 27 MB of texture memory on DPR-2 phones (384 ≈ 38 MB)
+  // and only softens the art slightly at the very closest zoom.
+  artMaxTexturePx: 320,
   /**
    * City-level rings around a diorama building: an ellipse on the ground around the foot of the
    * round base, this many px away from it. The Metropolis' second ring is drawn this many px
