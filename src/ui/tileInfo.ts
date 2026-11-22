@@ -42,6 +42,9 @@ import {
 import { buildingIcon, goodIcon, goodText, ownerColor, unitIcon } from './art';
 import { button, el } from './dom';
 import {
+  aboardText,
+  cargoText,
+  type AboardState,
   onTheWayText,
   unitStatLine,
   unitStatus,
@@ -126,6 +129,10 @@ export interface UnitInfo {
   order?: { turns: number | null; onStop(): void } | null;
   /** Settlers only: the "Found city here" button. */
   found?: { ok: boolean; reason?: string; onFound(): void };
+  /** Own transport ships: the passengers (each a button that selects it). */
+  cargo?: { capacity: number; passengers: Unit[]; onSelect(id: number): void };
+  /** A passenger: can it land (a free shore tile)? `onShip` selects its ship again. */
+  aboard?: { state: AboardState; onShip(): void };
 }
 
 export interface TradeInfo {
@@ -367,6 +374,31 @@ export function createTileInfoPanel(root: HTMLElement, onClose: () => void): Til
     return wrap;
   }
 
+  /** "Aboard: 1 / 2" and one 48 px button per passenger (tap = select it, then tap a shore tile). */
+  function cargoSection(c: NonNullable<UnitInfo['cargo']>): HTMLElement {
+    const wrap = el('div', 'build-here');
+    wrap.appendChild(el('h3', 'build-here__title', cargoText(c.passengers.length, c.capacity)));
+    if (c.passengers.length === 0) {
+      wrap.appendChild(el('p', 'tile-info__hint', en.unitText.aboardEmpty));
+    }
+    for (const p of c.passengers) {
+      const item = button('build-item build-item--here', '');
+      item.setAttribute('aria-label', fill(en.unitText.landAria, { unit: en.units[p.type] }));
+      const icon = el('span', 'build-item__icon');
+      icon.setAttribute('aria-hidden', 'true');
+      icon.appendChild(unitIcon(p.type, ownerColor(p.owner)));
+      const body = el('span', 'build-item__body');
+      body.appendChild(el('span', 'build-item__name', en.units[p.type]));
+      body.appendChild(
+        el('span', 'build-item__effect', fill(en.unitText.hp, { hp: p.hp, max: UNITS[p.type].hp })),
+      );
+      item.append(icon, body);
+      item.addEventListener('click', () => c.onSelect(p.id));
+      wrap.appendChild(item);
+    }
+    return wrap;
+  }
+
   function showUnit(o: UnitInfo): void {
     const def = UNITS[o.unit.type];
     setHeader(
@@ -413,6 +445,13 @@ export function createTileInfoPanel(root: HTMLElement, onClose: () => void): Til
     } else {
       nodes.push(terrainLine(o.terrain));
     }
+    if (o.own && o.aboard) {
+      nodes.push(el('p', 'tile-info__hint', aboardText(o.aboard.state)));
+      const back = button('btn btn--secondary unit-stop', en.unitText.backToShip);
+      back.addEventListener('click', o.aboard.onShip);
+      nodes.push(back);
+    }
+    if (o.own && o.cargo) nodes.push(cargoSection(o.cargo));
     if (o.own && o.found) {
       const found = o.found;
       const b = button('btn btn--primary unit-found', en.unitText.foundCity);

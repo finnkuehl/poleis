@@ -15,7 +15,7 @@ import { tileIndex } from '../map';
 import type { GameState, PlayerId } from '../state';
 import type { RuleError } from './errors';
 import { canAfford, missingGoods, pay } from './goods';
-import { isFreeLand } from './movement';
+import { isFreeLand, isFreeWater, pruneUnits } from './movement';
 import { ownerAt } from './territory';
 import type { UnitsReport } from './production';
 
@@ -26,12 +26,18 @@ export function orderTraining(
   barracksId: number,
   unit: UnitId,
 ): RuleError | null {
+  // `barracksId` is the id of the training building: a barracks (land units) or a harbor (ships).
   const barracks = state.buildings.find((b) => b.id === barracksId);
-  if (!barracks || barracks.owner !== player || barracks.type !== 'barracks') {
+  if (
+    !barracks ||
+    barracks.owner !== player ||
+    (barracks.type !== 'barracks' && barracks.type !== 'harbor')
+  ) {
     return { code: 'notOwnBuilding' };
   }
-  if (state.training.some((t) => t.barracksId === barracksId)) return { code: 'alreadyTraining' };
   const def = UNITS[unit];
+  if (def.trainedIn !== barracks.type) return { code: 'wrongTrainingBuilding' };
+  if (state.training.some((t) => t.barracksId === barracksId)) return { code: 'alreadyTraining' };
   const cityId = state.tileCity[tileIndex(state.map, barracks.hex)];
   const city = state.cities.find((c) => c.id === cityId && c.owner === player);
   if (!city) return { code: 'notOwnCity' };
@@ -82,12 +88,17 @@ export function spawnUnits(state: GameState, player: PlayerId): number {
     const barracks = state.buildings.find((b) => b.id === order.barracksId);
     // The barracks was demolished meanwhile: the order is lost.
     if (!barracks) continue;
-    const spot = [barracks.hex, ...neighbors(barracks.hex)].find((h) => isFreeLand(state, h));
+    const def = UNITS[order.unit];
+    // Land units: the barracks tile or a free walkable tile next to it.
+    // Ships: a free water tile next to the harbor.
+    const spot =
+      def.domain === 'sea'
+        ? neighbors(barracks.hex).find((h) => isFreeWater(state, h))
+        : [barracks.hex, ...neighbors(barracks.hex)].find((h) => isFreeLand(state, h));
     if (!spot) {
       waiting.push(order);
       continue;
     }
-    const def = UNITS[order.unit];
     state.units.push({
       id: state.nextId++,
       type: order.unit,
@@ -100,6 +111,7 @@ export function spawnUnits(state: GameState, player: PlayerId): number {
       attacked: false,
       capturing: null,
       order: null,
+      aboard: null,
     });
     spawned++;
   }
@@ -128,8 +140,8 @@ export function runUpkeep(
   let lost = 0;
   if (starving) {
     for (const u of own) u.hp -= militaryConfig.starvationDamage;
-    lost = own.filter((u) => u.hp <= 0).length;
-    state.units = state.units.filter((u) => u.hp > 0);
+    // Passengers of a ship that starved to death are lost with it.
+    lost = pruneUnits(state);
   }
   return { upkeepEaten, starving, lost };
 }

@@ -43,7 +43,8 @@ export interface EconomyLayers {
   update(state: GameState, statuses: Record<number, BuildingStatus>, viewer: PlayerId): void;
   /** Test option: buildings on every tile (no fog). Takes effect on the next update. */
   setRevealAll(value: boolean): void;
-  setHighlights(hexes: readonly Hex[]): void;
+  /** `board`: tiles that also get an anchor marker (boarding a ship). */
+  setHighlights(hexes: readonly Hex[], board?: readonly Hex[]): void;
   setPathPreview(path: readonly Hex[] | null, newTiles: readonly Hex[]): void;
 }
 
@@ -320,6 +321,33 @@ export function createEconomyLayers(art: ArtSet = NO_ART): EconomyLayers {
     }
   }
 
+  /** An anchor inside a ring: marks the tile of an own ship a unit can board. */
+  function drawAnchorMark(g: Graphics, center: { x: number; y: number }): void {
+    // At the top of the tile, so the ship's token stays visible
+    const c = { x: center.x, y: center.y - hexSize * theme.boardMark.offsetFactor };
+    const r = hexSize * theme.boardMark.radiusFactor;
+    const color = theme.boardMark.color;
+    const w = theme.boardMark.width;
+    g.circle(c.x, c.y, r).fill({
+      color: theme.boardMark.backColor,
+      alpha: theme.boardMark.backAlpha,
+    });
+    g.circle(c.x, c.y, r).stroke({ color, width: w });
+    // Shank, stock, ring on top, and the curved arms at the bottom
+    const a = r * 0.55;
+    g.moveTo(c.x, c.y - a)
+      .lineTo(c.x, c.y + a * 0.8)
+      .stroke({ color, width: w, cap: 'round' });
+    g.moveTo(c.x - a * 0.5, c.y - a * 0.4)
+      .lineTo(c.x + a * 0.5, c.y - a * 0.4)
+      .stroke({ color, width: w, cap: 'round' });
+    g.circle(c.x, c.y - a * 1.1, a * 0.18).stroke({ color, width: w * 0.8 });
+    g.moveTo(c.x - a * 0.7, c.y + a * 0.2)
+      .quadraticCurveTo(c.x - a * 0.6, c.y + a * 0.85, c.x, c.y + a * 0.85)
+      .quadraticCurveTo(c.x + a * 0.6, c.y + a * 0.85, c.x + a * 0.7, c.y + a * 0.2)
+      .stroke({ color, width: w, cap: 'round' });
+  }
+
   return {
     below: [tint, border, roads.roads, ground, objects, labels, badges],
     sorted: objects,
@@ -333,8 +361,9 @@ export function createEconomyLayers(art: ArtSet = NO_ART): EconomyLayers {
     setRevealAll(value) {
       revealAll = value;
     },
-    setHighlights(hexes) {
+    setHighlights(hexes, board = []) {
       highlights.clear();
+      for (const h of board) drawAnchorMark(highlights, hexToPixel(h, hexSize));
       for (const h of hexes) {
         highlights
           .poly(flatCorners(hexToPixel(h, hexSize)))

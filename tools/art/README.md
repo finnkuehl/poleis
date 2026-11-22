@@ -54,8 +54,8 @@ beach, fields) under it. The art contains only the building and its props, with 
   building and its props inside `iso.GROUND_R` (58 world units), a bit tighter than the old base,
   so everything sits on the game's ground patch.
 
-**All 20 buildings are grounded:** `bakery`, `barracks`, `borderTower`, `cityCenter`, `farm`,
-`fishery` (as direction variants, see below), `house`, `marketplace`, `mine`, `oilPress`,
+**All 21 buildings are grounded:** `bakery`, `barracks`, `borderTower`, `cityCenter`, `farm`,
+`fishery` and `harbor` (both as direction variants, see below), `house`, `marketplace`, `mine`, `oilPress`,
 `oliveGrove`, `quarry`, `sawmill`, `smelter`, `storehouse`, `temple`, `vineyard`, `winery`,
 `wonder`, `woodcutter`. `iso.base()` (the old round diorama base with the owner-colour rim band)
 is still in the library, but **no building uses it any more**. Units keep their round token
@@ -70,6 +70,7 @@ What the art contains and what the game draws around it:
 | vineyard | only the press hut, the pergola and the harvest | the vine rows across the tile |
 | farm | farmhouse, haystacks, cart, well – **no fields** | the wheat fields across the tile |
 | fishery | hut, short jetty, moored boat (one file per water direction) | beach, yard and the water – see "Direction variants" |
+| harbor | warehouse, stone quay, crane, goods, rowing boat (one file per water direction) | beach, yard and the water – see "Direction variants" |
 | cityCenter, temple | the building incl. its steps | the paved plaza |
 | all others | the building and its props | a yard / clearing patch |
 
@@ -100,6 +101,7 @@ Measured reference (the grounded buildings; world units, door = w × h):
 | farm (farmhouse) | 34 × 22, two haystacks, cart, well | 27 / 41 | 9 × 16 | 48 |
 | woodcutter (cabin) | 32 × 40, log stack 29 × 22 | 24 / 39 | 9 × 16 | 54 |
 | fishery (hut) | 34 × 22 on stilts (floor at 8), deck +5 | 28 / 43 | 9 × 16 | see "Direction variants" |
+| harbor | warehouse 40 × 24, quay 20 wide × ~75 long, crane ~37 high | 24 / 35 | 9 × 16 | see "Direction variants" |
 | storehouse | 76 × 34 | 29 / 41 | 9 × 16 | 53 |
 | temple | 59 × 77 (bottom step) | 62 / 73 | 9 × 16 | 54 |
 | cityCenter (tholos) | Ø 77 (bottom step) | 54 / 84 (+ finial) | 9 × 16 | 55 |
@@ -121,15 +123,16 @@ Measured reference (the grounded buildings; world units, door = w × h):
 tower (flag ~117) stops a little below it; then the city centre (84) above the temple (73); all
 other buildings stay at one or two storeys (≤ 54, the mine's rock peak).
 
-## Direction variants (the fishery; later the harbour)
+## Direction variants (fishery and harbor)
 
 A building that reaches into a neighbouring tile is drawn as **one scene per hex edge**, and the
-game picks the version that points at the real water. `buildings/fishery.py` builds 7 files:
+game picks the version that points at the real water. `buildings/fishery.py` and
+`buildings/harbor.py` build 7 files each:
 
 | File | What |
 |---|---|
-| `fishery.svg` (+ accent) | compact icon on the normal `0 0 256 256` canvas: hut, short jetty, boat, toward the south-east |
-| `fishery.e0.svg` … `fishery.e5.svg` (+ accent) | the map versions; the jetty points along the screen angle **60° · e** (y down): 0 east, 1 south-east, 2 south-west, 3 west, 4 north-west, 5 north-east |
+| `fishery.svg`, `harbor.svg` (+ accent) | compact icon on the normal `0 0 256 256` canvas (no `data-anchor`), toward the south-east |
+| `fishery.e0.svg` … `fishery.e5.svg`, `harbor.e0.svg` … `harbor.e5.svg` (+ accent) | the map versions; the jetty / quay points along the screen angle **60° · e** (y down): 0 east, 1 south-east, 2 south-west, 3 west, 4 north-west, 5 north-east |
 
 Canvas contract of a variant (the game relies on it):
 
@@ -148,9 +151,20 @@ Canvas contract of a variant (the game relies on it):
   `LAYOUT` in `fishery.py` sets where the jetty leaves the hut, which side the boat lies on, and
   the props. East / west jetties turn 14° toward the viewer, so the planks show instead of a
   fence-like edge.
+- **Harbor** layout (`harbor.py`, M6): on land a whitewashed warehouse (40 × 24, door 9 × 16,
+  water side at 58–66, centre 18–43 out) with a two-tone awning over its goods and a banner;
+  amphorae, crates and sacks at the quay's root (70–92); a broad stone quay (20 wide, 6.5 high,
+  cut blocks in two courses, paving slabs, a lit coping, a few bollards, a wet band and foam
+  where it stands in water beyond 110) from the beach at **82** over the shared edge to **165**;
+  an A-frame crane (shear legs) on its outer part lowering a net of amphorae into a small moored
+  rowing boat (`fishery.boat(..., mast=False)`). **No big ship** – ships are units. The game's
+  yard belongs about 50 out (radius ~55, under the warehouse and the quay's root). Per direction
+  `LAYOUT` in `harbor.py` sets the warehouse's place along the shore, the boat's side and the
+  goods. The quay is not tilted (broad stone reads well sideways too).
 - No painted water surface: only foam rings, the boat's waterline foam and soft shadows.
 
-How it is built (reuse it for the harbour): `Canvas(asset_id, pid=..., stem="fishery.e0")`,
+How it is built (the harbor reuses `fishery.py`'s `Scene`, direction helpers and boat):
+`Canvas(asset_id, pid=..., stem="fishery.e0")`,
 then set `c.viewbox = (x, y, w, h)` and `c.anchor_marker = True` before `write()`. Everything in
 the scene is placed in world units from the screen direction (`screen_world(deg)` in
 `fishery.py`); rotated parts are drawn from projected points (`c.P`), vertical planes at any
@@ -158,6 +172,8 @@ angle with `c.m_vplane(a, b, da, db)`. A small painter's sort (`Scene` in `fishe
 ground-level things first, then every object by its depth `a + b`, so the jetty correctly passes
 in front of or behind the hut. `Scene.viewbox()` fits the viewBox to the points the parts
 register. `preview.py` reads each file's viewBox, so `preview.py fishery.e1` works.
+`fishery.boat(sc, a, b, d, L, HWB, mast=True)` returns `(W, gz)` (the boat's point function and
+gunwale height), so a script can add oars or a mooring line.
 
 ## Two layers per asset (the accent rule)
 
@@ -361,7 +377,7 @@ The building libraries `lib_raw.py` (raw materials), `lib_processing.py` (worksh
 module docstrings list everything. Reusable pieces worth knowing:
 
 - `lib_raw.treadwheel_b(c, a, b, z, r, width=5, spokes=8, treads=22)` – the treadwheel of a crane
-  (quarry; reusable for the harbour).
+  (quarry; reusable for the harbor).
 - `lib_processing.awning_a(c, b0, b1, a, z, depth, drop, stripes=7)` – a two-tone owner-colour
   awning sloping out of a +a (shaded) wall; `iso.awning_b` is the +b counterpart.
 - `lib_civic.stall(..., two_tone=True)` – market stall whose awning is in two shades of the owner

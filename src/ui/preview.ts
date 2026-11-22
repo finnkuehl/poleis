@@ -465,6 +465,7 @@ function sampleUnit(type: UnitId, over: Partial<Unit> = {}): Unit {
     attacked: false,
     capturing: null,
     order: null,
+    aboard: null,
     ...over,
   };
 }

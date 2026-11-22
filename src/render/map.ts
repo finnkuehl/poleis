@@ -39,7 +39,7 @@ export interface MapView {
   /** Ghost token at world position; null hides it. */
   setGhost(unit: { type: string; owner: number } | null, x?: number, y?: number): void;
   /** Highlights valid tiles; [] clears. */
-  setHighlights(hexes: readonly Hex[]): void;
+  setHighlights(hexes: readonly Hex[], board?: readonly Hex[]): void;
   /** Road preview along `path`, dots on `newTiles`; null clears. */
   setPathPreview(path: readonly Hex[] | null, newTiles: readonly Hex[]): void;
   /** Draws move-order paths; [] clears. */

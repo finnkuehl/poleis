@@ -8,6 +8,7 @@ import { hexSize } from './config';
 import { edgeNeighborHex } from './geometry';
 import {
   FIELD_CELL_REACH,
+  cargoBadgeCount,
   GROUND_KIND,
   OUTLINE_SAMPLES_PER_EDGE,
   cellCorners,
@@ -796,5 +797,38 @@ describe('town ground', () => {
       { x: 0, y: 0 },
       { x: d * 1.1, y: 0 },
     ]);
+  });
+});
+
+describe('ships on the map', () => {
+  /** A transport with one passenger on coastal water, an enemy transport next to it. */
+  function withShips(): GameState {
+    const state = makeTestState(['pppp', 'cccc', 'cccc']);
+    state.players.push({ ...state.players[0], id: 1, isHuman: false, explored: [] });
+    const ship = addUnit(state, 'transport', at(1, 1), { owner: 0 });
+    const rider = addUnit(state, 'spearman', at(1, 1), { owner: 0 });
+    state.units.find((u) => u.id === rider)!.aboard = ship;
+    addUnit(state, 'transport', at(2, 1), { owner: 1 });
+    return state;
+  }
+
+  it('passengers are never drawn as their own figure', () => {
+    const state = withShips();
+    const types = unitsShownTo(state, 0, true).map((u) => u.type);
+    expect(types).toEqual(['transport', 'transport']);
+  });
+
+  it('only the viewer sees the cargo badge of its own ship', () => {
+    const state = withShips();
+    const [own, enemy] = state.units.filter((u) => u.type === 'transport');
+    expect(cargoBadgeCount(state, own, own.owner)).toBe(1);
+    expect(cargoBadgeCount(state, own, 1)).toBeNull();
+    expect(cargoBadgeCount(state, enemy, 0)).toBeNull();
+    expect(cargoBadgeCount(state, enemy, 1)).toBeNull();
+  });
+
+  it('ships and passengers leave no footprint', () => {
+    const state = withShips();
+    expect(unitFootprints(state, 0, true, size)).toHaveLength(0);
   });
 });

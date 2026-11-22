@@ -59,6 +59,7 @@ export const BUILDING_ART_BOUNDS: Readonly<Record<BuildingId, ArtBounds>> = {
   quarry: [44.5, 79, 200.5, 214.5],
   mine: [62, 77.5, 206.5, 204.5],
   barracks: [49.2, 48.2, 218, 205.5],
+  harbor: [82, 62, 181, 226],
   marketplace: [46.8, 72.2, 199.2, 218.5],
   wonder: [47, 6.8, 206.5, 217],
   borderTower: [60, 16, 173.8, 208.8],

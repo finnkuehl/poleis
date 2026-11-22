@@ -11,6 +11,7 @@ import {
   type CityLevel,
   type Goods,
   type Stock,
+  type TrainingBuildingId,
   type UnitId,
 } from '../data';
 import { en } from '../i18n/en';
@@ -116,10 +117,13 @@ export function trainOptions(facts: {
   cityLevel: CityLevel;
   residents: number;
   stock: Stock;
+  /** The training building (default: barracks; a harbor lists the ships). */
+  building?: TrainingBuildingId;
 }): TrainOption[] {
   const options: TrainOption[] = [];
   for (const id of UNIT_IDS) {
     const def = UNITS[id];
+    if (def.trainedIn !== (facts.building ?? 'barracks')) continue;
     if (CITY_LEVELS.indexOf(facts.cityLevel) < CITY_LEVELS.indexOf(def.minLevel)) {
       options.push({ id, state: 'locked', level: def.minLevel });
       continue;
@@ -178,4 +182,34 @@ export function orderOutcomeText(
     case 'blocked':
       return { text: fill(o.stoppedBlocked, { unit: name }), kind: 'error' };
   }
+}
+
+/** "Aboard: 1 / 2" for a transport ship's cargo. */
+export function cargoText(count: number, capacity: number): string {
+  return fill(en.unitText.aboard, { n: count, max: capacity });
+}
+
+/**
+ * Can the unit take part in the "Units" button's cycle? Ships and land units that can still act
+ * (`canAct`); passengers only while they can still land: moves left and a landing tile.
+ */
+export function inUnitCycle(unit: Unit, canAct: boolean, landingTiles: number): boolean {
+  if (unit.aboard !== null) return unit.movesLeft > 0 && !unit.attacked && landingTiles > 0;
+  return canAct;
+}
+
+/** What a passenger can do now: land, wait for the next turn (no moves left) or has no free shore. */
+export type AboardState = 'land' | 'noMoves' | 'noTile';
+
+export function aboardState(unit: Unit, landingTiles: number): AboardState {
+  if (unit.movesLeft <= 0 || unit.attacked) return 'noMoves';
+  return landingTiles > 0 ? 'land' : 'noTile';
+}
+
+export function aboardText(state: AboardState): string {
+  return {
+    land: en.unitText.aboardHint,
+    noMoves: en.unitText.aboardNoMoves,
+    noTile: en.unitText.aboardNoLanding,
+  }[state];
 }

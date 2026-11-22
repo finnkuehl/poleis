@@ -14,6 +14,7 @@ import type { MapState } from '../core/state';
 import { hexSize } from './config';
 import { mapEdgeNeighborIndex } from './geometry';
 import { sliceDepthKey } from './relief';
+import { reliefTexture } from './reliefPaint';
 import { TREE_ART_IDS, type TerrainArt } from './terrainArt';
 import { createTerrainLayer, type TerrainLayer } from './terrainLayer';
 
@@ -249,7 +250,7 @@ describe('createTerrainLayer', () => {
     const layer = createTerrainLayer(map, hexSize, FAKE_ART);
     // One fill of the ground carries the seamless grass, laid out in map space
     const grass = layer.ground.context.instructions.filter(
-      (i) => i.action === 'fill' && textureOf(i)?.source.width === 512,
+      (i) => i.action === 'fill' && textureOf(i) === reliefTexture('meadow'),
     );
     expect(grass).toHaveLength(1);
     expect((grass[0].data as { style: { textureSpace: string } }).style.textureSpace).toBe(
@@ -262,7 +263,7 @@ describe('createTerrainLayer', () => {
       l.rows.flatMap((slice) =>
         graphicsOf(slice)
           .context.instructions.filter(
-            (i) => i.action === 'fill' && local(i) && textureOf(i)?.source.width === 512,
+            (i) => i.action === 'fill' && local(i) && textureOf(i) === reliefTexture('meadowAtlas'),
           )
           .map((i) => tessellateOne(i)),
       );
@@ -270,6 +271,45 @@ describe('createTerrainLayer', () => {
     expect(a.length).toBeGreaterThan(100);
     for (const quad of a) expect(quad).toHaveLength(8);
     expect(clusters(createTerrainLayer(map, hexSize, FAKE_ART))).toEqual(a);
+  });
+
+  it('the sea: one depth fill and the swells under the whole map, ripples on coastal water', () => {
+    const { map } = generateMap(7, { width: 24, height: 24 });
+    const layer = createTerrainLayer(map, hexSize);
+    const fills = layer.ground.context.instructions.filter((i) => i.action === 'fill');
+    const textures = fills.map((i) => (i.data as { style: { texture: Texture } }).style.texture);
+    // The depth texture is the layer's own (first fill), then the shared wave textures
+    expect(textures[0].source.width).toBeGreaterThanOrEqual(256);
+    expect(textures[1]).toBe(reliefTexture('swell'));
+    expect(textures[2]).toBe(reliefTexture('ripple'));
+    // Freed with the ground
+    const depth = textures[0];
+    layer.ground.destroy();
+    expect(depth.destroyed).toBe(true);
+  });
+
+  it('no decorative boats: open water carries nothing standing, coastal water only reef patches', () => {
+    const water = (terrain: 'ocean' | 'coast'): MapState => ({
+      width: 14,
+      height: 14,
+      tiles: new Array<MapState['tiles'][number]>(14 * 14).fill(terrain),
+    });
+    const ocean = createTerrainLayer(water('ocean'), hexSize, FAKE_ART);
+    expect(allVertices(ocean)).toBe(0);
+    expect(allSprites(ocean)).toBe(0);
+    const coast = createTerrainLayer(water('coast'), hexSize, FAKE_ART);
+    expect(allSprites(coast)).toBe(0);
+    let reefs = 0;
+    for (const slice of coast.rows) {
+      for (const i of graphicsOf(slice).context.instructions) {
+        if (i.action !== 'fill') continue;
+        expect((i.data as { style: { texture: Texture } }).style.texture).toBe(
+          reliefTexture('reefAtlas'),
+        );
+        reefs++;
+      }
+    }
+    expect(reefs).toBeGreaterThan(5);
   });
 
   it('trees keep off roads; the same roads again repaint nothing', () => {

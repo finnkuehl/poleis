@@ -4,6 +4,10 @@ import { emptyStock } from '../core/rules/goods';
 import type { Unit } from '../core/state';
 import {
   attackPreviewLines,
+  aboardState,
+  aboardText,
+  cargoText,
+  inUnitCycle,
   onTheWayText,
   orderConfirm,
   orderOutcomeText,
@@ -25,6 +29,7 @@ function unit(over: Partial<Unit>): Unit {
     attacked: false,
     capturing: null,
     order: null,
+    aboard: null,
     ...over,
   };
 }
@@ -146,5 +151,48 @@ describe('orderOutcomeText', () => {
       text: 'Spearman stopped: the way is blocked',
       kind: 'error',
     });
+  });
+});
+
+describe('ship texts', () => {
+  it('cargo text shows the count and the capacity', () => {
+    expect(cargoText(1, 2)).toBe('Aboard: 1 / 2');
+  });
+
+  it('the harbor trains only ships; locked ships name their level', () => {
+    const options = trainOptions({
+      cityLevel: 'polis',
+      residents: 10,
+      stock: { ...emptyStock(), planks: 20, bronze: 5 },
+      building: 'harbor',
+    });
+    expect(options.map((o) => [o.id, o.state])).toEqual([
+      ['transport', 'ok'],
+      ['trireme', 'locked'],
+    ]);
+    expect(options[1].level).toBe('metropolis');
+    expect(
+      trainOptions({ cityLevel: 'polis', residents: 10, stock: emptyStock() }).map((o) => o.id),
+    ).not.toContain('transport');
+  });
+
+  it('the Units button cycles ships, but passengers only while they can land', () => {
+    const base = { aboard: null, movesLeft: 3, attacked: false } as unknown as Unit;
+    const passenger = { ...base, aboard: 7 } as Unit;
+    expect(inUnitCycle(base, true, 0)).toBe(true);
+    expect(inUnitCycle(base, false, 0)).toBe(false);
+    expect(inUnitCycle(passenger, true, 2)).toBe(true);
+    expect(inUnitCycle(passenger, true, 0)).toBe(false);
+    expect(inUnitCycle({ ...passenger, movesLeft: 0 } as Unit, true, 2)).toBe(false);
+  });
+});
+
+describe('passenger state', () => {
+  const p = { movesLeft: 1, attacked: false } as unknown as Unit;
+  it('lands, waits for the next turn, or has no shore', () => {
+    expect(aboardState(p, 2)).toBe('land');
+    expect(aboardState(p, 0)).toBe('noTile');
+    expect(aboardState({ ...p, movesLeft: 0 } as Unit, 2)).toBe('noMoves');
+    expect(aboardText('noMoves')).toMatch(/next turn/);
   });
 });

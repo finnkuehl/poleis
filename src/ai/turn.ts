@@ -21,6 +21,14 @@ export interface AiTurnOptions {
   onAction?: (candidate: Candidate) => void;
 }
 
+/** Seafaring is not part of the AI yet: no harbors, no ships. */
+export function isAllowed(c: Candidate): boolean {
+  const a = c.action;
+  if (a?.type === 'build') return !aiConfig.neverBuild.includes(a.building);
+  if (a?.type === 'train') return !aiConfig.neverTrain.includes(a.unit);
+  return true;
+}
+
 /** The best candidate that can be done now (ties: the first one generated), or null. */
 export function chooseCandidate(
   candidates: readonly Candidate[],
@@ -68,7 +76,7 @@ export function takeAiTurn(
   for (let step = 0; step < aiConfig.maxActionsPerTurn; step++) {
     const ctx = buildContext(current, player);
     ctx.skip = failed;
-    const candidates = GENERATORS.flatMap((generate) => generate(ctx));
+    const candidates = GENERATORS.flatMap((generate) => generate(ctx)).filter(isAllowed);
     const chosen = chooseCandidate(candidates, ctx.stock, failed);
     if (!chosen || !chosen.action) break;
     const result = applyAction(current, chosen.action);

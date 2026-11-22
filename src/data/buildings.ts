@@ -9,6 +9,7 @@ export type BuildingId =
   | 'storehouse'
   | 'borderTower'
   | 'barracks'
+  | 'harbor'
   | 'house'
   | 'woodcutter'
   | 'quarry'
@@ -55,7 +56,7 @@ export interface BuildingDef {
   outputs: Goods;
   /** Residents the building houses. */
   housing: number;
-  /** Connection point for roads (city center, storehouse). */
+  /** Connection point for roads (city center, storehouse, harbor). */
   isStorage: boolean;
   /** Territory claimed around the building (0 = claims nothing). */
   territoryRadius: number;
@@ -72,6 +73,7 @@ export const BUILDING_IDS: readonly BuildingId[] = [
   'storehouse',
   'borderTower',
   'barracks',
+  'harbor',
   'house',
   'woodcutter',
   'quarry',
@@ -153,6 +155,22 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     minLevel: 'settlement',
     playerCanBuild: true,
     icon: '🏰',
+  },
+  // Plains next to coastal water. Trains ships; the ship appears next turn on a free water tile
+  // next to the harbor. Also a road connection point, like a storehouse.
+  harbor: {
+    category: 'city',
+    placement: [{ on: ['plains'], nextTo: ['coast'] }],
+    cost: { planks: 8, stone: 4 },
+    workers: 1,
+    inputs: {},
+    outputs: {},
+    housing: 0,
+    isStorage: true,
+    territoryRadius: 0,
+    minLevel: 'polis',
+    playerCanBuild: true,
+    icon: '⚓',
   },
   // +6 housing.
   house: {

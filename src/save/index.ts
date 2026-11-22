@@ -4,7 +4,7 @@
 import type { GameState } from '../core/state';
 
 /** Current save format version. Bump it and add a step to MIGRATIONS when the state changes. */
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 /** Number of manual save slots (technical constant, not a balancing value). */
 export const SAVE_SLOT_COUNT = 3;
@@ -81,6 +81,16 @@ export const MIGRATIONS: Record<number, (env: Record<string, unknown>) => Record
       if (isRecord(state) && Array.isArray(state.players)) {
         for (const p of state.players) {
           if (isRecord(p) && !Array.isArray(p.lowPriorityGoods)) p.lowPriorityGoods = [];
+        }
+      }
+      return env;
+    },
+    // 2 -> 3: units got `aboard` (id of the transport ship they ride on, null = on their own).
+    2: (env) => {
+      const state = env.state;
+      if (isRecord(state) && Array.isArray(state.units)) {
+        for (const u of state.units) {
+          if (isRecord(u) && u.aboard === undefined) u.aboard = null;
         }
       }
       return env;
