@@ -1,7 +1,7 @@
 // Loads the drawn SVG art (public/assets, see docs/ART.md) once at startup and rasterizes every file
 // into a shared texture. Missing or broken files simply have no entry: the map then draws the old
 // colored plate / token with an emoji instead.
-import { ImageSource, Texture } from 'pixi.js';
+import { Container, ImageSource, Sprite, Texture } from 'pixi.js';
 import { BUILDING_IDS, UNIT_IDS } from '../data';
 import { hexSize } from './config';
 import {
@@ -32,6 +32,34 @@ export interface ArtAsset {
 export interface ArtSet {
   buildings: Readonly<Partial<Record<string, ArtAsset>>>;
   units: Readonly<Partial<Record<string, ArtAsset>>>;
+}
+
+/** Gives `sprite` one layer of `asset` (shared texture, the asset's anchor and scale). */
+export function setArtLayer(sprite: Sprite, asset: ArtAsset, texture: Texture): Sprite {
+  sprite.texture = texture;
+  sprite.anchor.set(asset.anchorX, asset.anchorY);
+  sprite.scale.set(asset.scale);
+  return sprite;
+}
+
+/** One drawn object on the map; `root` is placed on the tile point and sorted as one piece. */
+export interface ArtObject {
+  root: Container;
+  /** The owner-color layer (set its `tint` to the player color), null if the asset has none. */
+  accent: Sprite | null;
+}
+
+/**
+ * Builds the container of one object: the tinted owner layer FIRST, the art on top. The art has
+ * transparent holes exactly where the owner parts are (docs/ART.md, "Draw order"), so things in
+ * front of an owner part hide it and shadows painted on top darken the tinted color.
+ */
+export function createArtObject(asset: ArtAsset): ArtObject {
+  const root = new Container();
+  const accent = asset.accent ? setArtLayer(new Sprite(), asset, asset.accent) : null;
+  if (accent) root.addChild(accent);
+  root.addChild(setArtLayer(new Sprite(), asset, asset.art));
+  return { root, accent };
 }
 
 /** No art at all: everything is drawn with plates / tokens and emoji. */

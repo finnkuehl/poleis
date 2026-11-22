@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { offsetToAxial } from '../core/hex';
 import {
   ART_CANVAS,
+  BUILDING_BASE_DEPTH,
   artModeOf,
   artPlacement,
+  baseRingEllipse,
   depthKey,
   drawsOwnerDisc,
   hexWidth,
@@ -82,10 +85,13 @@ describe('depthKey', () => {
     expect(depthKey({ q: 4, r: 3 })).toBeGreaterThan(depthKey({ q: 3, r: 3 }));
   });
 
-  it('keeps the owner layer right above its own art, below the next object', () => {
-    const h = { q: 3, r: 3 };
-    expect(depthKey(h, 1)).toBeGreaterThan(depthKey(h, 0));
-    expect(depthKey(h, 1)).toBeLessThan(depthKey({ q: 4, r: 3 }, 0));
+  it('gives every tile of a 40 x 40 map its own key, in row order', () => {
+    const keys: number[] = [];
+    for (let row = 0; row < 40; row++) {
+      for (let col = 0; col < 40; col++) keys.push(depthKey(offsetToAxial({ col, row })));
+    }
+    expect(new Set(keys).size).toBe(keys.length);
+    expect([...keys].sort((a, b) => a - b)).toEqual(keys);
   });
 });
 
@@ -146,5 +152,59 @@ describe('SVG helpers', () => {
   it('replaces an existing size on the root tag', () => {
     const sized = withSvgSize('<svg width="96" height=\'96\' viewBox="0 0 96 96"></svg>', 160, 160);
     expect(sized).toBe('<svg width="160" height="160" viewBox="0 0 96 96"></svg>');
+  });
+});
+
+describe('baseRingEllipse', () => {
+  it('runs around the foot of the base, outside the base outline', () => {
+    const baseHalfWidth = (theme.buildingArtWidthFactor * hexWidth(hexSize)) / 2;
+    const scale = artPlacement('building', box(256), hexSize).scale;
+    const e = baseRingEllipse(hexSize, 1, 3);
+    expect(e.cy).toBeCloseTo(BUILDING_BASE_DEPTH * scale);
+    expect(e.rx).toBeCloseTo(baseHalfWidth + 1 + 1.5);
+    // 2:1 dimetric base: its top ellipse is half as high as wide
+    expect(e.ry).toBeCloseTo(baseHalfWidth / 2 + 1 + 1.5);
+    // The ring's front passes below the base's front edge (top ellipse + earth side)
+    expect(e.cy + e.ry).toBeGreaterThan(baseHalfWidth / 2 + BUILDING_BASE_DEPTH * scale);
+  });
+});
+
+/** The art files that exist right now (raw text); missing files are simply not in the list. */
+const artFiles = import.meta.glob<string>('/public/assets/{buildings,units}/*.svg', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+});
+
+describe('art files in public/assets', () => {
+  const mains = Object.keys(artFiles).filter((path) => !path.endsWith('.accent.svg'));
+
+  it('all have a readable canvas; owner layers share the canvas of their art', () => {
+    for (const path of mains) {
+      const vb = parseSvgViewBox(artFiles[path]);
+      expect(vb, path).not.toBeNull();
+      const accent = artFiles[path.replace(/\.svg$/, '.accent.svg')];
+      if (accent) expect(parseSvgViewBox(accent), path).toEqual(vb);
+    }
+  });
+
+  it('places the diorama buildings with the base center on the tile (ART.md anchor)', () => {
+    let checked = 0;
+    for (const path of mains.filter((p) => p.includes('/buildings/'))) {
+      const svg = artFiles[path];
+      const vb = parseSvgViewBox(svg);
+      if (!vb || vb.width !== ART_CANVAS.building.size) continue;
+      checked++;
+      const p = artPlacement('building', vb, hexSize);
+      expect(p.style, path).toBe('diorama');
+      expect(p.anchorX * vb.width, path).toBeCloseTo(128);
+      expect(p.anchorY * vb.height, path).toBeCloseTo(176);
+      // The grass top of the base is the 208 px wide ellipse around (128, 176) – drawn in world
+      // units (rx 96.17) inside the library's scale(1.08) group around the anchor.
+      expect(svg, path).toMatch(/<ellipse cx="128" cy="176" rx="96\.17" ry="48\.08"/);
+      expect(svg, path).toContain('translate(128 176) scale(1.08) translate(-128 -176)');
+    }
+    // house, temple, cityCenter and wonder exist as diorama art
+    expect(checked).toBeGreaterThanOrEqual(4);
   });
 });

@@ -1,12 +1,19 @@
 // Dynamic map layers: territory, roads, buildings, status badges, highlights, road preview.
-import { Container, Graphics, Sprite, Text, type Texture } from 'pixi.js';
+import { Container, Graphics, Text, type Sprite } from 'pixi.js';
 import { hexCorners, hexToPixel, type Hex, type Point } from '../core/hex';
 import { hexAtIndex } from '../core/map';
 import type { BuildingStatus } from '../core/rules/production';
 import type { GameState } from '../core/state';
 import { BUILDINGS, type BuildingId, type CityLevel } from '../data';
-import { NO_ART, type ArtSet } from './art';
-import { artModeOf, depthKey, drawsOwnerDisc, type ArtMode, type ArtPlacement } from './artLayout';
+import { createArtObject, NO_ART, type ArtSet } from './art';
+import {
+  artModeOf,
+  baseRingEllipse,
+  depthKey,
+  drawsOwnerDisc,
+  type ArtMode,
+  type ArtPlacement,
+} from './artLayout';
 import { hexSize } from './config';
 import { edgeMaskOf, insetRuns, roadGeometry, territoryEdges, type InsetRun } from './geometry';
 import { playerColorOf } from './playerColor';
@@ -162,48 +169,31 @@ export function createEconomyLayers(art: ArtSet = NO_ART): EconomyLayers {
     type: string;
     mode: ArtMode;
     style: ArtPlacement['style'] | null;
-    art: Sprite | null;
+    /** Art container [owner layer, art] or the fallback emoji; sorted as one piece. */
+    root: Container;
     accent: Sprite | null;
-    icon: Text | null;
   }
   const visuals = new Map<number, BuildingVisual>();
-
-  function destroyVisual(v: BuildingVisual): void {
-    v.art?.destroy();
-    v.accent?.destroy();
-    v.icon?.destroy();
-  }
 
   function createVisual(type: BuildingId, hex: Hex): BuildingVisual {
     const asset = art.buildings[type];
     const mode = artModeOf(asset);
-    if (!asset) {
+    let visual: BuildingVisual;
+    if (asset) {
+      const { root, accent } = createArtObject(asset);
+      visual = { type, mode, style: asset.placement.style, root, accent };
+    } else {
       const icon = new Text({
         text: BUILDINGS[type].icon,
         style: { fontSize: hexSize * theme.iconSizeFactor, fontFamily: theme.fontFamily },
         resolution: 2,
       });
       icon.anchor.set(0.5);
-      objects.addChild(icon);
-      icon.zIndex = depthKey(hex);
-      return { type, mode, style: null, art: null, accent: null, icon };
+      visual = { type, mode, style: null, root: icon, accent: null };
     }
-    const sprite = (texture: Texture, layer: number): Sprite => {
-      const s = new Sprite(texture);
-      s.anchor.set(asset.anchorX, asset.anchorY);
-      s.scale.set(asset.scale);
-      objects.addChild(s);
-      s.zIndex = depthKey(hex, layer);
-      return s;
-    };
-    return {
-      type,
-      mode,
-      style: asset.placement.style,
-      art: sprite(asset.art, 0),
-      accent: asset.accent ? sprite(asset.accent, 1) : null,
-      icon: null,
-    };
+    objects.addChild(visual.root);
+    visual.root.zIndex = depthKey(hex);
+    return visual;
   }
 
   /** City-level rings: circles around the plate, or an ellipse on the ground around a diorama base. */
@@ -222,17 +212,17 @@ export function createEconomyLayers(art: ArtSet = NO_ART): EconomyLayers {
       }
       return;
     }
-    const cy = p.y + hexSize * theme.cityArtRingOffsetFactor;
-    const rx = hexSize * theme.cityArtRingRxFactor + ring.outerWidth / 2;
-    const ry = hexSize * theme.cityArtRingRyFactor + ring.outerWidth / 2;
+    const { cy, rx, ry } = baseRingEllipse(hexSize, theme.cityArtRingGap, ring.outerWidth);
     if (ring.outerColor !== null) {
-      ground.ellipse(p.x, cy, rx, ry).stroke({ color: ring.outerColor, width: ring.outerWidth });
+      ground
+        .ellipse(p.x, p.y + cy, rx, ry)
+        .stroke({ color: ring.outerColor, width: ring.outerWidth });
     }
     if (ring.innerColor !== null) {
       // Second ring outside the first one: an inner ring would be hidden by the base.
-      const d = ring.outerWidth / 2 + theme.cityArtSecondRingGap;
+      const d = ring.outerWidth / 2 + theme.cityArtSecondRingGap + theme.cityInnerRingWidth / 2;
       ground
-        .ellipse(p.x, cy, rx + d, ry + d)
+        .ellipse(p.x, p.y + cy, rx + d, ry + d)
         .stroke({ color: ring.innerColor, width: theme.cityInnerRingWidth });
     }
   }
@@ -275,17 +265,14 @@ export function createEconomyLayers(art: ArtSet = NO_ART): EconomyLayers {
 
       let v = visuals.get(b.id);
       if (!v || v.type !== b.type) {
-        if (v) destroyVisual(v);
+        // destroy() keeps the shared textures (only Text frees its own)
+        v?.root.destroy({ children: true });
         v = createVisual(b.type, b.hex);
         visuals.set(b.id, v);
       }
-      v.art?.position.set(p.x, p.y);
-      v.icon?.position.set(p.x, p.y);
-      if (v.accent) {
-        v.accent.position.set(p.x, p.y);
-        // Owner color (changes when a city is captured)
-        v.accent.tint = color;
-      }
+      v.root.position.set(p.x, p.y);
+      // Owner color (changes when a city is captured)
+      if (v.accent) v.accent.tint = color;
       const diorama = v.style === 'diorama';
 
       if (drawsOwnerDisc(v.mode)) {
@@ -337,7 +324,7 @@ export function createEconomyLayers(art: ArtSet = NO_ART): EconomyLayers {
     }
     for (const [id, v] of visuals) {
       if (seen.has(id)) continue;
-      destroyVisual(v);
+      v.root.destroy({ children: true });
       visuals.delete(id);
     }
     for (const [id, label] of residentTexts) {

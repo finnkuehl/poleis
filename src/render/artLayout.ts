@@ -25,6 +25,12 @@ export const ART_CANVAS: Readonly<
   unit: { size: 128, baseX: 64, baseY: 96, baseWidth: 88 },
 };
 
+/**
+ * Height of the earth side of a diorama building's round base, in canvas px
+ * (tools/art/iso.py: BASE_H = 21 world units x S = 1.08 px per unit).
+ */
+export const BUILDING_BASE_DEPTH = 22.7;
+
 /** Where a sprite of the art goes: anchor on the tile point and world size. */
 export interface ArtPlacement {
   /**
@@ -80,6 +86,26 @@ export function artPlacement(kind: ArtKind, vb: ViewBox, hexSize: number): ArtPl
   };
 }
 
+/** An ellipse relative to the tile center (world px). */
+export interface RingEllipse {
+  cy: number;
+  rx: number;
+  ry: number;
+}
+
+/**
+ * Center line of a ring of `width` px on the ground around the foot of a diorama building's
+ * base, `gap` px away from it. The base's top ellipse is 2:1 (dimetric); its foot lies one base
+ * depth lower. Drawn under the art, only the front and the sides of the ring show.
+ */
+export function baseRingEllipse(hexSize: number, gap: number, width: number): RingEllipse {
+  const c = ART_CANVAS.building;
+  const scale = (theme.buildingArtWidthFactor * hexWidth(hexSize)) / c.baseWidth;
+  const rx = (c.baseWidth / 2) * scale;
+  const out = gap + width / 2;
+  return { cy: BUILDING_BASE_DEPTH * scale, rx: rx + out, ry: rx / 2 + out };
+}
+
 /** Texture sizes are rounded up to a multiple of this (px). */
 const RASTER_STEP_PX = 32;
 
@@ -96,10 +122,10 @@ export function rasterSizePx(placement: ArtPlacement, dpr: number, hexSize: numb
 
 /**
  * Draw order of objects on the map: rows from top to bottom (art of a lower tile overlaps the
- * tile above), then left to right. `layer` orders the parts of one object (0 = art, 1 = owner layer).
+ * tile above), then left to right. One key per object (its layers live in one container).
  */
-export function depthKey(h: Hex, layer = 0): number {
-  return (h.r * 4096 + h.q) * 4 + layer;
+export function depthKey(h: Hex): number {
+  return h.r * 4096 + h.q;
 }
 
 /**

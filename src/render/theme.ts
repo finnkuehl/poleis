@@ -162,17 +162,19 @@ export const theme = {
    */
   artMaxTexturePx: 384,
   /**
-   * City-level rings around a diorama building: an ellipse on the ground around the base
-   * (radii and downward shift are fractions of the hex size). The Metropolis' second ring is
-   * drawn this many px outside the first one (an inner ring would be hidden by the base).
+   * City-level rings around a diorama building: an ellipse on the ground around the foot of the
+   * round base, this many px away from it. The Metropolis' second ring is drawn this many px
+   * outside the first one (an inner ring would be hidden by the base).
    */
-  cityArtRingRxFactor: 0.84,
-  cityArtRingRyFactor: 0.48,
-  cityArtRingOffsetFactor: 0.06,
-  cityArtSecondRingGap: 2.5,
-  /** Status badge over a diorama building: offset from the tile center (fractions of hex size) */
-  badgeArtOffsetXFactor: 0.6,
-  badgeArtOffsetYFactor: -0.95,
+  cityArtRingGap: 1,
+  cityArtSecondRingGap: 1.5,
+  /**
+   * Status badge of a diorama building: offset from the tile center (fractions of hex size).
+   * On the right side of its own base: higher up it would sit on the base of the building
+   * above and cover that city's resident count.
+   */
+  badgeArtOffsetXFactor: 0.66,
+  badgeArtOffsetYFactor: -0.12,
   /** Building plate: radius (fraction of hex size), light rim, icon size (fraction) */
   plateRadiusFactor: 0.62,
   plateRimColor: 0xf4e9d8,

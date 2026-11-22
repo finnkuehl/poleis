@@ -1,11 +1,11 @@
 // Unit figures/tokens, fog of war and attack-target outlines.
-import { Container, Graphics, Sprite, Text, type Texture } from 'pixi.js';
+import { Container, Graphics, Sprite, Text } from 'pixi.js';
 import { hexCorners, hexToPixel, type Hex } from '../core/hex';
 import { hexAtIndex, tileIndex } from '../core/map';
 import { visibleTiles } from '../core/rules/vision';
 import type { GameState, PlayerId } from '../core/state';
 import { UNITS, type UnitId } from '../data';
-import { NO_ART, type ArtAsset, type ArtSet } from './art';
+import { createArtObject, NO_ART, setArtLayer, type ArtSet } from './art';
 import { artModeOf, depthKey, drawsOwnerDisc, type ArtMode } from './artLayout';
 import { hexSize } from './config';
 import {
@@ -51,14 +51,6 @@ function fillAll(g: Graphics, polys: readonly number[][], color: number, alpha: 
   g.fill({ color, alpha });
 }
 
-/** Sprite of one art layer with the asset's anchor and scale. */
-function artSprite(asset: ArtAsset, texture: Texture): Sprite {
-  const s = new Sprite(texture);
-  s.anchor.set(asset.anchorX, asset.anchorY);
-  s.scale.set(asset.scale);
-  return s;
-}
-
 /** `art`: the loaded unit art (missing entries fall back to token + emoji). */
 export function createUnitLayers(art: ArtSet = NO_ART): UnitLayers {
   const units = new Container();
@@ -77,34 +69,30 @@ export function createUnitLayers(art: ArtSet = NO_ART): UnitLayers {
   interface UnitVisual {
     type: string;
     mode: ArtMode;
-    art: Sprite | null;
+    /** Art container [owner layer, art] or the fallback emoji; moved, sorted and faded as one piece. */
+    root: Container;
     accent: Sprite | null;
-    icon: Text | null;
   }
   const visuals = new Map<number, UnitVisual>();
-
-  function destroyVisual(v: UnitVisual): void {
-    v.art?.destroy();
-    v.accent?.destroy();
-    v.icon?.destroy();
-  }
 
   function createVisual(type: UnitId): UnitVisual {
     const asset = art.units[type];
     const mode = artModeOf(asset);
-    if (!asset) {
+    let visual: UnitVisual;
+    if (asset) {
+      const { root, accent } = createArtObject(asset);
+      visual = { type, mode, root, accent };
+    } else {
       const icon = new Text({
         text: UNITS[type].icon,
         style: { fontSize: hexSize * theme.unitIconSizeFactor, fontFamily: theme.fontFamily },
         resolution: 2,
       });
       icon.anchor.set(0.5);
-      figures.addChild(icon);
-      return { type, mode, art: null, accent: null, icon };
+      visual = { type, mode, root: icon, accent: null };
     }
-    const main = figures.addChild(artSprite(asset, asset.art));
-    const accent = asset.accent ? figures.addChild(artSprite(asset, asset.accent)) : null;
-    return { type, mode, art: main, accent, icon: null };
+    figures.addChild(visual.root);
+    return visual;
   }
   let fogSig = '';
   /** Test option: show the whole map (no fog, enemy units everywhere). */
@@ -136,21 +124,16 @@ export function createUnitLayers(art: ArtSet = NO_ART): UnitLayers {
 
       let v = visuals.get(u.id);
       if (!v || v.type !== u.type) {
-        if (v) destroyVisual(v);
+        // destroy() keeps the shared textures (only Text frees its own)
+        v?.root.destroy({ children: true });
         v = createVisual(u.type);
         visuals.set(u.id, v);
       }
-      // Units move: position and draw order are updated every time
-      for (const [s, layer] of [
-        [v.art, 0],
-        [v.icon, 0],
-        [v.accent, 1],
-      ] as const) {
-        if (!s) continue;
-        s.position.set(cx, cy);
-        s.zIndex = depthKey(u.hex, layer);
-        s.alpha = alpha;
-      }
+      // Units move: position and draw order are updated every time. The layers do not overlap,
+      // so fading the whole container looks right.
+      v.root.position.set(cx, cy);
+      v.root.zIndex = depthKey(u.hex);
+      v.root.alpha = alpha;
       if (v.accent) v.accent.tint = color;
 
       if (drawsOwnerDisc(v.mode)) {
@@ -168,7 +151,7 @@ export function createUnitLayers(art: ArtSet = NO_ART): UnitLayers {
     }
     for (const [id, v] of visuals) {
       if (seen.has(id)) continue;
-      destroyVisual(v);
+      v.root.destroy({ children: true });
       visuals.delete(id);
     }
   }
@@ -252,11 +235,12 @@ export function createUnitLayers(art: ArtSet = NO_ART): UnitLayers {
   // Drag ghost: same look as a unit, larger and see-through; drawn above everything.
   const ghost = new Container();
   const ghostBody = new Graphics();
-  const ghostArt = new Sprite();
+  // Owner layer first, art on top (see createArtObject)
   const ghostAccent = new Sprite();
+  const ghostArt = new Sprite();
   let ghostText: Text | null = null;
   let ghostKey = '';
-  ghost.addChild(ghostBody, ghostArt, ghostAccent);
+  ghost.addChild(ghostBody, ghostAccent, ghostArt);
   ghost.visible = false;
   ghost.alpha = theme.dragGhostAlpha;
   ghost.scale.set(theme.dragGhostScale);
@@ -290,17 +274,11 @@ export function createUnitLayers(art: ArtSet = NO_ART): UnitLayers {
         ghostAccent.visible = false;
         if (asset) {
           // Same shared textures as the unit on the map
-          for (const [s, texture] of [
-            [ghostArt, asset.art],
-            [ghostAccent, asset.accent],
-          ] as const) {
-            if (!texture) continue;
-            s.texture = texture;
-            s.anchor.set(asset.anchorX, asset.anchorY);
-            s.scale.set(asset.scale);
-            s.visible = true;
+          setArtLayer(ghostArt, asset, asset.art).visible = true;
+          if (asset.accent) {
+            setArtLayer(ghostAccent, asset, asset.accent).visible = true;
+            ghostAccent.tint = color;
           }
-          ghostAccent.tint = color;
         } else {
           ghostText = new Text({
             text: UNITS[unit.type as UnitId].icon,
