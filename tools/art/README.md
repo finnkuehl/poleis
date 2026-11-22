@@ -1,26 +1,29 @@
 # Poleis art generator (`tools/art/`)
 
-All building art of Poleis is **generated** by small Python 3 scripts (standard library only)
-that print plain SVG. Style: isometric diorama miniatures, see `docs/ART.md` ("Chosen
-direction: V1"). Never edit the SVGs in `public/assets/buildings/` by hand – edit the script
-and rebuild.
+All building and unit art of Poleis is **generated** by small Python 3 scripts (standard
+library only) that print plain SVG. Style: isometric diorama miniatures, see `docs/ART.md`
+("Chosen direction: V1"). Never edit the SVGs in `public/assets/buildings/` or
+`public/assets/units/` by hand – edit the script and rebuild.
 
 ```
 tools/art/
   iso.py            the shared library (projection, base, light, materials, props, statues)
+  units_lib.py      unit library on top of iso.py (token, people, horse, cart, ships)
   buildings/<id>.py one script per building, named exactly like the id in src/data/
-  build_all.py      builds every script into public/assets/buildings/
+  units/<id>.py     one script per unit (see "Units" below)
+  build_all.py      builds every script into public/assets/buildings/ and public/assets/units/
   preview.py        review sheet: art + accent tinted in the four player colours, map sizes
 ```
 
 ## Run it
 
 ```sh
-python3 tools/art/build_all.py                 # all buildings
-python3 tools/art/build_all.py house temple    # only these
+python3 tools/art/build_all.py                 # all buildings and units
+python3 tools/art/build_all.py house hoplite   # only these ids
 python3 tools/art/buildings/house.py /tmp/out  # one script, into any folder
 
 python3 tools/art/preview.py house temple --out /tmp/preview.svg
+python3 tools/art/preview.py hoplite trireme --out /tmp/units.svg
 qlmanage -t -s 1600 -o /tmp /tmp/preview.svg   # macOS: -> /tmp/preview.svg.png, open it
 ```
 
@@ -204,3 +207,60 @@ if __name__ == "__main__":
   building's script.
 - Before handing in: run `build_all.py`, look at `preview.py` (all four colours, 64 px and 40 px),
   and check the asset id matches `src/data/`.
+
+## Units (`units_lib.py`, `units/<id>.py`)
+
+Units are board-game figures on a small round **token**. `units_lib.py` builds on `iso.py`
+(it never changes it) and has its own fixed canvas (docs/ART.md):
+
+- `viewBox="0 0 128 128"`; the token's top ellipse is centred at **(64, 96)** and is **88 px
+  wide** (x 20 → 108). The game scales the image so this width is 0.62 × the hex width.
+- Here **1 world unit = 1 px** (`TOKEN_R` ≈ 31 units). The figure stands on the token centre and
+  may rise to the top of the canvas (spear tips, sails, crests); ships may overhang the token.
+- Legibility: **32 px** (the token 32 px wide, i.e. a 52 px hex). `preview.py` shows a 52 px strip.
+- Accents: the token's rim band (automatic) + 1–3 owner touches (shield, crest, cloak, cap,
+  saddle cloth, cart cover, sail, hull strake, pennant). Same accent rule as buildings.
+
+```python
+"""peltast - ... Accent (owner colour): token band + shield."""
+import sys
+
+sys.dont_write_bytecode = True
+import os  # noqa: E402
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import units_lib as U  # noqa: E402
+
+
+def build():
+    c = U.UnitCanvas("peltast")          # id = file name = id in src/data/
+    U.token(c, seed=3)                   # first; top="water" for ships
+    x, y = c.P(0, 0, 0)                  # token centre = where the feet go
+    U.ground_shadow(c, x, y, 10)
+    U.person(c, x, y, h=70, helmet="pilos", hold="spear", shield="round", accents=("shield",))
+    return c
+```
+
+**Unit API** (`units_lib.py`)
+- `UnitCanvas(id)` – an `iso.Canvas` on the unit canvas; all iso helpers work on it. Extra:
+  the **broadside frame** for profiles (ships, horses, carts): `c.Pu(u, v, z)` with `u` along the
+  screen horizontal and `v` toward the viewer; `c.m_front(v)` (vertical plane facing the viewer,
+  local x = u, y = z) and `c.m_flat(z)` (ground). `from_uv(u, v)` converts to `c.at(a, b)`.
+- `token(c, top="grass"|"water", seed)` – always first; defines the clip `c.url("top")`.
+- `ground_shadow(c, x, y, w, length)` – contact + cast shadow under a figure.
+- `person(c, x, y, h=70, tunic=LINEN|WOOL|"accent", hem, armor=None|"cuirass",
+  legs="bare"|"greaves", stride, beard, helmet=None|"corinthian"|"pilos"|"petasos"|"phrygian",
+  cloak=None|material|"accent", cloak_flow, hold=None|"spear"|"staff"|"bow", shield=None|"aspis"|
+  "round", quiver, accents=("shield", "crest", "cloak", "cap", "tunic"), wide=1.12)` – a painted
+  miniature, front view, feet at (x, y). `h` is feet → top of the head.
+- `horse(c, x, y, h, coat=HORSE_BAY|DONKEY, saddle, accents=("saddle",))` → seat point;
+  `rider(c, seat_x, seat_y, h, accents=("cloak",))`.
+- `cart(c, u0, u1, z0, z1, wheel_u, wheel_r, cover_h)` – two-wheeled cart with an owner cover.
+- Ships: `ship_hull(c, L, W, hd, sheer_bow, sheer_stern, colours, deck)` → near gunwale points;
+  `sail(c, u0, u1, z_foot, z_yard)` (owner colour), `oars(c, near, u_from, u_to, n)`,
+  `ship_amphora(...)`, and the complete `transport_details` / `trireme_details`.
+- Materials: `SKIN`, `LINEN`, `WOOL`, `LEATHER`, `FELT`, `METAL`, `CLOTH_ACCENT`, `HORSE_BAY`, `DONKEY`.
+
+Silhouettes must differ at 32 px: hoplite = big round shield + crest; spearman = small shield +
+conical cap; scout = wide hat + flying cloak; archer = drawn bow; settler = covered cart;
+horseman = horse; transport = square sail; trireme = long low hull with oars.
