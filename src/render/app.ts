@@ -1,9 +1,10 @@
 // PixiJS application: canvas, map view, camera and tile selection.
-import { Application, Container } from 'pixi.js';
+import { Application, Container, CullerPlugin, extensions } from 'pixi.js';
 import { hexToPixel, pixelToHex, type Hex } from '../core/hex';
 import { inBounds } from '../core/map';
 import type { BuildingStatus } from '../core/rules/production';
 import type { GameState, PlayerId } from '../core/state';
+import { loadArt } from './art';
 import { CameraController, screenToWorld } from './camera';
 import { hexSize, startHexScreenRadiusPx } from './config';
 import { createMapView } from './map';
@@ -26,7 +27,7 @@ export interface Renderer {
   /** Red outlines on attack targets; [] clears. */
   setAttackTargets(hexes: readonly Hex[]): void;
   selectTile(h: Hex | null): void;
-  /** Test option: shows the whole map (no fog, all units); takes effect on the next setState. */
+  /** Test option: shows the whole map (no fog, all units and buildings); takes effect on the next setState. */
   setRevealAll(value: boolean): void;
   /** Highlights valid tiles; [] clears. */
   setHighlights(hexes: readonly Hex[]): void;
@@ -44,25 +45,40 @@ export interface Renderer {
   centerOnScreenPoint(h: Hex, sx: number, sy: number): void;
 }
 
+/** The culler extension is registered globally, only once. */
+let cullerAdded = false;
+
 export async function createRenderer(
   container: HTMLElement,
   state: GameState,
   onTileTap: (h: Hex | null) => void,
   drag?: DragHandlers,
 ): Promise<Renderer> {
+  const resolution = Math.min(window.devicePixelRatio || 1, 2);
+  // Load and rasterize the SVG art while the renderer starts (both before the first draw)
+  const artLoading = loadArt(resolution);
+  // Culling: every frame, objects marked `cullable` (the terrain's row slices) that lie off the
+  // screen are skipped. Registered once, before the first application starts.
+  if (!cullerAdded) {
+    extensions.add(CullerPlugin);
+    cullerAdded = true;
+  }
   const app = new Application();
   await app.init({
     background: theme.background,
     resizeTo: window,
     antialias: true,
     autoDensity: true,
-    resolution: Math.min(window.devicePixelRatio || 1, 2),
+    resolution,
   });
   container.appendChild(app.canvas);
+  const art = await artLoading;
 
-  const world = new Container();
+  // The camera moves and scales this container; as its own render group, panning and zooming
+  // only change the group's transform instead of every sprite and shape inside
+  const world = new Container({ isRenderGroup: true });
   app.stage.addChild(world);
-  const view = createMapView(state.map);
+  const view = createMapView(state.map, art);
   world.addChild(view.container);
 
   const selectTile = (h: Hex | null): void => view.setSelection(h);

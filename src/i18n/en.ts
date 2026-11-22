@@ -341,6 +341,7 @@ export const en = {
     newSeed: 'New seed',
     seedHint: 'The same seed always makes the same map.',
     previewLabel: 'Preview of the map for this seed',
+    previewCaption: 'Map for seed {seed}',
     victoryLabel: 'Ways to win',
     victoryPoints: 'Points',
     victoryPointsInfo: 'Most points when the turn limit is reached.',

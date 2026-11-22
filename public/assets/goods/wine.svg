@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Wine: a kylix (wide drinking cup) full of red wine -->
+  <g stroke="#1d2b36" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round">
+    <!-- handles -->
+    <path d="M10 27 C0 24 0 35 13 33 M54 27 C64 24 64 35 51 33" fill="none" stroke-width="6.5"/>
+    <path d="M10 27 C0 24 0 35 13 33" fill="none" stroke="#b5523b" stroke-width="2.6"/>
+    <path d="M54 27 C64 24 64 35 51 33" fill="none" stroke="#8a3b2a" stroke-width="2.6"/>
+    <!-- foot and stem -->
+    <ellipse cx="32" cy="55" rx="13" ry="4" fill="#8a3b2a"/>
+    <path d="M28.5 40 V54 H35.5 V40 z" fill="#b5523b"/>
+    <!-- bowl -->
+    <path d="M6 22 C8 35 20 43 32 43 C44 43 56 35 58 22 z" fill="#b5523b"/>
+    <path d="M58 22 C56 35 44 43 32 43 C46 40 50 30 51 22 z" fill="#8a3b2a" stroke="none"/>
+    <path d="M6 22 C8 35 20 43 32 43 C44 43 56 35 58 22 z" fill="none"/>
+    <!-- wine surface -->
+    <ellipse cx="32" cy="22" rx="26" ry="8.5" fill="#7a2a3a"/>
+    <path d="M14 20.5 C20 17.5 28 16.8 34 17" fill="none" stroke="#b06a80" stroke-width="2"/>
+  </g>
+</svg>

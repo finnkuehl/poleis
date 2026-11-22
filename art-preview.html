@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Poleis art gallery</title>
+    <style>
+      /* Dev-only review page for the drawn assets (see docs/ART.md). */
+      body {
+        margin: 0;
+        padding: 12px;
+        background: #dfe3da;
+        color: #1d2b36;
+        font:
+          14px system-ui,
+          sans-serif;
+      }
+      h1 {
+        margin: 4px 0 2px;
+        font:
+          600 22px Palatino,
+          Georgia,
+          serif;
+      }
+      h2 {
+        margin: 22px 0 8px;
+        font:
+          600 18px Palatino,
+          Georgia,
+          serif;
+      }
+      p {
+        margin: 0 0 8px;
+        color: #4b5b66;
+      }
+      .asset {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 0;
+        border-top: 1px solid #c9cdc2;
+      }
+      .asset-id {
+        width: 104px;
+        font-weight: 600;
+        overflow-wrap: anywhere;
+      }
+      .asset-id small {
+        display: block;
+        color: #9e3b34;
+        font-weight: 400;
+      }
+      /* One background strip (marble or sea) with the asset at 20, 40 and 96 px. */
+      .strip {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 12px;
+        border-radius: 10px;
+      }
+      .strip.marble {
+        background: #eceee8;
+        border: 1px solid #d5d9d0;
+      }
+      .strip.sea {
+        background: #163545;
+        border: 1px solid #163545;
+      }
+      .strip img,
+      .map-row img {
+        display: block;
+      }
+      /* Shown instead of an image whose file does not exist yet. */
+      .missing {
+        display: block;
+        box-sizing: border-box;
+        border: 1.5px dashed #a9b0a6;
+        border-radius: 4px;
+        background: repeating-linear-gradient(
+          45deg,
+          rgba(169, 176, 166, 0.18) 0 4px,
+          rgba(169, 176, 166, 0.36) 4px 8px
+        );
+      }
+      /* Buildings and units as in the game, bottom to top: accent image, player color in
+         multiply (masked by the accent), art image (which has holes where the accents are). */
+      .layered {
+        position: relative;
+        flex: none;
+        isolation: isolate;
+      }
+      .layered > * {
+        position: absolute;
+        inset: 0;
+      }
+      .layered .tint {
+        mix-blend-mode: multiply;
+        -webkit-mask-size: 100% 100%;
+        mask-size: 100% 100%;
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+      }
+      .map-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 12px;
+        border-radius: 10px;
+        background: #9cc25a;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="gallery"></div>
+    <script type="module" src="/src/artPreview.ts"></script>
+  </body>
+</html>

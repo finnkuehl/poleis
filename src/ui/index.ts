@@ -21,3 +21,4 @@ export * from './endScreen';
 export * from './endText';
 export * from './eventText';
 export * from './saveText';
+export * from './art';

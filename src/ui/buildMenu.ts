@@ -2,7 +2,6 @@
 import {
   BUILDING_IDS,
   BUILDINGS,
-  GOODS,
   type BuildingCategory,
   type BuildingId,
   type CityLevel,
@@ -12,6 +11,7 @@ import { canAfford, missingGoods } from '../core/rules/goods';
 import { en } from '../i18n/en';
 import { fill, formatMissing } from '../i18n/format';
 import { costParts, levelReached, perTurnText, workersText } from './buildingText';
+import { buildingIcon, goodText } from './art';
 import { button, el } from './dom';
 
 const CATEGORY_ORDER: readonly BuildingCategory[] = ['city', 'food', 'raw', 'processing'];
@@ -57,8 +57,9 @@ export function createBuildMenu(
     const def = BUILDINGS[id];
     const item = button('build-item is-muted is-locked', '');
     item.disabled = true;
-    const icon = el('span', 'build-item__icon', def.icon);
+    const icon = el('span', 'build-item__icon');
     icon.setAttribute('aria-hidden', 'true');
+    icon.appendChild(buildingIcon(id));
     const body = el('span', 'build-item__body');
     body.appendChild(el('span', 'build-item__name', en.buildings[id]));
     body.appendChild(el('span', 'build-item__effect', perTurnText(id)));
@@ -74,8 +75,9 @@ export function createBuildMenu(
     const affordable = canAfford(stock, def.cost);
     const item = button(`build-item${affordable ? '' : ' is-muted'}`, '');
     item.disabled = !affordable;
-    const icon = el('span', 'build-item__icon', def.icon);
+    const icon = el('span', 'build-item__icon');
     icon.setAttribute('aria-hidden', 'true');
+    icon.appendChild(buildingIcon(id));
     const body = el('span', 'build-item__body');
     body.appendChild(el('span', 'build-item__name', en.buildings[id]));
     body.appendChild(el('span', 'build-item__effect', perTurnText(id)));
@@ -84,12 +86,13 @@ export function createBuildMenu(
     cost.appendChild(document.createTextNode(`${en.ui.cost}: `));
     costParts(def.cost, stock).forEach((part, i) => {
       if (i > 0) cost.appendChild(document.createTextNode(', '));
-      const chip = el(
-        'span',
-        `cost-part${part.missing ? ' is-missing' : ''}`,
-        `${GOODS[part.good].icon} ${part.amount} ${en.goods[part.good]}`,
+      cost.appendChild(
+        goodText(
+          part.good,
+          `${part.amount} ${en.goods[part.good]}`,
+          `cost-part${part.missing ? ' is-missing' : ''}`,
+        ),
       );
-      cost.appendChild(chip);
     });
     body.appendChild(cost);
     if (def.workers > 0)
