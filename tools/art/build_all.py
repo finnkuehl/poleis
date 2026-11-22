@@ -2,9 +2,11 @@
 
     tools/art/buildings/<id>.py  ->  public/assets/buildings/<id>.svg + <id>.accent.svg
     tools/art/units/<id>.py      ->  public/assets/units/<id>.svg + <id>.accent.svg
+    tools/art/terrain/trees.py   ->  public/assets/terrain/<tree id>.svg (art only, no accent)
 
     python3 tools/art/build_all.py              # everything
-    python3 tools/art/build_all.py house scout  # only these ids
+    python3 tools/art/build_all.py house scout  # only these ids (scripts)
+    python3 tools/art/build_all.py trees        # the terrain trees and shrubs
 
 Each script is named after the asset id (e.g. cityCenter.py) and defines build(), which returns
 one Canvas or a list of Canvases (the fishery: its icon plus the direction variants
@@ -19,7 +21,7 @@ import os  # noqa: E402
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 ROOT = os.path.normpath(os.path.join(HERE, "..", ".."))
-KINDS = ("buildings", "units")          # script folder == asset folder name
+KINDS = ("buildings", "units", "terrain")   # script folder == asset folder name
 SOFT_LIMIT = 150 * 1024
 
 

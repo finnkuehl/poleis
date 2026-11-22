@@ -4,7 +4,14 @@ weathered rock around it; in front a timber treadwheel crane lifting a block off
 terrace, stacks of dressed blocks, a block on rollers and a small plank tool shed. The game draws
 the stony apron underneath (and clears the hill's own mounds inside the footprint).
 Accent (owner colour): the canvas over a stack of blocks, the shed's painted door and the pennant
-on the crane."""
+on the crane.
+
+Two files (docs/ART.md "Mines and quarries dig into the real slope"):
+    quarry.svg        the icon (build menu, panels) and the quarry on plains: the outcrop with its
+                      cut terraces and the works, as above
+    quarry.slope.svg  the map version on hills and mountains: ONLY the works (crane, blocks, rollers,
+                      shed, spalls). The terrain cuts the stepped terraces into its own hill or
+                      massif behind them (SLOPE_STEPS below)."""
 import sys
 
 sys.dont_write_bytecode = True
@@ -28,6 +35,14 @@ HOOK_Z = 4.5                     # bottom of the block being lifted (just above 
 SHED = (-36, 18)                # tool shed centre
 SA, SB, SH = 11, 7, 18           # shed half extents and wall height
 STACK = (30, 30)                # stack of blocks under the canvas
+
+# --- quarry.slope: the cut the TERRAIN draws behind the works (world units around the tile centre)
+# Three steps, each a vertical cut face facing +b (screen lower left, lit) with its right end cut
+# as a face facing +a (screen lower right, shade); each step's flat top runs back to the foot of
+# the next face. Behind the last top (b < -40) the natural slope continues; the left ends (a = -35)
+# run into the hill / massif. (a0, a1, b_front, b_back, z_top)
+SLOPE_STEPS = [(-35, 5, -10, -20, 9), (-35, -5, -20, -30, 18), (-35, -15, -30, -40, 27)]
+SLOPE_FACE_B = SLOPE_STEPS[0][2]      # the lowest face, right behind the crane
 
 
 def tarp_stack(c, a, b):
@@ -91,16 +106,17 @@ def outcrop(c):
         iso.olive_tree(c, 0, 0, size=0.42, seed=6)
 
 
-def crane(c):
+def crane(c, face_b=TERRACES[0][3]):
     """Treadwheel crane: an A-frame jib leaning over the lowest terrace, the block on its hook,
-    the treadwheel at its foot winding the hoisting rope."""
+    the treadwheel at its foot winding the hoisting rope. face_b: plane of the cut face behind the
+    hoisted block (it takes the block's shadow)."""
     ax, ab, az = APEX
     # the block on the hook, then the far leg, the near leg and the cross brace
     raw.rope(c, APEX, (ax, ab, HOOK_Z + 7.4))
     raw.rope(c, (ax, ab, HOOK_Z + 7.4), (ax - 3.6, ab + 2.6, HOOK_Z + 3.8))
     raw.rope(c, (ax, ab, HOOK_Z + 7.4), (ax + 3.6, ab + 2.6, HOOK_Z + 3.8))
     # its shadow on the cut face behind it, then the block in a rope sling
-    c.add(c.on(c.m_bface(TERRACES[0][3]), f'<rect x="{f(ax - 1.5)}" y="{f(HOOK_Z + 0.5)}" width="9" height="4.6" fill="{iso.INK}" opacity="0.3" filter="{c.blur(0.8)}"/>'))
+    c.add(c.on(c.m_bface(face_b), f'<rect x="{f(ax - 1.5)}" y="{f(HOOK_Z + 0.5)}" width="9" height="4.6" fill="{iso.INK}" opacity="0.3" filter="{c.blur(0.8)}"/>'))
     ba, bb_, hz = ax, ab + 2.6, HOOK_Z
     sil = iso.hull([c.P(ba + sa * 4, bb_ + sb * 3, hz + z) for sa in (-1, 1) for sb in (-1, 1) for z in (0, 3.8)])
     c.add(f'<path d="{iso.poly(sil)}" fill="none" stroke="#5a4a32" stroke-width="0.9" stroke-linejoin="round" opacity="0.7"/>')
@@ -161,13 +177,19 @@ def rollers(c, a, b):
     raw.stone_block(c, a, b, 6, 3.6, 4.2, z0=2.4, seed=17, shadow=False)
 
 
-def build():
+def build_icon():
     c = iso.Canvas("quarry")
     iso.ground(c)
     iso.ground_ao(c, [(-48, -46), (6, -46), (26, -30), (32, -6), (44, 24), (24, 40), (-30, 30), (-50, 0)], grow=5, opacity=0.12)
 
     outcrop(c)
     crane(c)
+    works(c)
+    return c
+
+
+def works(c):
+    """Everything in front of the cut: crane, tool shed, blocks, rollers, the covered stack, spalls."""
     with c.at(*SHED):
         shed(c)
     raw.stone_block(c, -16, 22, 5, 3.6, 4.2, seed=11)
@@ -176,9 +198,27 @@ def build():
     rollers(c, 6, 36)
     tarp_stack(c, *STACK)
     raw.rubble(c, [(14, 44, 1.4, 71), (-26, 40, 1.2, 72), (44, 12, 1.5, 73), (-8, 12, 1.2, 74)], pal=raw.PALE_ROCK)
+
+
+def build_slope():
+    """quarry.slope: the works only; the terrain cuts SLOPE_STEPS into its own hill or massif."""
+    c = iso.Canvas("quarry", pid="quarry-slope", stem="quarry.slope")
+    iso.ground(c)
+    iso.ground_ao(c, [(-48, 8), (-30, -6), (8, -6), (38, -2), (44, 24), (24, 42), (-30, 34)], grow=5, opacity=0.12)
+    # fresh spalls and a half-dressed block at the foot of the lowest cut face
+    fb = SLOPE_FACE_B
+    c.add(f'<path d="{iso.poly([c.P(-35, fb, 0), c.P(5, fb, 0), c.P(6, fb + 3, 0), c.P(-34, fb + 2.4, 0)])}" fill="{iso.INK}" opacity="0.18" filter="{c.blur(1.2)}"/>')
+    raw.rubble(c, [(-31, fb + 2.6, 1.3, 63), (-19, fb + 3, 1.0, 64), (-8, fb + 2.4, 1.2, 65), (2, fb + 2.8, 1.0, 66), (-25, fb + 5, 0.8, 67)], pal=raw.PALE_ROCK)
+    raw.stone_block(c, -24, fb + 5.5, 4.4, 3, 3.4, seed=18)
+    crane(c, face_b=fb)
+    works(c)
     return c
+
+
+def build():
+    return [build_icon(), build_slope()]
 
 
 if __name__ == "__main__":
     out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), "..", "..", "..", "public", "assets", "buildings")
-    print("\n".join(build().write(out)))
+    print("\n".join(p for cv in build() for p in cv.write(out)))

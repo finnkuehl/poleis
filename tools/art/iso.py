@@ -158,7 +158,8 @@ class Canvas:
     Direction variants (e.g. the fishery's fishery.e0 ... e5) use the same user units and anchor
     but their own tight viewBox: set `viewbox = (x, y, w, h)` (user units, may start negative)
     and `anchor_marker = True` (writes data-anchor="128 176" on the root <svg>); `stem` is the
-    file name without ".svg" (default: the asset id).
+    file name without ".svg" (default: the asset id). `accent_layer = False` writes only the art
+    file (terrain sprites such as trees have no owner colour).
     """
 
     def __init__(self, asset_id, pid=None, stem=None):
@@ -171,6 +172,7 @@ class Canvas:
         self.grounded = False
         self.viewbox = None           # None: "0 0 size size"
         self.anchor_marker = False
+        self.accent_layer = True      # False: write only <stem>.svg (no owner colour)
         self._defs = {}
         self._items = []          # ("art" | "accent", markup)
 
@@ -327,7 +329,10 @@ class Canvas:
     def write(self, out_dir):
         os.makedirs(out_dir, exist_ok=True)
         paths = []
-        for name, text in ((f"{self.stem}.svg", self.art_svg()), (f"{self.stem}.accent.svg", self.accent_svg())):
+        layers = [(f"{self.stem}.svg", self.art_svg())]
+        if self.accent_layer:
+            layers.append((f"{self.stem}.accent.svg", self.accent_svg()))
+        for name, text in layers:
             path = os.path.join(out_dir, name)
             with open(path, "w", encoding="utf-8") as fh:
                 fh.write(text)

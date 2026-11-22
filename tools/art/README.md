@@ -11,6 +11,7 @@ tools/art/
   units_lib.py      unit library on top of iso.py (token, people, horse, cart, ships)
   buildings/<id>.py one script per building, named exactly like the id in src/data/
   units/<id>.py     one script per unit (see "Units" below)
+  terrain/trees.py  the 13 tree and shrub sprites for forests and hills (see "Terrain trees" below)
   build_all.py      builds every script into public/assets/buildings/ and public/assets/units/
                     (a script's build() returns one Canvas or a list, e.g. the fishery variants)
   preview.py        review sheet: art + accent tinted in the four player colours, map sizes
@@ -21,6 +22,7 @@ tools/art/
 ```sh
 python3 tools/art/build_all.py                 # all buildings and units
 python3 tools/art/build_all.py house hoplite   # only these ids
+python3 tools/art/build_all.py trees           # the terrain trees -> public/assets/terrain/
 python3 tools/art/buildings/house.py /tmp/out  # one script, into any folder
 
 python3 tools/art/preview.py house temple --out /tmp/preview.svg
@@ -284,7 +286,8 @@ if __name__ == "__main__":
 **Canvas**
 - `Canvas(asset_id, pid=None, stem=None)` – one asset; `c.add(svg)` art, `c.accent(svg)` owner
   colour, `c.write(dir)` writes `<stem>.svg` + `<stem>.accent.svg` (stem = asset id by default).
-  Direction variants: `c.viewbox = (x, y, w, h)`, `c.anchor_marker = True` (see above).
+  Direction variants: `c.viewbox = (x, y, w, h)`, `c.anchor_marker = True` (see above);
+  `c.accent_layer = False` writes only the art file (terrain trees).
 - `c.m_vplane(a, b, da, db)` – vertical plane through the ground point (a, b) containing the
   horizontal unit direction (da, db); local x along it, y up (a sail on a rotated boat).
 - `c.P(a, b, z)`, `c.m_ground/m_bface/m_aface/m_slope_b/m_slope_a`, `c.on(transform, svg)`,
@@ -384,6 +387,64 @@ module docstrings list everything. Reusable pieces worth knowing:
   and check the asset id matches `src/data/`. For grounded buildings also look at them on a plain
   meadow-green (`#9cc25a`) hexagon of the real size (pointy-top, hex width = 208 / 0.92 canvas
   units, centred on (128, 176)) – there is no plateau to hide a floating prop or a hard shadow edge.
+
+## Slope versions (mine and quarry)
+
+`buildings/mine.py` and `buildings/quarry.py` return **two canvases** each, like the fishery:
+
+| File | Use |
+|---|---|
+| `<id>.svg` (+ accent) | the icon, and the quarry on plains |
+| `<id>.slope.svg` (+ accent) | the map version on hills and mountains |
+
+- Both use the normal `0 0 256 256` canvas; the slope version is built with
+  `Canvas(id, pid="<id>-slope", stem="<id>.slope")`, so its gradient / filter ids stay unique.
+- The slope versions show **only the works**. The game's terrain cuts the face into its own
+  massif or hill, so the art has no hollow, outcrop, peak, snow, hill rock or rock terraces.
+- **The cut geometry is a contract with the game's terrain** (`src/render/`): it is kept as
+  constants – `SLOPE_FACE_B`, `SLOPE_FACE_A`, `SLOPE_FACE_H`, `SLOPE_OPEN`, `SLOPE_TRACK_A` in
+  `mine.py` and `SLOPE_STEPS` in `quarry.py`. Change it there and in `src/render/` together.
+  - mine: a vertical rock face on b = −15, facing +b, over a −25 … +5, 28 high; the tunnel
+    opening is a −15 … −5, z 0 … 16; the rails run out of it toward +b along a = −10.
+  - quarry: three stepped terraces with their fronts at b = −10, −20 and −30, each 9 high
+    (tops at 9, 18, 27).
+- The mine's cut rim uses the massif face colours of the game's terrain painter
+  (`terrainPaint.mountains`), copied as the palette `TROCK` in `mine.py`; keep them in step.
+
+## Terrain trees (`terrain/trees.py`)
+
+Forests are dense woodland of drawn trees in the building style (docs/ART.md, "Hills and
+mountains", bullet "Forests"); the same sprites dot the golden hills with olives and shrubs. The
+game (`src/render/terrainArt.ts`) loads them by id and places them densely as overlapping
+sprites, sorted back to front.
+
+- Files: `public/assets/terrain/<id>.svg`, **one art layer, no accent file** (no owner colour;
+  `Canvas.accent_layer = False`). All 13 come from one script, `terrain/trees.py` (Canvas id
+  `trees`, the file name is the `stem`).
+- Canvas: the **same world scale as the buildings** (`iso.S`, 208 units = 0.92 × hex width), so
+  trees match the houses and temple. Each file has its own tight `viewBox` (multiples of 4) and
+  **`data-anchor="128 176"`** on the root `<svg>`: the trunk foot (where the trunk meets the
+  ground) is at (128, 176) user units, like a building's ground point.
+- Sizes (world units; width = crown diameter, on screen × 1.41):
+
+| Ids | Tree | Height | Width |
+|---|---|---|---|
+| `pine1` `pine2` `pine3` | umbrella pine: bare trunk forking into a flat, cushioned crown | 52, 58, 45 | 42, 46, 35 |
+| `cypress1` `cypress2` | cypress: slim dark flame of small sprays | 52, 41 | 13, 11 |
+| `oak1` `oak2` `oak3` | holm oak: short stout trunk, rounded dense crown (green, blue-green, warm) | 36, 31, 39 | 35, 31, 37 |
+| `shrub1` `shrub2` `shrub3` | maquis: lentisk cushion, grey sage with lilac flowers, flowering broom | 10, 8, 13 | 17, 13, 19 |
+| `olive1` `olive2` | wild olive: gnarled grey trunk, loose silvery crown | 27, 23 | 27, 24 |
+
+- How a crown is built (`Tree.masses`): a dark silhouette of all leaf masses first (dark gaps and
+  undersides), then the masses from the bottom (or back) up, each with a radial gradient lit from
+  the upper left (`L` / `M` / `D` by its position in the crown), a lighter cap and a few glints.
+  So overlapping trees read as one deep canopy. Every tree has a soft contact shadow at the foot
+  and a short soft cast shadow to the lower right in ink.
+- Keep each file small (< 20 KB; they are 5–18 KB): paths use one decimal (`n1`), masses have 6–7
+  scallops, one gradient set per palette, two blur filters.
+- Species helpers in `trees.py`: `umbrella_pine`, `cypress`, `holm_oak`, `shrub`, `wild_olive`;
+  palettes in `PAL` (leaf) and `BARK` (trunks). Add a variant by adding a line to `build()` with
+  a new id – and tell the game (`terrainArt.ts` lists the ids).
 
 ## Units (`units_lib.py`, `units/<id>.py`)
 
