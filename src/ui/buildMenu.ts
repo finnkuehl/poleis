@@ -2,6 +2,7 @@
 import {
   BUILDING_IDS,
   BUILDINGS,
+  economyConfig,
   type BuildingCategory,
   type BuildingId,
   type CityLevel,
@@ -9,7 +10,7 @@ import {
 } from '../data';
 import { canAfford, missingGoods } from '../core/rules/goods';
 import { en } from '../i18n/en';
-import { fill, formatMissing } from '../i18n/format';
+import { fill, formatGoods, formatMissing } from '../i18n/format';
 import { costParts, levelReached, perTurnText, workersText } from './buildingText';
 import { buildingIcon, goodText } from './art';
 import { button, el } from './dom';
@@ -18,7 +19,7 @@ const CATEGORY_ORDER: readonly BuildingCategory[] = ['city', 'food', 'raw', 'pro
 
 export function createBuildMenu(
   root: HTMLElement,
-  h: { onPick(id: BuildingId): void; onClose(): void },
+  h: { onPick(id: BuildingId): void; onRoad(): void; onClose(): void },
 ): {
   open(
     stock: Stock,
@@ -131,6 +132,37 @@ export function createBuildMenu(
     return item;
   }
 
+  /** The "Road" entry: starts the road flow (start tile, end tile); costs wood per tile. */
+  function roadEntry(stock: Stock): HTMLButtonElement {
+    const affordable = canAfford(stock, economyConfig.roadCost);
+    const item = button(`build-item${affordable ? '' : ' is-muted'}`, '');
+    item.disabled = !affordable;
+    const icon = el('span', 'build-item__icon', '\u{1F6E4}\uFE0F');
+    icon.setAttribute('aria-hidden', 'true');
+    const body = el('span', 'build-item__body');
+    body.appendChild(el('span', 'build-item__name', en.ui.road));
+    body.appendChild(el('span', 'build-item__effect', en.ui.roadHint));
+    body.appendChild(
+      el(
+        'span',
+        'build-item__cost',
+        `${en.ui.cost}: ${formatGoods(economyConfig.roadCost)} ${en.ui.perTile}`,
+      ),
+    );
+    if (!affordable) {
+      body.appendChild(
+        el(
+          'span',
+          'build-item__missing',
+          formatMissing(missingGoods(stock, economyConfig.roadCost)),
+        ),
+      );
+    }
+    item.append(icon, body);
+    item.addEventListener('click', () => h.onRoad());
+    return item;
+  }
+
   return {
     open(stock, cityLevel, towers) {
       const scrollTop = list.scrollTop;
@@ -151,6 +183,10 @@ export function createBuildMenu(
         }
         list.appendChild(group);
       }
+      const roads = el('div', 'build-menu__group');
+      roads.appendChild(el('h3', 'build-menu__heading', en.ui.roadsHeading));
+      roads.appendChild(roadEntry(stock));
+      list.appendChild(roads);
       sheet.hidden = false;
       list.scrollTop = scrollTop;
     },

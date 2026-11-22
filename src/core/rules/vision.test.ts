@@ -5,7 +5,7 @@ import { distance, hexEquals, neighbors } from '../hex';
 import { hexAtIndex, tileIndex } from '../map';
 import { createGameState } from '../state';
 import { addBuilding, addUnit, at, makeTestState } from '../testing';
-import { isVisible, updateExplored, visibleTiles } from './vision';
+import { isVisible, revealsNothing, updateExplored, visibleTiles } from './vision';
 
 const exploredHexes = (s: ReturnType<typeof createGameState>, p = 0) =>
   s.players[p].explored.flatMap((e, i) => (e ? [hexAtIndex(s.map, i)] : []));
@@ -130,5 +130,48 @@ describe('fog of war', () => {
     expect(a).toEqual(b);
     expect(JSON.parse(JSON.stringify(a))).toEqual(a);
     expect(hexEquals(a.cities[0].center, b.cities[0].center)).toBe(true);
+  });
+});
+
+describe('revealsNothing', () => {
+  const open = () => makeTestState(Array(15).fill('p'.repeat(15)));
+
+  it('true when nothing changed', () => {
+    const s = open();
+    addUnit(s, 'spearman', at(7, 7));
+    updateExplored(s, 0);
+    expect(revealsNothing(s, structuredClone(s), 0)).toBe(true);
+  });
+
+  it('false when new tiles were explored', () => {
+    const before = open();
+    const u = addUnit(before, 'spearman', at(7, 7));
+    before.players[0].explored = before.players[0].explored.map(() => false);
+    updateExplored(before, 0);
+    const after = structuredClone(before);
+    after.units.find((x) => x.id === u)!.hex = at(9, 7);
+    updateExplored(after, 0);
+    expect(revealsNothing(before, after, 0)).toBe(false);
+  });
+
+  it('false when an enemy unit comes into view without new tiles', () => {
+    const before = open();
+    const u = addUnit(before, 'spearman', at(7, 7));
+    // The area is already explored, but the enemy stands outside the unit's sight.
+    before.players[0].explored = before.players[0].explored.map(() => true);
+    addUnit(before, 'spearman', at(10, 7), { owner: 1 });
+    const after = structuredClone(before);
+    after.units.find((x) => x.id === u)!.hex = at(8, 7);
+    expect(revealsNothing(before, after, 0)).toBe(false);
+  });
+
+  it('true when an already seen enemy stays in view', () => {
+    const before = open();
+    const u = addUnit(before, 'spearman', at(7, 7));
+    before.players[0].explored = before.players[0].explored.map(() => true);
+    addUnit(before, 'spearman', at(8, 7), { owner: 1 });
+    const after = structuredClone(before);
+    after.units.find((x) => x.id === u)!.hex = at(7, 8);
+    expect(revealsNothing(before, after, 0)).toBe(true);
   });
 });

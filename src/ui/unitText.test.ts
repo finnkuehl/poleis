@@ -3,13 +3,12 @@ import type { CombatPreview } from '../core/rules/combat';
 import { emptyStock } from '../core/rules/goods';
 import type { Unit } from '../core/state';
 import {
-  attackPreviewLines,
+  attackLabel,
   aboardState,
   aboardText,
   cargoText,
   inUnitCycle,
   onTheWayText,
-  orderConfirm,
   orderOutcomeText,
   trainOptions,
   unitStatLine,
@@ -60,27 +59,22 @@ describe('unitStatus', () => {
     expect(unitStatus(unit({ type: 'settler', movesLeft: 0 }), true)).toBe('done'));
 });
 
-describe('attackPreviewLines', () => {
-  const a = unit({ id: 1 });
-  const d = unit({ id: 2, owner: 1 });
-  it('shows damage dealt and taken', () => {
-    expect(attackPreviewLines(preview({}), a, d)).toEqual([
-      'You deal 5 damage (Spearman 10 → 5 HP)',
-      'You take 5 damage (Spearman 10 → 5 HP)',
-    ]);
+describe('attackLabel', () => {
+  it('shows the damage', () => {
+    expect(attackLabel(preview({ counter: 0 }))).toBe('\u22125');
   });
-  it('says when there is no counterattack', () => {
-    expect(attackPreviewLines(preview({ counter: 0 }), a, d)[1]).toBe('No counterattack');
+  it('adds the counterattack', () => {
+    expect(attackLabel(preview({ damage: 3, counter: 2 }))).toBe('\u22123 \u21A92');
   });
-  it('announces a defeated enemy without a counterattack', () => {
-    expect(
-      attackPreviewLines(preview({ damage: 12, defenderDies: true, counter: 0 }), a, d),
-    ).toEqual(['You deal 12 damage (Spearman 10 → 0 HP)', 'The enemy is defeated']);
+  it('shows a skull when the enemy dies', () => {
+    expect(attackLabel(preview({ damage: 12, defenderDies: true, counter: 0 }))).toBe(
+      '\u221212 \u2620',
+    );
   });
-  it('warns when the attacker would be lost', () => {
-    const lines = attackPreviewLines(preview({ counter: 12, attackerDies: true }), a, d);
-    expect(lines[1]).toBe('You take 12 damage (Spearman 10 → 0 HP)');
-    expect(lines[2]).toBe('Your unit would be lost');
+  it('warns when the counterattack would kill the attacker', () => {
+    expect(attackLabel(preview({ damage: 3, counter: 12, attackerDies: true }))).toBe(
+      '\u22123 \u21A912 \u2716',
+    );
   });
 });
 
@@ -130,21 +124,6 @@ describe('onTheWayText', () => {
     expect(onTheWayText(1)).toBe('On the way – arrives in 1 turn');
   });
   it('falls back without an estimate', () => expect(onTheWayText(null)).toBe('On the way'));
-});
-
-describe('orderConfirm', () => {
-  it('builds title, lines and button label', () => {
-    expect(orderConfirm('scout', 3)).toEqual({
-      title: 'Send Scout here?',
-      lines: ['Arrives in 3 turns', 'It walks on by itself at the start of each turn.'],
-      confirmLabel: 'Go here (3 turns)',
-    });
-  });
-  it('uses the singular for one turn', () => {
-    const c = orderConfirm('scout', 1);
-    expect(c.lines[0]).toBe('Arrives in 1 turn');
-    expect(c.confirmLabel).toBe('Go here (1 turn)');
-  });
 });
 
 describe('orderOutcomeText', () => {

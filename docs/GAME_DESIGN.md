@@ -107,7 +107,7 @@ Woodcutter ─Wood─┴► Smelter ──Bronze──► Units, wonder
 - "Connected" = there is a chain of road tiles/building tiles between the building and the storehouse (adjacency on the hex grid). Buildings directly next to a storehouse count as connected.
 - All goods go into the civilization's shared stock (no carrier simulation in version 1).
 - If something is missing, the building shows a status symbol and the info panel shows the reason.
-- Building a road: 1 wood per tile (from Polis on, optionally paved road: 1 stone, later).
+- Building a road: 1 wood per tile (from Polis on, optionally paved road: 1 stone, later). Roads are built from the build menu ("Road") or the "Road from here" row of an empty tile; a building that is not connected offers "Connect with road (N wood)" in its panel (the cheapest road to the network, one tap).
 
 **Detailed rules (decided in M2)**
 - **Start:** stock of **20 wood and 10 stone**. The first city center is placed **automatically** on plains on the mainland; its territory (radius 2) is guaranteed to contain forest, hills or mountains and enough plains. The camera starts there.
@@ -205,7 +205,7 @@ An enemy land unit that stands on a city center undisturbed for one turn takes o
 - **Test mode** (`&sandbox`): a passive enemy civilization (one city, two spearmen) is placed nearby so combat and capturing can be tried before the AI arrives (M5). It takes no actions.
 
 ### Detailed rules (decided after M4: move orders)
-- **Move orders:** a selected unit can be sent to any explored land tile it cannot reach this turn, as long as a land path over explored tiles leads there. **Dragging** the unit onto that tile gives the order right away; **tapping** the tile shows the path with turn numbers and a "Go here (N turns)" button (cancel = nothing happens).
+- **Move orders:** a selected unit can be sent to any explored land tile it cannot reach this turn, as long as a land path over explored tiles leads there. **Tapping** the tile or **dragging** the unit onto it gives the order right away (no confirmation); the path with its turn numbers is drawn on the map and the order can be stopped with "Stop".
 - **Walking:** the unit walks right away as far as its movement allows this turn. At the start of each of its owner's turns (after healing and new units, before production) it walks on along the cheapest path with its full movement – same rules as a normal move (explored tiles only, terrain costs, roads, the 1-tile rule, one unit per tile). The path is planned again every turn; units the owner can see block it, unseen ones do not (the fog reveals nothing).
 - **The order ends** when the unit arrives, when no path is left (the way is blocked), when an enemy unit it had not seen during this order comes into its sight (enemies already visible when the order was given do not stop it), when it is attacked, or when the player moves, attacks or founds a city with it by hand, gives it a new order or taps "Stop".
 - A unit on its way moves every turn, so it does not heal.
@@ -270,12 +270,14 @@ Individually selectable at game start:
 ## 11. Controls (phone)
 
 - **Top:** resource bar (horizontally scrollable), turn X / limit.
-- **Bottom:** bar with "Build", "Road", "Units"; large "End turn" button at the bottom right.
+- **Bottom:** bar with "Build", "Undo", "Units"; large "End turn" button at the bottom right.
 - Tap a tile → info panel from below (terrain, building, status, actions).
-- **Tap an empty tile in your territory** → the panel lists every building that fits on that tile ("Build here"); **one tap builds it** right away. Unaffordable ones are muted with what is missing, higher-level ones show "From Polis". A "Road from here" button starts a road on that tile.
+- **Tap an empty tile in your territory** → the panel lists every building that fits on that tile ("Build here"); **one tap builds it** right away. Unaffordable ones are muted with what is missing, higher-level ones show "From Polis". A "Road from here" row at the end of the list starts a road on that tile.
 - Building via the "Build" button: choose a building → valid tiles are highlighted → tap a tile → confirm.
-- Road: tap the start tile, tap the target tile → preview of the path with cost → confirm.
-- Tap a unit → reachable tiles highlighted, attackable enemies marked red.
+- Road: "Build" → "Road" (or "Road from here"): tap the start tile, tap the target tile → preview of the path with cost → confirm. There is no separate Road button.
+- **Units, one tap:** tap a unit → reachable tiles highlighted, attackable enemies marked red with the expected result on them ("−3", "−3 ☠" when it kills, "−3 ↩2" when a counterattack follows). A tap on a reachable tile moves the unit, a tap on a far tile gives the move order, a tap on an attackable enemy attacks – all at once, without a confirmation sheet.
+- **Undo:** the "Undo" button takes back the last move (move or move order; not attacks, founding, boarding/landing, training or building), but only if that move revealed no new tile and no new enemy unit. Ending the turn or any other action clears it.
+- When a unit is done (no moves left and no order), the next unit that can still act is selected automatically; when none is left, a hint says so.
 
 ## 12. Later (not in version 1)
 

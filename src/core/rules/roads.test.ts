@@ -3,7 +3,7 @@ import { applyAction } from '../actions';
 import { addBuilding, addCity, addRoad, at, makeTestState } from '../testing';
 import { connectedBuildingIds } from './connection';
 import { tileIndex } from '../map';
-import { planRoad } from './roads';
+import { planRoad, roadConnection, roadField } from './roads';
 
 const OPEN = ['ppppppp', 'ppppppp', 'ppppppp'];
 
@@ -112,5 +112,40 @@ describe('buildRoad action', () => {
     const s = makeTestState(OPEN, { goods: { wood: 2 } });
     const r = applyAction(s, { type: 'buildRoad', from: at(0, 1), to: at(3, 1) });
     expect(r).toEqual({ ok: false, error: { code: 'notAffordable', missing: { wood: 2 } } });
+  });
+});
+
+describe('roadField / roadConnection', () => {
+  it('a tile next to the network needs no road', () => {
+    const s = makeTestState(OPEN);
+    addCity(s, at(0, 1), { radius: 6 });
+    const field = roadField(s, 0);
+    expect(roadConnection(s, field, at(1, 1))).toEqual({ cost: 0, target: null });
+  });
+
+  it('counts the new road tiles and names the end of the road', () => {
+    const s = makeTestState(OPEN);
+    addCity(s, at(0, 1), { radius: 6 });
+    const field = roadField(s, 0);
+    const info = roadConnection(s, field, at(4, 1));
+    expect(info?.cost).toBe(3);
+    expect(info?.target).toEqual(at(0, 1));
+  });
+
+  it('reuses an existing road', () => {
+    const s = makeTestState(OPEN);
+    addCity(s, at(0, 1), { radius: 6 });
+    addRoad(s, at(1, 1));
+    addRoad(s, at(2, 1));
+    const info = roadConnection(s, roadField(s, 0), at(4, 1));
+    expect(info?.cost).toBe(1);
+    expect(info?.target).toEqual(at(2, 1));
+  });
+
+  it('is null when the network cannot be reached', () => {
+    // An ocean strip separates the city from the tile.
+    const s = makeTestState(['pppoppp', 'pppoppp', 'pppoppp']);
+    addCity(s, at(0, 1), { radius: 6 });
+    expect(roadConnection(s, roadField(s, 0), at(5, 1))).toBeNull();
   });
 });

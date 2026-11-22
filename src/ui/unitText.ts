@@ -54,40 +54,17 @@ export function unitStatusText(status: UnitStatus): string {
 }
 
 /**
- * Lines for the attack confirm sheet: damage dealt, the counterattack and the outcome.
- * The unit name in the brackets is the unit that takes the damage.
+ * Short label drawn on an attackable enemy: the damage ("-3"), a skull when it kills,
+ * the counterattack ("-3 ↩2") and a cross when the counterattack would kill the attacker.
  */
-export function attackPreviewLines(
-  preview: CombatPreview,
-  attacker: Unit,
-  defender: Unit,
-): string[] {
+export function attackLabel(preview: CombatPreview): string {
   const a = en.attack;
-  const lines: string[] = [];
-  lines.push(
-    fill(a.deal, {
-      n: preview.damage,
-      unit: en.units[defender.type],
-      from: defender.hp,
-      to: Math.max(0, defender.hp - preview.damage),
-    }),
-  );
-  if (preview.defenderDies) {
-    lines.push(a.defeated);
-  } else if (preview.counter > 0) {
-    lines.push(
-      fill(a.take, {
-        n: preview.counter,
-        unit: en.units[attacker.type],
-        from: attacker.hp,
-        to: Math.max(0, attacker.hp - preview.counter),
-      }),
-    );
-    if (preview.attackerDies) lines.push(a.lost);
-  } else {
-    lines.push(a.noCounter);
-  }
-  return lines;
+  if (preview.defenderDies) return fill(a.labelKill, { n: preview.damage });
+  if (preview.counter <= 0) return fill(a.labelDamage, { n: preview.damage });
+  return fill(preview.attackerDies ? a.labelCounterDeath : a.labelCounter, {
+    n: preview.damage,
+    counter: preview.counter,
+  });
 }
 
 export interface TrainOption {
@@ -151,20 +128,6 @@ export function onTheWayText(turns: number | null): string {
   return turns === null
     ? en.orders.onTheWayUnknown
     : fill(en.orders.onTheWay, { turns: formatTurns(turns) });
-}
-
-/** Texts of the confirm sheet shown before a unit is sent on a multi-turn move. */
-export function orderConfirm(
-  unit: UnitId,
-  turns: number,
-): { title: string; lines: string[]; confirmLabel: string } {
-  const o = en.orders;
-  const t = formatTurns(turns);
-  return {
-    title: fill(o.confirmTitle, { unit: en.units[unit] }),
-    lines: [fill(o.arrivesIn, { turns: t }), o.continues],
-    confirmLabel: fill(o.goHere, { turns: t }),
-  };
 }
 
 /** Toast text for an order that ended at the start of the turn (arrived = info, stopped = error). */

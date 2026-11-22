@@ -50,3 +50,28 @@ export function updateExplored(state: GameState, player: PlayerId): void {
 export function updateAllExplored(state: GameState): void {
   for (const p of state.players) updateExplored(state, p.id);
 }
+
+/**
+ * Did the step from `before` to `after` reveal nothing to the player? True when no new tile was
+ * explored and no enemy unit is visible that was not visible before (used to allow undo).
+ */
+export function revealsNothing(before: GameState, after: GameState, player: PlayerId): boolean {
+  const explored = (s: GameState): boolean[] =>
+    s.players.find((p) => p.id === player)?.explored ?? [];
+  const a = explored(before);
+  const b = explored(after);
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+
+  const seenEnemies = (s: GameState): Set<number> => {
+    const visible = visibleTiles(s, player);
+    const ids = new Set<number>();
+    for (const u of s.units) {
+      if (u.owner !== player && visible[tileIndex(s.map, u.hex)]) ids.add(u.id);
+    }
+    return ids;
+  };
+  const was = seenEnemies(before);
+  for (const id of seenEnemies(after)) if (!was.has(id)) return false;
+  return true;
+}

@@ -16,7 +16,7 @@ import { footprintSignature, groundFootprints, unitFootprints } from './groundwo
 import { createOrderLayers, type OrderPath } from './orderLayers';
 import { playerColorOf } from './playerColor';
 import { createTerrainLayer } from './terrainLayer';
-import { createUnitLayers } from './unitLayers';
+import { createUnitLayers, type AttackTarget } from './unitLayers';
 import { theme } from './theme';
 
 export { mapWorldBounds };
@@ -32,7 +32,7 @@ export interface MapView {
   /** Redraws the dynamic layers (territory, roads, buildings, badges, the ground under buildings). */
   update(state: GameState, statuses: Record<number, BuildingStatus>, viewer?: PlayerId): void;
   /** Red outlines on attack targets; [] clears. */
-  setAttackTargets(hexes: readonly Hex[]): void;
+  setAttackTargets(targets: readonly AttackTarget[]): void;
   setSelection(h: Hex | null): void;
   /** Test option: no fog, enemy units and buildings drawn everywhere. Takes effect on the next update. */
   setRevealAll(value: boolean): void;
