@@ -74,7 +74,14 @@ export function turnSummary(report: TurnReport, ctx: SummaryContext = {}): Summa
   }
   if (report.units.starving) {
     lines.push({
-      text: fill(en.turnSummary.unitsHungry, { hp: militaryConfig.starvationDamage }),
+      text: fill(
+        report.units.hungry && report.units.unpaid
+          ? en.turnSummary.unitsHungryUnpaid
+          : report.units.unpaid
+            ? en.turnSummary.unitsUnpaid
+            : en.turnSummary.unitsHungry,
+        { hp: militaryConfig.starvationDamage },
+      ),
       kind: 'error',
     });
   }

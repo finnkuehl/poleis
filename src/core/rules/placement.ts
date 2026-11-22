@@ -1,6 +1,13 @@
 // Placement rules for buildings.
 
-import { BUILDINGS, CITY_LEVELS, wonderConfig, type BuildingId, type TerrainId } from '../../data';
+import {
+  BUILDINGS,
+  CITY_LEVELS,
+  CITY_LEVEL_DEFS,
+  wonderConfig,
+  type BuildingId,
+  type TerrainId,
+} from '../../data';
 import { hexEquals, neighbors, type Hex } from '../hex';
 import { allHexes, inBounds, tileIndex, terrainAt } from '../map';
 import type { GameState, PlayerId } from '../state';
@@ -18,6 +25,40 @@ function hasNeighborTerrain(state: GameState, h: Hex, terrains: readonly Terrain
     const t = terrainAt(state.map, n);
     return t !== undefined && terrains.includes(t);
   });
+}
+
+/** Watchtowers the player has in one city, and the most that city may have at its level. */
+export function towerUsage(
+  state: GameState,
+  player: PlayerId,
+  cityId: number,
+): { used: number; max: number } {
+  const city = state.cities.find((c) => c.id === cityId);
+  const used = state.buildings.filter(
+    (b) =>
+      b.type === 'borderTower' &&
+      b.owner === player &&
+      state.tileCity[tileIndex(state.map, b.hex)] === cityId,
+  ).length;
+  return { used, max: city ? CITY_LEVEL_DEFS[city.level].maxTowers : 0 };
+}
+
+/** Watchtowers over all cities of the player: total used, total limit, and whether any city has room. */
+export function towerTotals(
+  state: GameState,
+  player: PlayerId,
+): { used: number; max: number; hasRoom: boolean } {
+  let used = 0;
+  let max = 0;
+  let hasRoom = false;
+  for (const c of state.cities) {
+    if (c.owner !== player) continue;
+    const u = towerUsage(state, player, c.id);
+    used += u.used;
+    max += u.max;
+    if (u.used < u.max) hasRoom = true;
+  }
+  return { used, max, hasRoom };
 }
 
 /** null = the building may be placed here, otherwise the first rule that is violated. */
@@ -62,6 +103,11 @@ export function checkPlacement(
     return { code: 'wrongTerrain', terrains: allowed };
   }
 
+  // A city captured with more towers than its limit keeps them but cannot build new ones.
+  if (type === 'borderTower' && city) {
+    const { used, max } = towerUsage(state, player, city.id);
+    if (used >= max) return { code: 'towerLimit', max };
+  }
   if (!opts.ignoreCost) {
     const stock = state.players.find((p) => p.id === player)?.goods;
     if (stock && !canAfford(stock, def.cost)) {

@@ -2,7 +2,7 @@
 
 import { distance, hexEquals, range, type Hex } from '../core/hex';
 import { hexAtIndex, inBounds, terrainAt, tileIndex } from '../core/map';
-import { advanceCheck, checkFoundCity } from '../core/rules';
+import { advanceCheck, checkFoundCity, planMoveOrder } from '../core/rules';
 import type { City, Unit } from '../core/state';
 import { aiConfig, militaryConfig, type TerrainId } from '../data';
 import type { AiContext } from './context';
@@ -76,9 +76,29 @@ export function settlerCount(ctx: AiContext): number {
   );
 }
 
+/** Free plains (no building, no road) in the territory of the city's owner around this city. */
+export function freePlainsOf(ctx: AiContext, city: City): number {
+  const map = ctx.state.map;
+  const built = new Set(ctx.state.buildings.map((b) => tileIndex(map, b.hex)));
+  let n = 0;
+  for (let i = 0; i < map.tiles.length; i++) {
+    if (ctx.state.tileCity[i] !== city.id || ctx.state.territory[i] !== ctx.player) continue;
+    if (map.tiles[i] === 'plains' && !ctx.state.roads[i] && !built.has(i)) n += 1;
+  }
+  return n;
+}
+
+/** Has the city (almost) no free plains left? Then it cannot grow where it stands. */
+export function isCramped(ctx: AiContext, city: City): boolean {
+  return freePlainsOf(ctx, city) < M.crampedFreePlains;
+}
+
 /** May a settler be sent out from this city now (all conditions except the site)? */
 export function mayExpandFrom(ctx: AiContext, city: City): boolean {
   if (ctx.cities.length + settlerCount(ctx) >= M.maxCities[ctx.personality]) return false;
+  // A cramped city cannot grow where it stands: it needs only the residents a settler takes
+  // (the rule minimum), whatever the food surplus is and whether it waits to advance.
+  if (isCramped(ctx, city)) return city.residents >= militaryConfig.settlerMinCityResidents;
   if (city.residents < M.expandMinResidents) return false;
   const waiting = ctx.cities.some((c) => {
     const check = advanceCheck(ctx.state, c.city.id, ctx.production);
@@ -114,6 +134,8 @@ export function settlerCandidates(ctx: AiContext): Candidate[] {
     }
     sites.forEach((site, k) => {
       if (hexEquals(site.hex, u.hex)) return;
+      // Only sites the settler can really walk to (other units may block the way).
+      if (!planMoveOrder(view.state, u.id, site.hex).ok) return;
       out.push({
         action: { type: 'setOrder', unitId: u.id, to: site.hex },
         utility: M.utility.settleWalk - k,

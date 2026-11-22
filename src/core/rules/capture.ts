@@ -24,6 +24,8 @@ export function captureCities(state: GameState, player: PlayerId): number[] {
     if (unit.owner !== player || unit.capturing === null) continue;
     const city = state.cities.find((c) => c.id === unit.capturing);
     unit.capturing = null;
+    // Old saves: a unit that cannot capture (scout, settler) never takes a city.
+    if (!UNITS[unit.type].canCapture) continue;
     if (!city || city.owner === player || !hexEquals(city.center, unit.hex)) continue;
     const ofCity = (barracksId: number) => {
       const b = state.buildings.find((x) => x.id === barracksId);

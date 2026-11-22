@@ -94,7 +94,7 @@ Woodcutter ─Wood─┴► Smelter ──Bronze──► Units, wonder
 | Mine | on mountains | 5 wood, 3 stone | 2 | +2 ore | Settlement |
 | Smelter | Plains | 2 planks, 4 stone | 1 | 2 ore + 1 wood → 1 bronze | Settlement |
 | Barracks | Plains | 6 planks, 4 stone | 0 | trains land units | Settlement |
-| Border tower | Plains or hills, inside own territory | 2 wood, 4 stone | 0 | claims territory radius 2 around the tower (only unclaimed tiles); the new land belongs to the tower's city | Settlement |
+| Watchtower (id `borderTower`) | Plains or hills, inside own territory | 2 wood, 4 stone | 0 | claims territory radius 2 around the tower (only unclaimed tiles); sees 3 tiles and **shoots at enemy units within 2 tiles (2 damage per turn)**; the new land belongs to the tower's city; **limit per city: 1 as a Settlement, 3 as a Polis, 6 as a Metropolis** | Settlement |
 | Vineyard | Hills | 4 planks, 2 stone | 1 | +2 grapes | Polis |
 | Winery | Plains | 4 planks, 4 stone | 1 | 2 grapes → 2 wine | Polis |
 | Harbor | Plains at coastal water | 8 planks, 4 stone | 1 | builds ships; road connection point like a storehouse | Polis |
@@ -112,7 +112,8 @@ Woodcutter ─Wood─┴► Smelter ──Bronze──► Units, wonder
 **Detailed rules (decided in M2)**
 - **Start:** stock of **20 wood and 10 stone**. The first city center is placed **automatically** on plains on the mainland; its territory (radius 2) is guaranteed to contain forest, hills or mountains and enough plains. The camera starts there.
 - **Resource placement (balance pass after M3):** resource buildings may stand on their resource. Woodcutter: on forest, or on plains/hills next to forest. Quarry: on hills or mountains, or on plains next to them. Mine: on mountains only (a city without mountains reaches them with a border tower). Fishery: plains next to coastal water.
-- **Territory grows with border towers** (moved forward from M4): a city claims radius 2; border towers claim radius 2 around themselves. Ordinary buildings do not expand territory – expanding stays a deliberate, paid choice.
+- **Watchtower limit:** each city may have at most 1 watchtower as a Settlement, 3 as a Polis and 6 as a Metropolis (counted on the tiles of that city). A city captured with more keeps them but cannot build new ones until it is below its limit.
+- **Territory grows with border towers (watchtowers)** (moved forward from M4): a city claims radius 2; border towers claim radius 2 around themselves. Ordinary buildings do not expand territory – expanding stays a deliberate, paid choice.
 - **One thing per tile:** a tile holds either one building or one road.
 - **Roads** only on walkable land in the player's own territory (plains, forest, hills – not mountains, not water). A road may pass through the player's own buildings at no cost.
 - **Demolishing** buildings and roads is allowed, **without refund**. The city center cannot be demolished.
@@ -166,7 +167,7 @@ Every city of a civilization has its own level; the stock is shared.
 | Trireme | 3 | 2 | 12 | 3 | 1 | 8 planks, 2 bronze | Metropolis (harbor) |
 
 - Training: land units in the barracks, ships in the harbor, **settlers in the city center**. The unit appears on the next turn.
-- **Upkeep:** 1 food per unit per turn. If food is missing, every unit loses 2 HP.
+- **Upkeep:** every unit costs **1 food and 1 drachma (soldiers' pay)** per turn. If either is short, every unit loses 2 HP (once, even if both are short).
 - Per turn: move and/or attack (an attack ends the unit's turn).
 - Healing: +2 HP per turn without acting, +4 inside your own territory.
 - **Settlers** found a new city on a free plains tile (at least 4 tiles from other city centers).
@@ -180,6 +181,15 @@ damage        = round(attackPower / total × Attack_A × 4.5)
 counterattack = round(defensePower / total × Defense_D × 4.5)   // only if D survives and A is within D's range
 ```
 
+### City and tower fire
+At the start of its owner's turn, **every city center and every watchtower shoots once** at an enemy unit within **2 tiles**. Fixed damage, no counterattack: city center 3 (Settlement), 4 (Polis), 5 (Metropolis); watchtower 2 (numbers in `src/data/military.ts`).
+- **Peace time:** no city or tower fire before turn 15 (`defenseFromTurn`, the same turn as the AI peace time in section 9). The passive test-mode enemy fires from turn 1, at the start of the human's turn and before the capture, so its fire can be tried in the sandbox.
+- Order: city centers first, then watchtowers, each by building id. Dead units are removed right after the shot, so the next shooter picks a new target.
+- Target: the unit capturing this city first, then the lowest HP, then the nearest, then the lowest unit id. Passengers are never targets (their ship is, and a sunk ship takes them along). Ships near the coast can be hit.
+- **Shots never cancel a capture** (only an attack by a unit does), otherwise no city could ever be taken. The army has to survive the fire for a turn.
+- The sequence at the start of a turn: capture, elimination, **city and tower fire**, healing/new units, move orders, production. A city captured this turn already shoots for its new owner.
+- Shooting needs no extra vision (city and tower vision is 3, range 2). The turn summary reports shots on your units and your shots at enemies.
+
 ### Capturing cities
 An enemy land unit that stands on a city center undisturbed for one turn takes over the city, including the buildings in its territory.
 
@@ -189,9 +199,9 @@ An enemy land unit that stands on a city center undisturbed for one turn takes o
 - **Only into explored land:** a unit can only move onto tiles its civilization has already explored (so the fog reveals nothing). A scout explores step by step: move, see further, move on. If an unseen enemy unit stands in the way, the move is blocked ("An unseen unit blocks the way.").
 - **Training:** land units are trained in a barracks, **settlers in the city center** (city panel: "Train settler"; no barracks needed to expand); the cost is paid when ordering, the unit appears at the start of the next turn on the training building's tile (or the nearest free walkable tile next to it). One order per training building per turn. A settler order queued at a barracks in an old save still finishes.
 - **Settlers** take 2 residents from the city whose center trains them (that city needs at least 3). A settler founds a city on a free plains tile at least 4 tiles from every city center; the settler is used up, the new city starts with **2 residents** and claims the unclaimed land in radius 2.
-- **Upkeep:** units eat after the residents; if food runs out, every unit loses 2 HP. A unit at 0 HP is gone.
+- **Upkeep:** units eat after the residents and are paid in drachmas (1 food + 1 drachma each; passengers aboard ships count, units still in training do not). If the food or the pay does not last for all units, every unit loses 2 HP once. A unit at 0 HP is gone. The turn summary says when soldiers were hungry or not paid; the economy overview lists the pay as drachma consumption.
 - **Combat:** move and/or attack per turn; an attack ends the unit's turn. Defender bonuses multiply: forest/hills ×1.5, **a unit defending on a city center counts as walled (×1.5)**. After a win the attacker stays where it is.
-- **Capturing:** a land unit (not a settler) that stands on an enemy city center and is still there, unattacked, at the start of its owner's next turn takes the city with the buildings and territory of that city.
+- **Capturing:** a land unit (**never a settler or a scout**) that stands on an enemy city center and is still there, unattacked, at the start of its owner's next turn takes the city with the buildings and territory of that city.
 - **Test mode** (`&sandbox`): a passive enemy civilization (one city, two spearmen) is placed nearby so combat and capturing can be tried before the AI arrives (M5). It takes no actions.
 
 ### Detailed rules (decided after M4: move orders)
@@ -217,6 +227,7 @@ An enemy land unit that stands on a city center undisturbed for one turn takes o
 - City center: territory radius 2. Border tower: radius 2 around the tower (must border your own territory).
 - Tiles belong to the civilization that claimed them first.
 - **Fog of war:** unexplored tiles black; explored but currently not visible tiles darkened. Vision range: units 2, city center/border tower 3.
+- **Watchtowers (border towers) also shoot:** like the city center, each watchtower fires once per turn at an enemy unit within 2 tiles for 2 damage (see section 7, city and tower fire).
 
 ## 9. AI civilizations
 
@@ -226,6 +237,7 @@ An enemy land unit that stands on a city center undisturbed for one turn takes o
 | Sparta | Warrior | Barracks early, hoplites, attacks neighbors |
 | Corinth | Builder | Fast growth, wonder race |
 
+- **Peace time:** no AI attacks anyone before turn 15, and no city or watchtower fires before then either (section 7).
 - The player chooses their own civilization (name/color free), the AI takes the rest.
 - AI approach: **utility-based** – every possible action gets a score based on current needs (e.g. food scarce → farm scores high), weighted by the personality. The AI only uses regular player actions and only sees what its vision allows.
 - Difficulty levels later (e.g. production bonus for the AI).

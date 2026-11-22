@@ -6,7 +6,7 @@ import { endTurn } from '../turn';
 import type { GameState } from '../state';
 
 /** 7x5 plains; enemy (player 1) city at (4,2) with a farm, human unit next to it. */
-function world(type: 'spearman' | 'settler' = 'spearman') {
+function world(type: 'spearman' | 'settler' | 'scout' = 'spearman') {
   const s = makeTestState(['ppppppp', 'ppppppp', 'ppppppp', 'ppppppp', 'ppppppp'], {
     ownAll: false,
   });
@@ -86,9 +86,26 @@ describe('capturing', () => {
     expect(endTurn(on).cities[0].owner).toBe(1);
   });
 
+  it('scouts cannot capture', () => {
+    const { s, unit } = world('scout');
+    const on = move(s, unit, at(4, 2));
+    expect(on.units[0].capturing).toBeNull();
+    expect(endTurn(on).cities[0].owner).toBe(1);
+  });
+
   it('does not capture own city', () => {
     const { s, unit } = world();
     s.cities[0].owner = 0;
     expect(move(s, unit, at(4, 2)).units[0].capturing).toBeNull();
+  });
+
+  it('a scout standing on an enemy city (old save) never takes it and loses `capturing`', () => {
+    const { s, cityId, unit } = world('scout');
+    const scout = s.units.find((u) => u.id === unit)!;
+    scout.hex = at(4, 2);
+    scout.capturing = cityId;
+    const t = endTurn(s);
+    expect(t.cities.find((c) => c.id === cityId)?.owner).toBe(1);
+    expect(t.units.find((u) => u.id === unit)?.capturing).toBeNull();
   });
 });

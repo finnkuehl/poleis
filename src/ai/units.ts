@@ -6,6 +6,7 @@ import { distance, hexEquals, neighbors, type Hex } from '../core/hex';
 import { hexAtIndex, terrainAt, tileIndex } from '../core/map';
 import {
   attackTargets,
+  shotDamage,
   combatPreview,
   planMoveOrder,
   reachableTiles,
@@ -13,7 +14,7 @@ import {
   type OrderPlan,
 } from '../core/rules';
 import type { City, GameState, Unit } from '../core/state';
-import { aiConfig, TERRAIN, UNITS } from '../data';
+import { aiConfig, militaryConfig, TERRAIN, UNITS } from '../data';
 import type { AiContext } from './context';
 import { defendersWanted } from './training';
 import type { Candidate } from './types';
@@ -22,6 +23,7 @@ import {
   hpShare,
   isCombat,
   isEnemyCenter,
+  knownEnemyShooters,
   landSearch,
   nearestDistance,
   ownCenters,
@@ -170,6 +172,7 @@ function peaceGuard(view: View): Candidate[] {
 function exploreCandidates(view: View, roles: Roles): Candidate[] {
   const out: Candidate[] = [];
   const { state, ctx } = view;
+  const shooters = knownEnemyShooters(view);
   for (const u of roles.scouts) {
     if (!ready(ctx, u)) continue;
     const others = roles.scouts.filter((s) => s.id !== u.id).map((s) => s.order?.to ?? s.hex);
@@ -191,11 +194,13 @@ function exploreCandidates(view: View, roles: Roles): Candidate[] {
       if (nearestDistance(tile, others) < M.scoutSpread) continue;
       const plan = planMoveOrder(state, u.id, tile);
       if (!plan.ok || stopsOnEnemyCity(view, plan.plan)) continue;
+      // Soft penalty: do not end the move where known enemy cities or towers can shoot.
+      const shot = shooters.some((b) => distance(b.hex, tile) <= militaryConfig.defense.range);
       out.push(
         cmd(
           u,
           { type: 'setOrder', unitId: u.id, to: tile },
-          M.utility.explore - tries,
+          M.utility.explore - tries - (shot ? M.fireAvoidPenalty : 0),
           'explore',
           `explore:${tile.q},${tile.r}`,
         ),
@@ -285,10 +290,24 @@ function offenseOf(view: View, roles: Roles): Offense | null {
     if (e.type === 'settler') continue;
     if (distance(e.hex, first.center) <= M.targetStrengthRadius) enemy += strength(e);
   }
+  // The target's fire: its city center and the known watchtowers of that city.
+  enemy += M.fireStrengthWeight * cityFire(view, first);
   const mine = active.reduce((sum, u) => sum + strength(u), 0);
   const ratio =
     M.attackRatio[view.ctx.personality] * (engaged.length > 0 ? M.engagedRatioFactor : 1);
   return { targets, on: active.length >= minSize && mine >= ratio * enemy, engaged, active };
+}
+
+/** Damage per turn of the city's center and its known watchtowers (what the army must endure). */
+function cityFire(view: View, city: City): number {
+  const center = view.state.buildings.find((b) => b.id === city.id);
+  let total = center ? shotDamage(view.state, center) : 0;
+  for (const b of knownEnemyShooters(view)) {
+    if (b.type === 'borderTower' && view.state.tileCity[idx(view, b.hex)] === city.id) {
+      total += shotDamage(view.state, b);
+    }
+  }
+  return total;
 }
 
 function armyCandidates(view: View, roles: Roles): Candidate[] {

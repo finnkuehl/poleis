@@ -1,10 +1,15 @@
+import type { CityLevel } from './buildings';
+
 // General military numbers (see docs/GAME_DESIGN.md, section 7).
 // To rebalance: change the numbers below, save, reload the game.
 
 export const militaryConfig = {
   // Food every unit eats per turn (after the residents; fish first, then grain).
   upkeepFood: 1,
-  // HP every unit loses per turn if the food does not last for all units.
+  // Drachmas ("pay") every unit costs per turn. If food or drachmas do not last for all units,
+  // every unit loses `starvationDamage` HP (once, even if both are short).
+  upkeepDrachmas: 1,
+  // HP every unit loses per turn if the food or the pay does not last for all units.
   starvationDamage: 2,
   // HP healed per turn by a unit that neither moved nor attacked.
   healIdle: 2,
@@ -33,4 +38,20 @@ export const militaryConfig = {
   visionUnit: 2,
   // Vision range of city centers and border towers, in tiles.
   visionCity: 3,
+
+  // City and watchtower fire (docs/GAME_DESIGN.md, section 7): at the start of its owner's turn
+  // every city center and every watchtower shoots once at an enemy unit in range. The damage is
+  // fixed and the target never shoots back. Shots never cancel a capture.
+  defense: {
+    // No city or watchtower fires before this turn (peace time). Matches
+    // `aiConfig.peaceUntilTurn`: nobody is attacked before then. The passive test-mode enemy
+    // fires from turn 1 so the feature can be tried in the sandbox.
+    defenseFromTurn: 15,
+    // Range in tiles (hex distance).
+    range: 2,
+    // Damage of a city center's shot, by city level.
+    cityDamage: { settlement: 3, polis: 4, metropolis: 5 } as Record<CityLevel, number>,
+    // Damage of a watchtower's shot.
+    towerDamage: 2,
+  },
 };

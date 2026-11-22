@@ -6,6 +6,7 @@ import { runPopulation } from './rules/population';
 import { runProduction } from './rules/production';
 import { updateAllExplored } from './rules/vision';
 import { captureCities } from './rules/capture';
+import { runDefense } from './rules/defense';
 import { eliminatePlayers } from './rules/elimination';
 import {
   checkEliminationResult,
@@ -39,11 +40,20 @@ export function endTurn(state: GameState): GameState {
   if (!stock) throw new Error(`Unknown player ${player}`);
   const before = { ...stock };
   // Start of the player's turn (docs/GAME_DESIGN.md, section 2):
+  // Test mode: the passive enemy never takes a turn, so its cities and towers shoot at the start
+  // of the human's turn instead, before the capture (the capturer gets shot first, as in a real
+  // game; the shots never cancel the capture).
+  if (next.players.find((p) => p.id === player)?.isHuman) {
+    for (const p of next.players) if (p.alive && isPassive(p)) runDefense(next, p.id);
+  }
   // Units standing on an enemy city center take it over.
   const captured = captureCities(next, player);
   // Players without a city are out of the game.
   eliminatePlayers(next, player);
   checkEliminationResult(next);
+  // The player's cities and watchtowers shoot (also the ones just captured); this is before the own units
+  // heal, spawn and walk, so the enemies they shoot at are exactly the ones standing there.
+  runDefense(next, player);
   // Units first: heal, reset, new units appear.
   healAndResetUnits(next, player);
   const spawned = spawnUnits(next, player);

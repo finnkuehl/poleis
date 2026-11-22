@@ -5,9 +5,17 @@ import { distance, neighbors } from '../core/hex';
 import { hexAtIndex, tileIndex } from '../core/map';
 import { advanceCheck, cityIdOf, canAfford, foodIn } from '../core/rules';
 import type { Building, City } from '../core/state';
-import { aiConfig, CITY_LEVELS, GOOD_IDS, UNITS, type Goods, type UnitId } from '../data';
+import {
+  aiConfig,
+  CITY_LEVELS,
+  GOOD_IDS,
+  militaryConfig,
+  UNITS,
+  type Goods,
+  type UnitId,
+} from '../data';
 import type { AiContext } from './context';
-import { mayExpandFrom, settleSites } from './settle';
+import { isCramped, mayExpandFrom, settleSites } from './settle';
 import type { Candidate } from './types';
 import { isCombat, landSearch, viewOf, type View } from './view';
 
@@ -106,6 +114,14 @@ export function trainingCandidates(ctx: AiContext): Candidate[] {
   const foodAfter = ctx.foodProd - ctx.foodNeed - 1;
   const margin = M.unitFoodMargin[ctx.personality];
   const foodOk = foodAfter >= 0 || (foodAfter >= margin && foodIn(ctx.stock) >= M.unitFoodStockMin);
+  // Drachma income per turn (before any pay) minus the pay of all units, the ones in training
+  // and one more.
+  const payAfter = ctx.drachmaIncome - (ctx.unitCount + 1) * militaryConfig.upkeepDrachmas;
+  const payMargin = M.unitPayMargin[ctx.personality];
+  const payOk =
+    payAfter >= payMargin ||
+    (payAfter >= payMargin - M.unitPayStockSlack[ctx.personality] &&
+      ctx.stock.drachmas >= M.unitPayStockMin);
   const keep = advanceKeep(ctx);
   // Does paying for the unit leave what the advance of a city needs?
   const keeps = (unit: UnitId): boolean =>
@@ -131,7 +147,12 @@ export function trainingCandidates(ctx: AiContext): Candidate[] {
     if (!city) continue;
     if (mayExpandFrom(ctx, city) && canAfford(ctx.stock, UNITS.settler.cost)) {
       if (settleSites(view, center.hex, 1).length > 0) {
-        makeAdd(center)('settler', M.utility.trainSettler, 'settler for a new city');
+        const cramped = isCramped(ctx, city);
+        makeAdd(center)(
+          'settler',
+          cramped ? M.utility.trainSettlerCramped : M.utility.trainSettler,
+          cramped ? 'settler: the city is cramped' : 'settler for a new city',
+        );
       }
     }
   }
@@ -142,7 +163,7 @@ export function trainingCandidates(ctx: AiContext): Candidate[] {
     const city = ctx.cities.find((c) => c.city.id === cityIdOf(state, barracks))?.city;
     if (!city) continue;
     const add = makeAdd(barracks);
-    if (!foodOk) continue;
+    if (!foodOk || !payOk) continue;
 
     // Scout.
     const scouts = combatCount(ctx, 'scout');

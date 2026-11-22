@@ -364,7 +364,15 @@ function turnReport(...cities: CityReport[]): TurnReport {
     delta: {},
     buildings: [],
     cities,
-    units: { spawned: 0, upkeepEaten: {}, starving: false, lost: 0 },
+    units: {
+      spawned: 0,
+      upkeepEaten: {},
+      upkeepPaid: 0,
+      hungry: false,
+      unpaid: false,
+      starving: false,
+      lost: 0,
+    },
     captured: [],
     orders: [],
   };
@@ -599,10 +607,32 @@ addControl('Turn summary: units', () => {
   const base = turnReport();
   const sequence = [
     ...turnSummary(
-      { ...base, units: { spawned: 1, upkeepEaten: {}, starving: false, lost: 0 } },
+      {
+        ...base,
+        units: {
+          spawned: 1,
+          upkeepEaten: {},
+          upkeepPaid: 0,
+          hungry: false,
+          unpaid: false,
+          starving: false,
+          lost: 0,
+        },
+      },
       { spawnedUnits: ['spearman'] },
     ),
-    ...turnSummary({ ...base, units: { spawned: 0, upkeepEaten: {}, starving: true, lost: 1 } }),
+    ...turnSummary({
+      ...base,
+      units: {
+        spawned: 0,
+        upkeepEaten: {},
+        upkeepPaid: 0,
+        hungry: true,
+        unpaid: false,
+        starving: true,
+        lost: 1,
+      },
+    }),
     ...turnSummary({ ...base, captured: [2] }),
   ];
 

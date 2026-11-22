@@ -25,7 +25,15 @@ function report(...cities: CityReport[]): TurnReport {
     delta: {},
     buildings: [],
     cities,
-    units: { spawned: 0, upkeepEaten: {}, starving: false, lost: 0 },
+    units: {
+      spawned: 0,
+      upkeepEaten: {},
+      upkeepPaid: 0,
+      hungry: false,
+      unpaid: false,
+      starving: false,
+      lost: 0,
+    },
     captured: [],
     orders: [],
   };
@@ -65,7 +73,18 @@ describe('turnSummary', () => {
     ]);
   });
   it('reports new units by name or by count', () => {
-    const r = { ...report(), units: { spawned: 2, upkeepEaten: {}, starving: false, lost: 0 } };
+    const r = {
+      ...report(),
+      units: {
+        spawned: 2,
+        upkeepEaten: {},
+        upkeepPaid: 0,
+        hungry: false,
+        unpaid: false,
+        starving: false,
+        lost: 0,
+      },
+    };
     expect(turnSummary(r, { spawnedUnits: ['spearman', 'settler'] })).toEqual([
       { text: 'Spearman is ready', kind: 'info' },
       { text: 'Settler is ready', kind: 'info' },
@@ -76,16 +95,52 @@ describe('turnSummary', () => {
     ]);
   });
   it('reports hungry and lost units as errors', () => {
-    const r = { ...report(), units: { spawned: 0, upkeepEaten: {}, starving: true, lost: 1 } };
+    const r = {
+      ...report(),
+      units: {
+        spawned: 0,
+        upkeepEaten: {},
+        upkeepPaid: 0,
+        hungry: true,
+        unpaid: false,
+        starving: true,
+        lost: 1,
+      },
+    };
     expect(turnSummary(r)).toEqual([
       { text: 'Your units are hungry: each lost 2 HP', kind: 'error' },
-      { text: '1 unit was lost to hunger', kind: 'error' },
+      { text: '1 unit was lost (hunger or missing pay)', kind: 'error' },
+    ]);
+  });
+  it('says soldiers were not paid, or hungry and not paid', () => {
+    const units = {
+      spawned: 0,
+      upkeepEaten: {},
+      upkeepPaid: 0,
+      hungry: false,
+      unpaid: true,
+      starving: true,
+      lost: 0,
+    };
+    expect(turnSummary({ ...report(), units })).toEqual([
+      { text: 'Your soldiers were not paid: each lost 2 HP', kind: 'error' },
+    ]);
+    expect(turnSummary({ ...report(), units: { ...units, hungry: true } })).toEqual([
+      { text: 'Your soldiers were hungry and not paid: each lost 2 HP', kind: 'error' },
     ]);
   });
   it('reports move orders after the unit lines and before captured cities', () => {
     const r = {
       ...report(),
-      units: { spawned: 1, upkeepEaten: {}, starving: false, lost: 0 },
+      units: {
+        spawned: 1,
+        upkeepEaten: {},
+        upkeepPaid: 0,
+        hungry: false,
+        unpaid: false,
+        starving: false,
+        lost: 0,
+      },
       captured: [3],
       orders: [
         { unitId: 1, unitType: 'scout' as const, outcome: 'arrived' as const },

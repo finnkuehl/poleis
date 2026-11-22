@@ -160,6 +160,7 @@ describe('turn: healing, reset, upkeep', () => {
     const acted = addUnit(s, 'spearman', at(1, 0), { hp: 3, acted: true });
     const nearFull = addUnit(s, 'spearman', at(3, 0), { hp: 9 });
     s.players[0].goods.grain = 50;
+    s.players[0].goods.drachmas = 50;
     const next = endTurn(s);
     const hp = (id: number) => next.units.find((u) => u.id === id)!.hp;
     expect(hp(inside)).toBe(7);
@@ -181,6 +182,7 @@ describe('turn: healing, reset, upkeep', () => {
     addCity(s, at(2, 1), { residents: 4 });
     s.players[0].goods.fish = 1;
     s.players[0].goods.grain = 5;
+    s.players[0].goods.drachmas = 10;
     addUnit(s, 'spearman', at(0, 0));
     addUnit(s, 'spearman', at(4, 2));
     const next = endTurn(s);
@@ -188,9 +190,14 @@ describe('turn: healing, reset, upkeep', () => {
     expect(next.lastReport?.units).toEqual({
       spawned: 0,
       upkeepEaten: { grain: 2 },
+      upkeepPaid: 2,
+      hungry: false,
+      unpaid: false,
       starving: false,
       lost: 0,
     });
+    // (The city's taxes come on top of the stock.)
+    expect(next.lastReport?.units.upkeepPaid).toBe(2);
     expect(next.players[0].goods.grain).toBe(5 + 2 - 1 - 2);
     expect(next.lastReport?.delta.grain).toBe(2 - 1 - 2);
     expect(next.units.every((u) => u.hp === 10)).toBe(true);
@@ -210,6 +217,68 @@ describe('turn: healing, reset, upkeep', () => {
     // Idle healing happened before hunger (acted -> no healing here).
     expect(next.units.find((u) => u.id === a)?.hp).toBe(8);
     expect(next.units.find((u) => u.id === b)).toBeUndefined();
+  });
+
+  /** Two idle spearmen without a city; food and pay as given. */
+  function upkeepWorld(grain: number, drachmas: number) {
+    const s = makeTestState(['pppp']);
+    const a = addUnit(s, 'spearman', at(0, 0), { acted: true });
+    const b = addUnit(s, 'spearman', at(1, 0), { acted: true });
+    s.players[0].goods.grain = grain;
+    s.players[0].goods.drachmas = drachmas;
+    return { s, a, b };
+  }
+
+  it('units cost 1 drachma each; fed and paid units are unharmed', () => {
+    const { s } = upkeepWorld(5, 5);
+    const next = endTurn(s);
+    expect(next.players[0].goods.drachmas).toBe(3);
+    expect(next.lastReport?.units).toMatchObject({ upkeepPaid: 2, unpaid: false, starving: false });
+    expect(next.units.every((u) => u.hp === 10)).toBe(true);
+  });
+
+  it('missing drachmas alone hurt every unit once', () => {
+    const { s } = upkeepWorld(5, 1);
+    const next = endTurn(s);
+    expect(next.players[0].goods.drachmas).toBe(0);
+    expect(next.players[0].goods.grain).toBe(3);
+    expect(next.lastReport?.units).toMatchObject({
+      upkeepPaid: 1,
+      hungry: false,
+      unpaid: true,
+      starving: true,
+    });
+    expect(next.units.map((u) => u.hp)).toEqual([8, 8]);
+  });
+
+  it('missing food alone hurts every unit once and the pay is still paid', () => {
+    const { s } = upkeepWorld(1, 5);
+    const next = endTurn(s);
+    expect(next.players[0].goods.drachmas).toBe(3);
+    expect(next.lastReport?.units).toMatchObject({ hungry: true, unpaid: false, starving: true });
+    expect(next.units.map((u) => u.hp)).toEqual([8, 8]);
+  });
+
+  it('food and pay both short: still only one hit', () => {
+    const { s } = upkeepWorld(0, 0);
+    const next = endTurn(s);
+    expect(next.lastReport?.units).toMatchObject({ hungry: true, unpaid: true, starving: true });
+    expect(next.units.map((u) => u.hp)).toEqual([8, 8]);
+  });
+
+  it('passengers aboard ships cost food and pay', () => {
+    const s = makeTestState(['cccc', 'pppp', 'cccc']);
+    addUnit(s, 'transport', at(0, 0), { acted: true });
+    addUnit(s, 'spearman', at(1, 1), { acted: true });
+    // The passenger sits on the ship's tile.
+    const passenger = addUnit(s, 'spearman', at(0, 0), { acted: true });
+    s.units.find((u) => u.id === passenger)!.aboard = s.units[0].id;
+    s.players[0].goods.grain = 10;
+    s.players[0].goods.drachmas = 10;
+    const next = endTurn(s);
+    // Three units pay: the ship, the spearman and the passenger.
+    expect(next.players[0].goods.drachmas).toBe(7);
+    expect(next.lastReport?.units.upkeepEaten).toEqual({ grain: 3 });
   });
 });
 

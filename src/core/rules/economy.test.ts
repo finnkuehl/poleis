@@ -109,4 +109,18 @@ describe('economyOverview low priority row', () => {
     const wood = flow(economyOverview(s, 0), 'wood');
     expect(wood).toMatchObject({ lowPriority: true, canPrioritize: true, stock: 0, net: 0 });
   });
+
+  it('books the full unit pay due (units plus queued ones), so a shortfall shows as a deficit', () => {
+    const s = setup({ drachmas: 1 });
+    const barracks = addBuilding(s, 'barracks', at(1, 2));
+    addUnit(s, 'spearman', at(2, 2));
+    s.training.push({ barracksId: barracks, unit: 'spearman', owner: 0 });
+    const drachmas = flow(economyOverview(s, 0), 'drachmas')!;
+    const pay = drachmas.consumed.find((c) => c.source === 'units');
+    // One unit on the map and one in the queue, 1 drachma each, though only 1 is in stock.
+    expect(pay?.amount).toBe(2);
+    // The net is taxes minus the full pay, not capped by the 1 drachma in stock.
+    const taxes = drachmas.produced.reduce((sum, p) => sum + p.amount, 0);
+    expect(drachmas.net).toBe(taxes - 2);
+  });
 });

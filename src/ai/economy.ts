@@ -7,7 +7,14 @@
 import type { Action } from '../core/actions';
 import { neighbors, type Hex } from '../core/hex';
 import { terrainAt, tileIndex } from '../core/map';
-import { advanceCheck, canAfford, foodIn, missingGoods, territoryGain } from '../core/rules';
+import {
+  advanceCheck,
+  canAfford,
+  foodIn,
+  missingGoods,
+  territoryGain,
+  towerUsage,
+} from '../core/rules';
 import {
   aiConfig,
   BUILDINGS,
@@ -22,6 +29,7 @@ import {
   type TerrainId,
 } from '../data';
 import type { AiContext, CityInfo } from './context';
+import { freePlainsOf, isCramped } from './settle';
 import { bronzeForUnits } from './training';
 import type { Candidate } from './types';
 
@@ -253,6 +261,14 @@ function houseWishes(g: Gen): void {
   if (food.net < aiConfig.houseMinFoodNet[ctx.personality]) return;
   if (aiConfig.houseNeedsFoodCover[ctx.personality] && food.projNet < 0) return;
   for (const ci of ctx.cities) {
+    // The last free plains tile of a cramped civilization without a barracks is kept for it.
+    if (
+      ctx.count.barracks === 0 &&
+      freePlainsOf(ctx, ci.city) <= aiConfig.military.crampedBarracksPlains &&
+      isCramped(ctx, ci.city)
+    ) {
+      continue;
+    }
     let buffer = aiConfig.houseBuffer[ctx.personality];
     // A Metropolis needs room for the wonder's crew.
     if (ci.city.level === 'metropolis') buffer = Math.max(buffer, aiConfig.metropolisHouseBuffer);
@@ -407,6 +423,10 @@ function optionalWishes(g: Gen): void {
   }
   if (ctx.count.barracks === 0 && ctx.turn >= cfg.barracksStartTurn[ctx.personality]) {
     wishBuilding(g, 'barracks', U.barracks, 'barracks', { wish: 'barracks' });
+  } else if (ctx.count.barracks === 0 && ctx.cities.some((c) => isCramped(ctx, c.city))) {
+    // A cramped civilization builds the barracks at once, while a free plains tile is left:
+    // without it there are no scouts and no way to find a place for settlers.
+    wishBuilding(g, 'barracks', U.barracksCramped, 'barracks (cramped)', { reserve: true });
   }
   if (
     ctx.count.wonder === 0 &&
@@ -519,13 +539,26 @@ function towerWishes(g: Gen): void {
     for (const h of sites) {
       const gained = territoryGain(ctx.state, h, radius);
       if (gained.length < cfg.towerMinGain) continue;
+      // The last watchtower a city may build: spend it on the most land, not on one terrain.
+      // A cramped city (almost no free plains) wants plains above all and ignores the needed
+      // terrain: it can only grow by claiming plains.
+      const cityId = ctx.state.tileCity[tileIndex(ctx.state.map, h)];
+      const usage = towerUsage(ctx.state, ctx.player, cityId);
+      const lastSlot = usage.max - usage.used <= 1;
+      const city = ctx.state.cities.find((c) => c.id === cityId);
+      const cramped = lastSlot && city !== undefined && isCramped(ctx, city);
       let value = 0;
-      let hasNeeded = needed.length === 0;
+      let hasNeeded = needed.length === 0 || cramped;
       for (const t of gained) {
         const terrain = terrainAt(ctx.state.map, t) as TerrainId;
         const isNeeded = needed.includes(terrain);
         if (isNeeded) hasNeeded = true;
-        value += isNeeded ? cfg.neededTerrainValue : cfg.tileValue[terrain];
+        value +=
+          isNeeded && !lastSlot
+            ? cfg.neededTerrainValue
+            : cramped && terrain === 'plains'
+              ? cfg.crampedPlainsValue
+              : cfg.tileValue[terrain];
       }
       if (!hasNeeded) continue;
       if (terrainAt(ctx.state.map, h) === 'plains') value -= cfg.towerOnPlainsPenalty;

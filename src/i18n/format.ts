@@ -39,6 +39,7 @@ export function formatError(err: RuleError): string {
     good: err.good ? en.goods[err.good].toLowerCase() : '',
     made: err.made ?? 0,
     needed: err.needed ?? 0,
+    max: err.max ?? 0,
     distance: militaryConfig.foundMinDistance,
   });
 }
@@ -217,7 +218,9 @@ export function formatUsed(flow: GoodFlow): string | null {
         : c.source === 'residents'
           ? en.economy.residentsUse
           : c.source === 'units'
-            ? en.economy.unitsUse
+            ? flow.good === 'drachmas'
+              ? en.economy.unitsPay
+              : en.economy.unitsUse
             : en.economy.needsUse;
     return flowPart(name, c.source === 'building' ? c.count : 1, c.amount, -1);
   });

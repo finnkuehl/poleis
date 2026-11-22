@@ -25,6 +25,8 @@ export interface Advance {
 }
 
 export interface CityLevelDef {
+  /** Most watchtowers (border towers) one city of this level may have. */
+  maxTowers: number;
   /** Needs of this level besides food. */
   needs: readonly Need[];
   /** How to reach the next level (null = highest level). */
@@ -33,6 +35,8 @@ export interface CityLevelDef {
 
 export const CITY_LEVEL_DEFS: Record<CityLevel, CityLevelDef> = {
   settlement: {
+    // Watchtower limit per city: 1 as a Settlement, 3 as a Polis, 6 as a Metropolis.
+    maxTowers: 1,
     needs: [],
     next: {
       to: 'polis',
@@ -42,6 +46,7 @@ export const CITY_LEVEL_DEFS: Record<CityLevel, CityLevelDef> = {
     },
   },
   polis: {
+    maxTowers: 3,
     needs: [{ good: 'oil', residentsPer: 10 }],
     next: {
       to: 'metropolis',
@@ -51,6 +56,7 @@ export const CITY_LEVEL_DEFS: Record<CityLevel, CityLevelDef> = {
     },
   },
   metropolis: {
+    maxTowers: 6,
     needs: [
       { good: 'oil', residentsPer: 10 },
       { good: 'wine', residentsPer: 10 },

@@ -69,6 +69,9 @@ export const aiConfig = {
     marketplace: 40,
     temple: 45,
     barracks: 80,
+    // The barracks of a cramped civilization (see `crampedFreePlains`), before the turn it
+    // would normally be built.
+    barracksCramped: 160,
     wonder: 250,
     // Border towers: to reach terrain a wished building needs / when plains run out / to grow.
     towerForTerrain: 0.9, // x the utility of the wish that is stuck
@@ -182,6 +185,8 @@ export const aiConfig = {
   // Value of a newly claimed tile by terrain; terrain a wish needs counts `neededTerrainValue`.
   tileValue: { plains: 1.5, forest: 1, hills: 1, mountains: 1, coast: 0.1, ocean: 0.1 },
   neededTerrainValue: 6,
+  // Value of a newly claimed plains tile for the last tower slot of a cramped city.
+  crampedPlainsValue: 6,
   // Towers on plains cost a building spot: subtracted from the tower tile's score.
   towerOnPlainsPenalty: 1,
   // Stock the AI wants before building a tower just to expand.
@@ -242,6 +247,8 @@ export const aiConfig = {
       peaceGuard: 880,
       // Training wishes.
       trainSettler: 70,
+      // Same, for a cramped city (see `crampedFreePlains`): beats most building wishes.
+      trainSettlerCramped: 200,
       trainScout: 95,
       trainDefender: 90,
       trainDefenderUnderThreat: 400,
@@ -296,6 +303,14 @@ export const aiConfig = {
     // Warriors accept a small food deficit while the food stock is at least `unitFoodStockMin`.
     unitFoodMargin: { merchant: 0, warrior: -2, builder: 0 } as Record<Personality, number>,
     unitFoodStockMin: 20,
+    // Soldiers' pay: the AI trains a combat unit only if its drachma income per turn, after the
+    // pay of all units (also the ones in training) and this new one, stays at least this high.
+    // This caps the army by the money. Warriors accept a small deficit while the stock is big.
+    unitPayMargin: { merchant: 0, warrior: -1, builder: 0 } as Record<Personality, number>,
+    // The income may be this much below the margin while the drachma stock is at least
+    // `unitPayStockMin` (only warriors use this slack).
+    unitPayStockSlack: { merchant: 0, warrior: 1, builder: 0 } as Record<Personality, number>,
+    unitPayStockMin: 60,
     // The food wishes plan for this many wanted-but-missing units at most (they will eat).
     unitFoodPlanCap: 4,
 
@@ -307,6 +322,11 @@ export const aiConfig = {
     engageRadius: 3,
     // Strength (attack x HP share) of visible enemy units within this distance of the target.
     targetStrengthRadius: 4,
+    // City and watchtower fire (docs/GAME_DESIGN.md, section 7) counts as enemy strength when the
+    // army judges an attack: strength added = fire damage per turn x this weight, for the city
+    // center and the known watchtowers of the target city. Fire never misses and cannot be
+    // answered, so the army wants a bigger edge against a city that shoots hard.
+    fireStrengthWeight: 1,
     // Strength assumed for a target city whose center is not in sight.
     assumedCityDefense: 4,
     // The army strength must be at least this many times the enemy strength near the target.
@@ -321,6 +341,9 @@ export const aiConfig = {
     // --- Exploring ---
     // Frontier tiles tried per scout (nearest first), and the distance two scouts keep apart.
     frontierTries: 4,
+    // Soft penalty on the explore utility of a spot within the range of a known enemy city or
+    // watchtower: the scout would be shot there. A spot is still used if nothing better exists.
+    fireAvoidPenalty: 60,
     scoutSpread: 5,
 
     // --- Settling ---
@@ -328,6 +351,13 @@ export const aiConfig = {
     // residents (units not counted) is at least `expandMinFoodNet`.
     expandMinResidents: 8,
     expandMinFoodNet: 0,
+    // A city is cramped when its territory has fewer free plains than this (plains without a
+    // building or road). A cramped city sends out settlers although the food surplus is too
+    // small and although it waits to advance: it cannot grow where it stands.
+    crampedFreePlains: 3,
+    // A cramped civilization without a barracks keeps its last free plains tiles (at most this
+    // many) for the barracks: no house is built there.
+    crampedBarracksPlains: 1,
     // While a city waits to advance (enough residents, but oil/goods missing) no settlers go out:
     // they would take the workers the chain needs. Unless the city is this big.
     expandWaitResidents: 40,
