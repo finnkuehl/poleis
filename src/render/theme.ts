@@ -109,7 +109,64 @@ export const theme = {
     grassAlpha: 0.9,
     hillGrassColor: 0x8a8f3e,
     flowerColors: [0xfbf7ea, 0xf3d34a, 0xd8483a, 0xb79ad8],
-    /** Forest: share of cypresses among the trees (the rest are umbrella pines) */
+    /**
+     * Forest drawn with the tree art (docs/ART.md "Forests", src/render/forest.ts): a dense wood
+     * on a jittered lattice in map space, so the canopy runs on from one forest tile into the next.
+     */
+    forest: {
+      /** Distance between neighboring trees (fraction of the hex size) and random shift (share of it) */
+      spacing: 0.34,
+      jitter: 0.36,
+      /** Chance of a gap in the canopy; a smooth noise adds a few glades (extra gap chance there) */
+      gapChance: 0.04,
+      gladeChance: 0.45,
+      /** How much the mix of species shifts from region to region (pine-rich vs oak-rich woods) */
+      mixShift: 0.2,
+      /** Umbrella pines dominate, holm oaks are the mass, the rest are cypresses (vertical accents) */
+      pineShare: 0.44,
+      oakShare: 0.4,
+      /** Size change per tree (+-share) */
+      scaleJitter: 0.15,
+      /**
+       * Toward open land (other terrain, water, map border) the wood thins out over this distance:
+       * chance a tree stays right at the edge, share that become shrubs, size there
+       */
+      edgeZone: 0.45,
+      edgeKeep: 0.4,
+      edgeShrubShare: 0.55,
+      edgeScale: 0.7,
+      /** Trees keep this far from the beach */
+      shoreMargin: 0.3,
+      /** Crown radius of each kind at size 1 (fraction of the hex size), when no exact one is known */
+      crown: { pine: 0.24, oak: 0.2, cypress: 0.07, shrub: 0.096, olive: 0.15 },
+      /** Exact crown radius of every tree art file at size 1 (measured from the art, hex sizes) */
+      treeCrowns: {
+        pine1: 0.246,
+        pine2: 0.27,
+        pine3: 0.205,
+        cypress1: 0.076,
+        cypress2: 0.064,
+        oak1: 0.205,
+        oak2: 0.182,
+        oak3: 0.217,
+        shrub1: 0.1,
+        shrub2: 0.076,
+        shrub3: 0.111,
+        olive1: 0.158,
+        olive2: 0.141,
+      },
+      /** Brightness variation of the tree sprites (tint between this gray and white) */
+      tintMin: 0xe6e6e6,
+      /** Soft contact shadow under each tree sprite (0 = none: the tree art brings its own shadows) */
+      spriteShadowAlpha: 0,
+      /** Forest floor: dappled shade between the trunks and a few sunflecks (per tile) */
+      floorShadeCount: 6,
+      floorShadeAlpha: 0.2,
+      sunfleckCount: 3,
+      sunfleckColor: 0xa8c768,
+      sunfleckAlpha: 0.22,
+    },
+    /** Forest without tree art (code-drawn trees): share of cypresses among the trees (the rest are umbrella pines) */
     cypressShare: 0.4,
     pineDark: 0x47662a,
     pineLight: 0x76973a,
@@ -239,6 +296,44 @@ export const theme = {
      * over it (hills) or a dry-stone wall (mountains), highest in the middle and running out into
      * the slope at both ends (share of the front it spans, height, how ragged its top is).
      */
+    /**
+     * Mines and quarries on hills and mountains dig into the terrain's own slope (docs/ART.md
+     * "Mines and quarries dig into the real slope"). The geometry is a contract with the art
+     * (tools/art/buildings/mine.py SLOPE_FACE_*, quarry.py SLOPE_STEPS), in the art's world units
+     * around the tile center: a / b = the two ground axes of the art, z = height.
+     */
+    cuts: {
+      /** Art world units -> canvas units (the art's iso scale) and the height factor of z */
+      artScale: 1.08146,
+      artHeight: 1.225,
+      /** Mine: one vertical rock face on the plane b = faceB along a faceA, faceH high */
+      faceB: -15,
+      faceA: [-25, 5],
+      faceH: 28,
+      /** ... running out into the slope over this many units beyond both ends (a, toward +b) */
+      faceRunOut: [12, 4],
+      /** Quarry: [a from, a to, front face b, top runs back to b, top height z] per step */
+      steps: [
+        [-35, 5, -10, -20, 9],
+        [-35, -5, -20, -30, 18],
+        [-35, -15, -30, -40, 27],
+      ],
+      /** On a cut tile the peak stands this far behind the tile center (hex sizes), this much lower */
+      peakBack: 0.5,
+      peakFactor: 0.9,
+      /** Hills: the cut face is dusty limestone, the step tops hill gold */
+      hillFace: 0xe2d8c2,
+      hillEnd: 0xb7ab92,
+      hillTop: 0xd8c27a,
+      /** Mountains: the cut face is the massif's middle rock, ends in shade, tops lit */
+      rockFace: 0xbaac95,
+      rockEnd: 0x958873,
+      rockTop: 0xd6cab3,
+      /** Light lip along the top edge of every cut face; faint tool marks on the faces */
+      lipColor: 0xf1ead9,
+      markColor: 0x6a6054,
+      markAlpha: 0.25,
+    },
     terrace: {
       earthSpan: 0.6,
       stoneSpan: 0.56,
@@ -449,8 +544,6 @@ export const theme = {
   hpBarGoodColor: 0x4caf50,
   hpBarMidColor: 0xc2902a,
   hpBarLowColor: 0xd6453a,
-  /** Token moves up (fraction of hex size) when a building stands on the same tile */
-  unitOnBuildingOffsetFactor: 0.38,
   /** Attack targets: red outline + light red fill */
   attackColor: 0xd6453a,
   attackWidth: 3,
@@ -567,7 +660,22 @@ export const theme = {
       /** Small details (rubble, stones) lie mostly near the building: within this share, from this ring */
       detailShare: 0.85,
       detailRing: 0.3,
+      /**
+       * Mine and quarry on a slope: the terrain cuts the rock face / terraces, the art shows the
+       * works; the ground is only a narrow ledge of scree and gravel in front of them (half width,
+       * half height, how far in front of the tile center; fractions of the hex size)
+       */
+      ledge: { rx: 0.42, ry: 0.1, y: 0.16 },
     },
+    /** Under a unit's token on a tile without a building, the terrain makes room (half axes) */
+    unitFootprint: { rx: 0.3, ry: 0.18 },
+    /**
+     * A unit on a tile with a building stands at the front of the tile (this far below the tile
+     * center, fraction of the hex size), so the building stays visible
+     */
+    unitFrontOffset: 0.4,
+    /** Soft ground shadow under drawn tokens (offset to the lower right, alpha) */
+    unitShadowAlpha: 0.22,
     /** Soft shadows of small things on the ground (stumps, shrubs, walls, hedges) */
     shadowColor: 0x1d2b36,
     shadowAlpha: 0.24,
@@ -779,6 +887,13 @@ export const theme = {
       color: 0xdcc58f,
       /** The yard's center sits this share of the apothem toward the jetty edge (under the hut) */
       yardShift: 0.64,
+      /** The terrain keeps its grass and flowers off the yard grown by this much (the rest stays) */
+      footprintGrow: 1.15,
+      /** Around the yard: sparse beach grass, shells and pebbles (how many, colors) */
+      litterCount: 9,
+      beachGrass: 0xb3b46a,
+      shellColors: [0xf6eee0, 0xecd3c4],
+      pebbleColor: 0xb9ad95,
     },
     /**
      * City-level rings on the ground around a building (no base any more): half width of the

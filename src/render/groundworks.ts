@@ -4,9 +4,11 @@
 // trees and rocks. No PixiJS; deterministic (tile hashes only).
 import type { Hex, Point } from '../core/hex';
 import { tileIndex } from '../core/map';
-import type { Building, GameState, MapState, PlayerId } from '../core/state';
+import { visibleTiles } from '../core/rules/vision';
+import type { Building, GameState, MapState, PlayerId, Unit } from '../core/state';
 import type { BuildingId } from '../data/buildings';
 import { buildingsShownTo } from './fog';
+import type { FootprintKind } from './terrainArt';
 import { edgeNeighborHex } from './geometry';
 import { apothem, isWater, tileHash } from './terrain';
 import { theme } from './theme';
@@ -163,11 +165,26 @@ export function slopeOutline(
   return pts;
 }
 
-/** Same shape as `TileFootprint` in terrainLayer.ts: an ellipse around the tile center. */
+/**
+ * Same shape as `TileFootprint` in terrainLayer.ts: an ellipse around the tile center, plus
+ * what it belongs to (terrainArt.ts `FootprintKind`; absent = 'building') and, optionally, how far
+ * the ellipse's center lies from the tile center (`cx`, `cy`, world px; absent = 0).
+ */
 export interface GroundFootprint {
   hex: Hex;
   rx: number;
   ry: number;
+  kind?: FootprintKind;
+  cx?: number;
+  cy?: number;
+}
+
+/** Footprint kind of a building: a mine or quarry on hills / mountains cuts into the slope. */
+export function footprintKindOf(type: BuildingId, terrain: string | undefined): FootprintKind {
+  const slope = terrain === 'hills' || terrain === 'mountains';
+  if (slope && type === 'mine') return 'mineCut';
+  if (slope && type === 'quarry') return 'quarryCut';
+  return 'building';
 }
 
 /**
@@ -202,15 +219,77 @@ export function groundFootprints(
   for (const b of buildingsShownTo(state, viewer, revealAll)) {
     const fp = footprintOf(b.type, size);
     if (GROUND_KIND[b.type] !== 'fishery') {
-      out.push({ hex: b.hex, ...fp });
+      const kind = footprintKindOf(b.type, state.map.tiles[tileIndex(state.map, b.hex)]);
+      out.push(kind === 'building' ? { hex: b.hex, ...fp } : { hex: b.hex, ...fp, kind });
       continue;
     }
+    // Only the yard, around its shifted center: the terrain's grass and flowers stay on the rest
     const e = jettyEdge(state.map, b.hex);
     const shift = fisheryYardOffset(e, size);
-    out.push({ hex: b.hex, rx: fp.rx + Math.abs(shift.x), ry: fp.ry + Math.abs(shift.y) });
+    const { rx, ry } = patchRadii(b.type, size);
+    const k = G.fishery.footprintGrow;
+    out.push({ hex: b.hex, rx: rx * k, ry: ry * k, cx: shift.x, cy: shift.y });
     if (e !== null) out.push({ hex: edgeNeighborHex(b.hex, e), rx: size, ry: size });
   }
   return out;
+}
+
+/**
+ * The units `viewer` may see: its own, and others only on tiles it sees right now (`revealAll`:
+ * all). The unit sprites and the unit footprints use exactly this filter, so the terrain never
+ * makes room for a unit the viewer cannot see. `visible`: the viewer's visible tiles, if known.
+ */
+export function unitsShownTo(
+  state: GameState,
+  viewer: PlayerId,
+  revealAll: boolean,
+  visible: readonly boolean[] | null = revealAll ? null : visibleTiles(state, viewer),
+): Unit[] {
+  if (revealAll || visible === null) return [...state.units];
+  return state.units.filter(
+    (u) => u.owner === viewer || visible[tileIndex(state.map, u.hex)] === true,
+  );
+}
+
+/**
+ * Small footprints under the tokens of the units `viewer` may see (trees, shrubs and rocks make
+ * room there), one per tile, only on tiles without a shown building (its footprint covers them).
+ */
+export function unitFootprints(
+  state: GameState,
+  viewer: PlayerId,
+  revealAll: boolean,
+  size: number,
+  visible?: readonly boolean[] | null,
+): GroundFootprint[] {
+  const buildings = new Set<number>();
+  for (const b of buildingsShownTo(state, viewer, revealAll)) {
+    buildings.add(tileIndex(state.map, b.hex));
+  }
+  const done = new Set<number>();
+  const out: GroundFootprint[] = [];
+  for (const u of unitsShownTo(state, viewer, revealAll, visible)) {
+    const i = tileIndex(state.map, u.hex);
+    if (i < 0 || buildings.has(i) || done.has(i)) continue;
+    done.add(i);
+    out.push({
+      hex: u.hex,
+      rx: G.unitFootprint.rx * size,
+      ry: G.unitFootprint.ry * size,
+      kind: 'unit',
+    });
+  }
+  return out;
+}
+
+/** Cheap key of a footprint list (same key -> the terrain needs no repaint). */
+export function footprintSignature(list: readonly GroundFootprint[]): string {
+  return list
+    .map(
+      (f) =>
+        `${f.hex.q}.${f.hex.r}.${f.rx.toFixed(2)}.${f.ry.toFixed(2)}.${f.kind ?? ''}.${(f.cx ?? 0).toFixed(1)}.${(f.cy ?? 0).toFixed(1)}`,
+    )
+    .join(',');
 }
 
 // ---------------------------------------------------------------------------------------------

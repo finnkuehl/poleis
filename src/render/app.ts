@@ -1,5 +1,5 @@
 // PixiJS application: canvas, map view, camera and tile selection.
-import { Application, Container } from 'pixi.js';
+import { Application, Container, CullerPlugin, extensions } from 'pixi.js';
 import { hexToPixel, pixelToHex, type Hex } from '../core/hex';
 import { inBounds } from '../core/map';
 import type { BuildingStatus } from '../core/rules/production';
@@ -45,6 +45,9 @@ export interface Renderer {
   centerOnScreenPoint(h: Hex, sx: number, sy: number): void;
 }
 
+/** The culler extension is registered globally, only once. */
+let cullerAdded = false;
+
 export async function createRenderer(
   container: HTMLElement,
   state: GameState,
@@ -54,6 +57,12 @@ export async function createRenderer(
   const resolution = Math.min(window.devicePixelRatio || 1, 2);
   // Load and rasterize the SVG art while the renderer starts (both before the first draw)
   const artLoading = loadArt(resolution);
+  // Culling: every frame, objects marked `cullable` (the terrain's row slices) that lie off the
+  // screen are skipped. Registered once, before the first application starts.
+  if (!cullerAdded) {
+    extensions.add(CullerPlugin);
+    cullerAdded = true;
+  }
   const app = new Application();
   await app.init({
     background: theme.background,
@@ -65,7 +74,9 @@ export async function createRenderer(
   container.appendChild(app.canvas);
   const art = await artLoading;
 
-  const world = new Container();
+  // The camera moves and scales this container; as its own render group, panning and zooming
+  // only change the group's transform instead of every sprite and shape inside
+  const world = new Container({ isRenderGroup: true });
   app.stage.addChild(world);
   const view = createMapView(state.map, art);
   world.addChild(view.container);

@@ -9,7 +9,7 @@
 //   the row above. Footprints, roads and the explored area change what stands on a tile; only
 //   the rows they touch are repainted.
 // Light comes from the upper left, so shadows fall to the lower right (docs/ART.md).
-import { Graphics } from 'pixi.js';
+import { Container, Graphics, Rectangle, Sprite } from 'pixi.js';
 import { hexCorners, hexToPixel, pixelToHex, type Hex, type Point } from '../core/hex';
 import { hexAtIndex, tileIndex } from '../core/map';
 import type { MapState } from '../core/state';
@@ -22,10 +22,13 @@ import {
   wavyTileOutline,
   type RoadGeometry,
 } from './geometry';
-import { hillMounds, massifPlan, roadDistance, roadMasks, rowDepthKey } from './relief';
+import { crownRadius, woodlandTrees, type TreePlan, type WoodKind, type WoodTree } from './forest';
+import { hillMounds, massifPlan, roadDistance, roadMasks, sliceDepthKey, sliceOfY } from './relief';
 import {
+  cutStanding,
   fillShape,
   hillDetails,
+  maquisStanding,
   massifStanding,
   mountainFootDetails,
   paintHillMounds,
@@ -43,6 +46,7 @@ import {
   forestTrees,
   insideFootprint,
   isWater,
+  mixColor,
   smoothNoise,
   taperedStroke,
   tileHash,
@@ -52,28 +56,40 @@ import {
   type FootprintShape,
   type TreeSpot,
 } from './terrain';
+import type { FootprintKind, TerrainArt, TreeArtId, TreeSprite } from './terrainArt';
 import { theme } from './theme';
 
 const P = theme.terrainPaint;
+const F = P.forest;
 
 /** All six edges (for "keep away from the tile border" checks). */
 const ALL_EDGES: readonly boolean[] = [true, true, true, true, true, true];
 
-/** Area around a tile centre (ellipse radii in px) where the terrain draws no standing objects and no decals. */
+/**
+ * Area around a tile centre (ellipse radii in px) where the terrain draws no standing objects
+ * and no decals ('unit': only trees, shrubs and rocks make room; absent kind = 'building').
+ */
 export interface TileFootprint {
   hex: Hex;
   rx: number;
   ry: number;
+  kind?: FootprintKind;
+  /** The ellipse's center offset from the tile center (px; absent = 0). */
+  cx?: number;
+  cy?: number;
 }
 
 export interface TerrainLayer {
   /** Flat painted ground (static). */
   ground: Graphics;
   /**
-   * Decals and standing objects, one Graphics per map row (index = row), each with
-   * zIndex = rowDepthKey(row): add them to the container that sorts the buildings by depthKey.
+   * Decals, standing objects and tree sprites in slices: two Containers per map row (index
+   * 2 * row = the back half of the row, 2 * row + 1 = the front half), each with
+   * zIndex = sliceDepthKey(index). Add them to the container that sorts the buildings by
+   * depthKey: the back half draws before the row's buildings, the front half after them.
+   * They are cullable (with a cullArea) for a culler run by the app.
    */
-  rows: readonly Graphics[];
+  rows: readonly Container[];
   /**
    * Clears room for buildings: decals and standing objects whose ground point lies inside a
    * footprint ellipse (clipped to its hex) are left out; on hills and mountains the tile gets a
@@ -106,8 +122,9 @@ interface Tile {
 
 interface TilePlan {
   decals: Decal[];
-  /** In paint order (back to front within the tile). */
   standing: Standing[];
+  /** Drawn trees and shrubs (sprites of the tree art). */
+  sprites: TreePlan[];
 }
 
 function flat(points: readonly Point[]): number[] {
@@ -309,6 +326,43 @@ function paintWashes(g: Graphics, tiles: readonly Tile[], size: number): void {
     }
   }
   groups.fill(g);
+}
+
+/**
+ * Forest floor: soft pools of shade between the trunks and a few sunflecks, kept inside the wood
+ * (they never reach over an edge to other terrain).
+ */
+function paintForestFloor(g: Graphics, tiles: readonly Tile[], size: number): void {
+  const groups: Shape[] = [];
+  for (const t of tiles) {
+    if (t.terrain !== 'forest') continue;
+    const open = t.across.map((n) => n !== 'forest');
+    const rng = tileRng(t.hex.q, t.hex.r, 15);
+    const blob = (
+      count: number,
+      rMin: number,
+      rMax: number,
+      color: number,
+      alpha: number,
+    ): void => {
+      for (let k = 0; k < count; k++) {
+        const p = { x: (rng() - 0.5) * 1.5 * size, y: (rng() - 0.5) * 1.6 * size };
+        const want = (rMin + rng() * (rMax - rMin)) * size;
+        if (distanceToEdges(p, ALL_EDGES, size) < 0) continue;
+        const r = Math.min(want, distanceToWavyEdges(p, open, t.waves, size) * 0.9);
+        if (r < 0.1 * size) continue;
+        groups.push({
+          poly: ellipsePoints(t.center.x + p.x, t.center.y + p.y, r, r * 0.66, 12),
+          color,
+          alpha,
+          texture: 'spot',
+        });
+      }
+    };
+    blob(F.floorShadeCount, 0.28, 0.48, P.shadowColor, F.floorShadeAlpha);
+    blob(F.sunfleckCount, 0.12, 0.22, F.sunfleckColor, F.sunfleckAlpha);
+  }
+  for (const shape of groups) fillShape(g, shape);
 }
 
 /** Deep ocean fades into the turquoise coast, lighter shallow water along the shore. */
@@ -646,6 +700,7 @@ function paintCliffs(g: Graphics, tiles: readonly Tile[], size: number): void {
 function paintGround(g: Graphics, tiles: readonly Tile[], map: MapState, size: number): void {
   paintFills(g, tiles);
   paintWashes(g, tiles, size);
+  paintForestFloor(g, tiles, size);
   paintSea(g, tiles, size);
   paintBleed(g, tiles, size);
   paintHillMounds(g, hillMounds(map, size, shoreDistanceAt(map, tiles, size)), size);
@@ -823,10 +878,34 @@ function spillTrees(t: Tile, size: number): TreeSpot[] {
   return trees;
 }
 
-/** Plans the decals and standing objects of one tile (deterministic, independent of footprints). */
-function planTile(t: Tile, size: number): TilePlan {
+/** Which tree art is loaded, by kind (see `artOf`). */
+type ArtKinds = Readonly<Record<WoodKind, boolean>>;
+
+/**
+ * Plans the decals, standing objects and tree sprites of one tile (deterministic, independent of
+ * footprints). `wood`: the woodland trees standing on this tile (with tree art), else null.
+ */
+function planTile(
+  t: Tile,
+  size: number,
+  art: ArtKinds,
+  wood: readonly WoodTree[] | null,
+): TilePlan {
   const decals: Decal[] = [];
   const standing: Standing[] = [];
+  const sprites: TreePlan[] = [];
+  /** A spill tree beside a forest: a sprite with tree art, else drawn in code. */
+  const spill = (tree: TreeSpot): void => {
+    const kind: WoodKind = tree.kind === 'cypress' ? 'cypress' : 'pine';
+    if (art[kind]) {
+      const x = t.center.x + tree.x;
+      const y = t.center.y + tree.y;
+      const variant = Math.floor(tileHash(Math.round(x), Math.round(y), 820) * 1000);
+      sprites.push({ x, y, kind, variant, scale: (tree.scale / P.spillTreeScale) * 0.75 });
+    } else {
+      standing.push(treeStanding(t.center.x + tree.x, t.center.y + tree.y, tree, size));
+    }
+  };
   const k = size / 32;
   const c = t.center;
   const shoreDist = (p: Point): number => shoreDistance(t, p, size);
@@ -898,27 +977,40 @@ function planTile(t: Tile, size: number): TilePlan {
   }
 
   if (t.terrain === 'forest') {
-    const trees = forestTrees(
-      tileRng(t.hex.q, t.hex.r, 30),
-      size,
-      t.shore,
-      P.cypressShare,
-      shoreDist,
-    );
-    for (const tree of trees) standing.push(treeStanding(c.x + tree.x, c.y + tree.y, tree, size));
+    if (wood) {
+      // Dense woodland of tree sprites (kinds without art fall back to code-drawn trees)
+      for (const tree of wood) {
+        if (art[tree.kind]) sprites.push(tree);
+        else standing.push(codeTree(tree, size));
+      }
+    } else {
+      const trees = forestTrees(
+        tileRng(t.hex.q, t.hex.r, 30),
+        size,
+        t.shore,
+        P.cypressShare,
+        shoreDist,
+      );
+      for (const tree of trees) {
+        standing.push(treeStanding(c.x + tree.x, c.y + tree.y, tree, size));
+      }
+    }
   } else if (t.terrain === 'hills') {
     // Dry grass, maquis, olive trees and limestone on the slopes (the mounds are in the ground)
-    const details = hillDetails(c, size, tileRng(t.hex.q, t.hex.r, 31), (p, margin) => {
-      if (distanceToEdges(p, ALL_EDGES, size) < 0.07 * size) return false;
-      return shoreDist(p) >= margin * size + P.beachDepth * size;
-    });
+    const details = hillDetails(
+      c,
+      size,
+      tileRng(t.hex.q, t.hex.r, 31),
+      (p, margin) => {
+        if (distanceToEdges(p, ALL_EDGES, size) < 0.07 * size) return false;
+        return shoreDist(p) >= margin * size + P.beachDepth * size;
+      },
+      { olive: art.olive, shrub: art.shrub },
+    );
     decals.push(...details.decals);
-    const items = [...details.standing];
-    for (const tree of spillTrees(t, size)) {
-      items.push(treeStanding(c.x + tree.x, c.y + tree.y, tree, size));
-    }
-    items.sort((a, b) => a.y - b.y);
-    standing.push(...items);
+    standing.push(...details.standing);
+    sprites.push(...details.sprites);
+    for (const tree of spillTrees(t, size)) spill(tree);
     // Loose scree spilling over from neighboring mountains
     for (let e = 0; e < 6; e++) {
       if (t.across[e] !== 'mountains') continue;
@@ -944,12 +1036,7 @@ function planTile(t: Tile, size: number): TilePlan {
     decals.push(...foot.decals);
     standing.push(...foot.standing.sort((a, b) => a.y - b.y));
   } else if (t.terrain === 'plains') {
-    const items: Standing[] = [];
-    for (const tree of spillTrees(t, size)) {
-      items.push(treeStanding(c.x + tree.x, c.y + tree.y, tree, size));
-    }
-    items.sort((a, b) => a.y - b.y);
-    standing.push(...items);
+    for (const tree of spillTrees(t, size)) spill(tree);
   } else if (t.terrain === 'coast') {
     const rng = tileRng(t.hex.q, t.hex.r, 210);
     if (rng() < P.boatChance) {
@@ -959,12 +1046,30 @@ function planTile(t: Tile, size: number): TilePlan {
       }
     }
   }
-  return { decals, standing };
+  return { decals, standing, sprites };
 }
 
-/** What a row needs to know about the current footprints, roads and explored tiles. */
-interface RowState {
+/** A woodland tree whose kind has no art: drawn in code (oaks as broad pines, shrubs as maquis). */
+function codeTree(tree: WoodTree, size: number): Standing {
+  if (tree.kind === 'shrub' || tree.kind === 'olive') {
+    const rng = tileRng(Math.round(tree.x), Math.round(tree.y), 830);
+    return maquisStanding(tree.x, tree.y, 0.075 * size * tree.scale, rng);
+  }
+  const spot: TreeSpot = {
+    kind: tree.kind === 'cypress' ? 'cypress' : 'pine',
+    x: 0,
+    y: 0,
+    scale: tree.scale * (tree.kind === 'oak' ? 0.95 : 1),
+  };
+  return treeStanding(tree.x, tree.y, spot, size);
+}
+
+/** What a slice needs to know about the current footprints, roads and explored tiles. */
+interface PaintState {
+  /** Footprints of buildings (incl. mine / quarry cuts), merged per tile. */
   footprints: ReadonlyMap<number, FootprintShape>;
+  /** Footprints of units (only trees, shrubs and rocks make room), merged per tile. */
+  units: ReadonlyMap<number, FootprintShape>;
   roads: readonly number[];
   explored: readonly boolean[] | null;
 }
@@ -974,22 +1079,111 @@ const ROAD_CLEAR = 0.24;
 /** Grass tufts, flowers and pebbles keep this far. */
 const ROAD_CLEAR_DECAL = 0.15;
 
+/** What lies in one slice (see `sliceOfY`), each item with the tile it belongs to. */
+interface SliceItems {
+  decals: { tile: number; item: Decal }[];
+  standing: { tile: number; item: Standing }[];
+  sprites: { tile: number; item: TreePlan }[];
+  /** Tiles of this row whose relief depends on footprints (mountains, hills): back slices only. */
+  relief: number[];
+}
+
+/** One slice on screen: its Graphics (decals, code-drawn objects) and the tree sprites above. */
+interface SliceView {
+  root: Container;
+  g: Graphics;
+}
+
+/** Tree art ids by kind (the loaded ones are picked from these). */
+const ART_IDS: Readonly<Record<WoodKind, readonly TreeArtId[]>> = {
+  pine: ['pine1', 'pine2', 'pine3'],
+  oak: ['oak1', 'oak2', 'oak3'],
+  cypress: ['cypress1', 'cypress2'],
+  shrub: ['shrub1', 'shrub2', 'shrub3'],
+  olive: ['olive1', 'olive2'],
+};
+
+/** The loaded tree sprites by kind, each with its art id (empty lists when nothing is loaded). */
+function artOf(art: TerrainArt | undefined): Record<WoodKind, LoadedTree[]> {
+  const pick = (kind: WoodKind): LoadedTree[] => {
+    const out: LoadedTree[] = [];
+    for (const id of ART_IDS[kind]) {
+      const sprite = art?.trees[id];
+      if (sprite) out.push({ id, sprite });
+    }
+    return out;
+  };
+  return {
+    pine: pick('pine'),
+    oak: pick('oak'),
+    cypress: pick('cypress'),
+    shrub: pick('shrub'),
+    olive: pick('olive'),
+  };
+}
+
+/** One loaded tree art file. */
+interface LoadedTree {
+  id: TreeArtId;
+  sprite: TreeSprite;
+}
+
 /**
- * Paints one map row: its decals first, then tile by tile the standing objects (with the
- * mountain massifs and the terraces under buildings on slopes).
+ * Merges footprints per tile; `keep` selects which kinds. Two on one tile: the larger radii win,
+ * the center offset of the larger one stays, and a cut wins over a plain building footprint.
  */
-function paintRow(
-  g: Graphics,
+function mergeFootprints(
+  map: MapState,
+  list: readonly TileFootprint[],
+  keep: (kind: FootprintKind) => boolean,
+): Map<number, FootprintShape> {
+  const out = new Map<number, FootprintShape>();
+  for (const fp of list) {
+    const kind = fp.kind ?? 'building';
+    if (!keep(kind)) continue;
+    const i = tileIndex(map, fp.hex);
+    if (i < 0) continue;
+    const shape: FootprintShape = { rx: fp.rx, ry: fp.ry, kind };
+    if (fp.cx) shape.cx = fp.cx;
+    if (fp.cy) shape.cy = fp.cy;
+    const old = out.get(i);
+    if (!old) {
+      out.set(i, shape);
+      continue;
+    }
+    const bigger = fp.rx * fp.ry > old.rx * old.ry ? shape : old;
+    const merged: FootprintShape = {
+      rx: Math.max(old.rx, fp.rx),
+      ry: Math.max(old.ry, fp.ry),
+      kind: old.kind !== 'building' ? old.kind : kind,
+    };
+    if (bigger.cx) merged.cx = bigger.cx;
+    if (bigger.cy) merged.cy = bigger.cy;
+    out.set(i, merged);
+  }
+  return out;
+}
+
+/**
+ * Paints one slice: its decals, then the code-drawn standing objects back to front (in back
+ * slices also the mountain massifs and the terraces under buildings on slopes), then the tree
+ * sprites back to front.
+ */
+function paintSlice(
+  view: SliceView,
+  items: SliceItems,
   map: MapState,
   tiles: readonly Tile[],
-  plans: readonly TilePlan[],
-  state: RowState,
+  state: PaintState,
+  art: Readonly<Record<WoodKind, readonly LoadedTree[]>>,
   size: number,
 ): void {
+  const { g, root } = view;
   g.clear();
-  const { footprints, roads, explored } = state;
-  /** Is a ground point free (no footprint, no road nearby)? */
-  const free = (x: number, y: number, roadClear: number): boolean => {
+  if (root.children.length > 1) for (const child of root.removeChildren(1)) child.destroy();
+  const { footprints, units, roads, explored } = state;
+  /** Is a ground point free? Decals ignore units; standing objects make room for both. */
+  const free = (x: number, y: number, standing: boolean): boolean => {
     const h = pixelToHex({ x, y }, size);
     const i = tileIndex(map, h);
     if (i < 0) return true;
@@ -997,39 +1191,74 @@ function paintRow(
     const rel = { x: x - c.x, y: y - c.y };
     const fp = footprints.get(i);
     if (fp && insideFootprint(rel, fp, size)) return false;
-    return roadDistance(rel, roads[i], size) >= roadClear * size;
+    const unit = units.get(i);
+    if (standing && unit && insideFootprint(rel, unit, size)) return false;
+    const clear = standing ? ROAD_CLEAR : ROAD_CLEAR_DECAL;
+    return roadDistance(rel, roads[i], size) >= clear * size;
   };
-  const shown = (t: Tile): boolean => explored === null || explored[t.index] === true;
+  const shown = (tile: number): boolean => explored === null || explored[tile] === true;
 
   const decals = new FillGroups();
-  tiles.forEach((t, k) => {
-    if (!shown(t)) return;
-    for (const d of plans[k].decals) {
-      if (free(d.x, d.y, ROAD_CLEAR_DECAL)) decals.add(d.color, d.alpha, d.poly);
-    }
-  });
+  for (const { tile, item } of items.decals) {
+    if (shown(tile) && free(item.x, item.y, false)) decals.add(item.color, item.alpha, item.poly);
+  }
   decals.fill(g);
 
-  tiles.forEach((t, k) => {
-    if (!shown(t)) return;
-    const fp = footprints.get(t.index) ?? null;
-    const visible = plans[k].standing.filter((s) => free(s.x, s.y, ROAD_CLEAR));
-    const slope = fp !== null && (t.terrain === 'hills' || t.terrain === 'mountains');
-    if (slope) {
-      visible.push(...terraceStanding(t.center, fp, t.terrain, size));
-      visible.sort((a, b) => a.y - b.y);
-    }
+  const visible: Standing[] = [];
+  for (const { tile, item } of items.standing) {
+    if (shown(tile) && (item.behindBuilding || free(item.x, item.y, true))) visible.push(item);
+  }
+  const massifs: Standing[] = [];
+  for (const i of items.relief) {
+    if (!shown(i)) continue;
+    const t = tiles[i];
+    const fp = footprints.get(i) ?? null;
+    // A mine or quarry digs into the slope; any other building stands on a terrace
+    const cut = fp?.kind === 'mineCut' || fp?.kind === 'quarryCut' ? fp.kind : null;
+    if (cut) visible.push(cutStanding(t.center, cut, t.terrain, size));
+    else if (fp) visible.push(...terraceStanding(t.center, fp, t.terrain, size));
     if (t.terrain === 'mountains') {
-      // The massif stands behind everything else on its tile
-      visible.unshift(massifStanding(massifPlan(map, t.hex, size, fp), size, 760));
+      massifs.push(massifStanding(massifPlan(map, t.hex, size, fp), size, 760));
     }
-    if (visible.length === 0) return;
-    // All ground shadows of the tile first, so no shadow lies on an object
-    const shadows = new FillGroups();
-    for (const s of visible) if (s.shadow) shadows.add(P.shadowColor, s.shadowAlpha, s.shadow);
-    shadows.fill(g);
-    for (const s of visible) for (const shape of s.shapes) fillShape(g, shape);
-  });
+  }
+  // Back to front; the massifs stand behind everything else in their slice
+  visible.sort((a, b) => a.y - b.y);
+  visible.unshift(...massifs);
+
+  const trees: TreePlan[] = [];
+  for (const { tile, item } of items.sprites) {
+    if (shown(tile) && free(item.x, item.y, true)) trees.push(item);
+  }
+  trees.sort((a, b) => a.y - b.y || a.x - b.x);
+
+  // All ground shadows first, so no shadow lies on an object
+  const shadows = new FillGroups();
+  for (const s of visible) if (s.shadow) shadows.add(P.shadowColor, s.shadowAlpha, s.shadow);
+  if (F.spriteShadowAlpha > 0) {
+    for (const t of trees) {
+      const r = crownRadius(t.kind, size) * t.scale;
+      shadows.add(
+        P.shadowColor,
+        F.spriteShadowAlpha,
+        ellipsePoints(t.x + r * 0.35, t.y + r * 0.08, r * 1.05, r * 0.38, 10),
+      );
+    }
+  }
+  shadows.fill(g);
+  for (const s of visible) for (const shape of s.shapes) fillShape(g, shape);
+
+  for (const t of trees) {
+    const choices = art[t.kind];
+    if (choices.length === 0) continue;
+    const tex = choices[t.variant % choices.length].sprite;
+    const sprite = new Sprite(tex.texture);
+    sprite.anchor.set(tex.anchorX, tex.anchorY);
+    sprite.scale.set(tex.scale * t.scale);
+    sprite.position.set(t.x, t.y);
+    // A little brighter or darker each (never mirrored: that would flip the light)
+    sprite.tint = mixColor(F.tintMin, 0xffffff, tileHash(Math.round(t.x), Math.round(t.y), 840));
+    root.addChild(sprite);
+  }
 }
 
 /** Tile indices whose road mask, explored flag or footprint changed (null = all). */
@@ -1059,59 +1288,127 @@ function shoreDistanceAt(map: MapState, tiles: readonly Tile[], size: number) {
   };
 }
 
-/** Creates the static terrain layers for a map. */
-export function createTerrainLayer(map: MapState, size: number): TerrainLayer {
+/** World point -> distance to the nearest edge of its tile toward anything but forest. */
+function openDistanceAt(map: MapState, tiles: readonly Tile[], size: number) {
+  return (p: Point): number => {
+    const i = tileIndex(map, pixelToHex(p, size));
+    if (i < 0) return 0;
+    const t = tiles[i];
+    const open = t.across.map((n) => n !== 'forest');
+    return distanceToWavyEdges({ x: p.x - t.center.x, y: p.y - t.center.y }, open, t.waves, size);
+  };
+}
+
+/** Creates the static terrain layers for a map; `art`: the drawn trees (else trees drawn in code). */
+export function createTerrainLayer(map: MapState, size: number, art?: TerrainArt): TerrainLayer {
   const tiles = buildTiles(map, size);
   const ground = new Graphics();
   paintGround(ground, tiles, map, size);
 
-  const plans = tiles.map((t) => planTile(t, size));
-  const rowTiles: Tile[][] = [];
-  const rowPlans: TilePlan[][] = [];
-  for (let r = 0; r < map.height; r++) {
-    rowTiles.push(tiles.slice(r * map.width, (r + 1) * map.width));
-    rowPlans.push(plans.slice(r * map.width, (r + 1) * map.width));
+  const sprites = artOf(art);
+  const kinds: ArtKinds = {
+    pine: sprites.pine.length > 0,
+    oak: sprites.oak.length > 0,
+    cypress: sprites.cypress.length > 0,
+    shrub: sprites.shrub.length > 0,
+    olive: sprites.olive.length > 0,
+  };
+  // With tree art the forests become dense woodland, else the code-drawn trees stay
+  const woodland = kinds.pine || kinds.oak || kinds.cypress;
+  const woodByTile = new Map<number, WoodTree[]>();
+  if (woodland) {
+    // The exact crown of the variant that will be drawn (kinds without art: the nominal one)
+    const crownOf = (kind: WoodKind, variant: number): number => {
+      const loaded = sprites[kind];
+      if (loaded.length === 0) return F.crown[kind];
+      return F.treeCrowns[loaded[variant % loaded.length].id];
+    };
+    const trees = woodlandTrees(
+      map,
+      size,
+      shoreDistanceAt(map, tiles, size),
+      openDistanceAt(map, tiles, size),
+      crownOf,
+    );
+    for (const tree of trees) {
+      const list = woodByTile.get(tree.tile);
+      if (list) list.push(tree);
+      else woodByTile.set(tree.tile, [tree]);
+    }
   }
-  const state: RowState = {
+  const plans = tiles.map((t) =>
+    planTile(t, size, kinds, woodland ? (woodByTile.get(t.index) ?? []) : null),
+  );
+
+  // Sort every item into the slice of its ground point
+  const sliceCount = 2 * map.height;
+  const slices: SliceItems[] = [];
+  for (let s = 0; s < sliceCount; s++)
+    slices.push({ decals: [], standing: [], sprites: [], relief: [] });
+  const sliceOf = (y: number): number => sliceOfY(y, size, map.height);
+  plans.forEach((plan, i) => {
+    const row = Math.floor(i / map.width);
+    for (const d of plan.decals) slices[sliceOf(d.y)].decals.push({ tile: i, item: d });
+    for (const s of plan.standing) {
+      slices[s.behindBuilding ? 2 * row : sliceOf(s.y)].standing.push({ tile: i, item: s });
+    }
+    for (const t of plan.sprites) slices[sliceOf(t.y)].sprites.push({ tile: i, item: t });
+    const terrain = tiles[i].terrain;
+    if (terrain === 'mountains' || terrain === 'hills') slices[2 * row].relief.push(i);
+  });
+
+  const state: PaintState = {
     footprints: new Map<number, FootprintShape>(),
+    units: new Map<number, FootprintShape>(),
     roads: new Array<number>(map.tiles.length).fill(0),
     explored: null,
   };
-  const paint = (r: number): void => {
-    paintRow(rows[r], map, rowTiles[r], rowPlans[r], state, size);
-  };
-  const rows = rowPlans.map((_, r) => {
+  const mapWidth = (map.width + 1) * Math.sqrt(3) * size;
+  const views: SliceView[] = slices.map((_, s) => {
+    const root = new Container();
     const g = new Graphics();
-    g.zIndex = rowDepthKey(r);
-    return g;
+    root.addChild(g);
+    root.zIndex = sliceDepthKey(s);
+    // Off-screen slices are skipped by the culler (if the app runs one): the slice's ground
+    // band plus room for tall mountains and trees above it and shadows below
+    const row = Math.floor(s / 2);
+    const top = (row - 0.75) * 1.5 * size - 2 * size;
+    root.cullable = true;
+    root.cullArea = new Rectangle(-2 * size, top, mapWidth + 4 * size, 4.6 * size);
+    root.cullableChildren = false;
+    // Its own render group: the sprites keep their batches while the camera pans and zooms
+    // (only the group moves), about 7x cheaper per frame than plain containers on a full map
+    root.isRenderGroup = true;
+    return { root, g };
   });
-  for (let r = 0; r < rows.length; r++) paint(r);
+  const paintRows = (rows: readonly number[]): void => {
+    for (const r of rows) {
+      for (const s of [2 * r, 2 * r + 1]) {
+        paintSlice(views[s], slices[s], map, tiles, state, sprites, size);
+      }
+    }
+  };
+  paintRows(Array.from({ length: map.height }, (_, r) => r));
 
   return {
     ground,
-    rows,
+    rows: views.map((v) => v.root),
     setFootprints(list) {
-      const next = new Map<number, FootprintShape>();
-      for (const fp of list) {
-        const i = tileIndex(map, fp.hex);
-        if (i < 0) continue;
-        const old = next.get(i);
-        next.set(
-          i,
-          old
-            ? { rx: Math.max(old.rx, fp.rx), ry: Math.max(old.ry, fp.ry) }
-            : { rx: fp.rx, ry: fp.ry },
-        );
-      }
-      const dirty = footprintRowsToRepaint(state.footprints, next, map.width, map.height);
-      state.footprints = next;
-      for (const r of dirty) paint(r);
+      const buildings = mergeFootprints(map, list, (k) => k !== 'unit');
+      const units = mergeFootprints(map, list, (k) => k === 'unit');
+      const dirty = new Set([
+        ...footprintRowsToRepaint(state.footprints, buildings, map.width, map.height),
+        ...footprintRowsToRepaint(state.units, units, map.width, map.height),
+      ]);
+      state.footprints = buildings;
+      state.units = units;
+      paintRows([...dirty].sort((a, b) => a - b));
     },
     setRoads(roads) {
       const next = roadMasks(map, roads);
       const dirty = rowsAround(changedTiles(state.roads, next), map.width, map.height);
       state.roads = next;
-      for (const r of dirty) paint(r);
+      paintRows(dirty);
     },
     setExplored(explored) {
       const prev = state.explored;
@@ -1121,7 +1418,7 @@ export function createTerrainLayer(map: MapState, size: number): TerrainLayer {
       else if (prev === null || next === null) changed = tiles.map((t) => t.index);
       else changed = changedTiles(prev, next);
       state.explored = next;
-      for (const r of rowsAround(changed, map.width, map.height)) paint(r);
+      paintRows(rowsAround(changed, map.width, map.height));
     },
   };
 }

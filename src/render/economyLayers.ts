@@ -1,7 +1,7 @@
 // Dynamic map layers: territory, roads, buildings, status badges, highlights, road preview.
 import { Container, Graphics, Text, type Sprite } from 'pixi.js';
 import { hexCorners, hexToPixel, type Hex, type Point } from '../core/hex';
-import { hexAtIndex } from '../core/map';
+import { hexAtIndex, tileIndex } from '../core/map';
 import type { BuildingStatus } from '../core/rules/production';
 import type { GameState, PlayerId } from '../core/state';
 import { BUILDINGS, type BuildingId, type CityLevel } from '../data';
@@ -191,12 +191,15 @@ export function createEconomyLayers(art: ArtSet = NO_ART): EconomyLayers {
   const visuals = new Map<number, BuildingVisual>();
 
   /**
-   * Which art a building uses: the fishery scene facing its jetty edge (fishery.e0-e5), falling
-   * back to its own art when there is no water edge or that version did not load.
+   * Which art a building uses: the fishery scene facing its jetty edge (fishery.e0-e5), a mine or
+   * quarry on hills / mountains its slope version, falling back to its own art when there is no
+   * water edge or that version did not load.
    */
   function artIdOf(state: GameState, type: BuildingId, hex: Hex): string {
     const edge = EDGE_ART_BUILDINGS.includes(type) ? jettyEdge(state.map, hex) : null;
-    return buildingArtId(type, edge, (id) => art.buildings[id] !== undefined);
+    // A mine or quarry on hills / mountains: the slope version (the terrain cuts the rock)
+    const terrain = state.map.tiles[tileIndex(state.map, hex)];
+    return buildingArtId(type, edge, (id) => art.buildings[id] !== undefined, terrain);
   }
 
   function createVisual(type: BuildingId, artId: string, hex: Hex): BuildingVisual {

@@ -7,6 +7,7 @@ import { tileIndex } from '../core/map';
 import type { MapState } from '../core/state';
 import { TERRAIN, type TerrainId } from '../data/terrain';
 import { edgeNeighborHex } from './geometry';
+import type { FootprintKind } from './terrainArt';
 import { theme } from './theme';
 
 /** Deterministic hash of a tile position (+ salt) in [0, 1). Same tile -> same value, always. */
@@ -168,16 +169,35 @@ export function distanceToWavyEdges(
 export interface FootprintShape {
   rx: number;
   ry: number;
+  /** What it belongs to (absent = 'building'); see terrainArt.ts. */
+  kind?: FootprintKind;
+  /** The ellipse's center, offset from the tile center (px; absent = 0), e.g. a fishery's yard. */
+  cx?: number;
+  cy?: number;
 }
 
 /**
- * True when `p` (relative to the tile center) lies inside the footprint: inside the ellipse AND
- * inside the hex (a footprint larger than the hex covers the whole tile, never its neighbors).
+ * True when `p` (relative to the tile center) lies inside the footprint: inside the ellipse
+ * (around the tile center shifted by cx / cy) AND inside the hex (a footprint larger than the hex
+ * covers the whole tile, never its neighbors).
  */
 export function insideFootprint(p: Point, fp: FootprintShape, size: number): boolean {
   if (fp.rx <= 0 || fp.ry <= 0) return false;
-  if ((p.x * p.x) / (fp.rx * fp.rx) + (p.y * p.y) / (fp.ry * fp.ry) > 1) return false;
+  const dx = p.x - (fp.cx ?? 0);
+  const dy = p.y - (fp.cy ?? 0);
+  if ((dx * dx) / (fp.rx * fp.rx) + (dy * dy) / (fp.ry * fp.ry) > 1) return false;
   return distanceToEdges(p, ALL_EDGES, size) >= 0;
+}
+
+/** True when two footprints of a tile are the same (size, kind, center offset). */
+export function sameFootprint(a: FootprintShape, b: FootprintShape): boolean {
+  return (
+    a.rx === b.rx &&
+    a.ry === b.ry &&
+    (a.kind ?? 'building') === (b.kind ?? 'building') &&
+    (a.cx ?? 0) === (b.cx ?? 0) &&
+    (a.cy ?? 0) === (b.cy ?? 0)
+  );
 }
 
 const ALL_EDGES: readonly boolean[] = [true, true, true, true, true, true];
@@ -200,7 +220,7 @@ export function footprintRowsToRepaint(
   };
   for (const [i, a] of prev) {
     const b = next.get(i);
-    if (!b || b.rx !== a.rx || b.ry !== a.ry) mark(i);
+    if (!b || !sameFootprint(a, b)) mark(i);
   }
   for (const i of next.keys()) if (!prev.has(i)) mark(i);
   return [...rows].sort((x, y) => x - y);

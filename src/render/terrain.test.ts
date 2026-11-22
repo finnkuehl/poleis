@@ -271,6 +271,10 @@ describe('footprints', () => {
     expect(insideFootprint({ x: apothem(size) - 1, y: 0 }, big, size)).toBe(true);
     expect(insideFootprint({ x: apothem(size) + 1, y: 0 }, big, size)).toBe(false);
     expect(insideFootprint({ x: 0, y: 0 }, { rx: 0, ry: 5 }, size)).toBe(false);
+    // Centered off the tile center (e.g. a fishery's yard toward the water)
+    const shifted = { rx: 6, ry: 4, cx: 10, cy: -2 };
+    expect(insideFootprint({ x: 10, y: -2 }, shifted, size)).toBe(true);
+    expect(insideFootprint({ x: 0, y: 0 }, shifted, size)).toBe(false);
   });
 
   it('footprintRowsToRepaint: only rows around changed tiles, nothing for the same footprints', () => {
@@ -287,6 +291,23 @@ describe('footprints', () => {
     expect(footprintRowsToRepaint(new Map([[71, fp(12)]]), a, width, height)).toEqual([1, 2, 3]);
     // Removed footprint on tile 71 (last row 7): rows 6..7
     expect(footprintRowsToRepaint(a, new Map([[25, fp(10)]]), width, height)).toEqual([6, 7]);
+    // A changed center or kind counts as a change too
+    expect(
+      footprintRowsToRepaint(
+        new Map([[25, fp(10)]]),
+        new Map([[25, { ...fp(10), cx: 3 }]]),
+        width,
+        height,
+      ),
+    ).toEqual([1, 2, 3]);
+    expect(
+      footprintRowsToRepaint(
+        new Map([[25, fp(10)]]),
+        new Map([[25, { ...fp(10), kind: 'mineCut' as const }]]),
+        width,
+        height,
+      ),
+    ).toEqual([1, 2, 3]);
     // Changed size on tile 3 (row 0): rows 0..1
     expect(
       footprintRowsToRepaint(new Map([[3, fp(10)]]), new Map([[3, fp(10, 8)]]), width, height),

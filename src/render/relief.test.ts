@@ -6,19 +6,25 @@ import { at, makeTestState } from '../core/testing';
 import { depthKey } from './artLayout';
 import { edgeNeighborHex } from './geometry';
 import {
+  artPoint,
   cornerHeight,
   cornerOwner,
   cornerPoint,
   edgeMound,
   facetLight,
   hillMounds,
+  isStarShaped,
   massifFacets,
   massifPlan,
+  mineCut,
   moundShadePixels,
+  quarryCut,
   ridgeSaddle,
   roadDistance,
   roadMasks,
   rowDepthKey,
+  sliceDepthKey,
+  sliceOfY,
   softSpotPixels,
   terraceArc,
 } from './relief';
@@ -36,6 +42,39 @@ describe('rowDepthKey (terrain rows between the buildings)', () => {
       expect(depthKey(h)).toBeLessThan(rowDepthKey(h.r + 1));
     }
     expect(rowDepthKey(3)).toBeLessThan(rowDepthKey(4));
+  });
+});
+
+describe('terrain slices (half rows between the buildings)', () => {
+  it('back slice before the buildings of its row, front slice after them', () => {
+    const { map } = generateMap(5, { width: 40, height: 40 });
+    for (let i = 0; i < map.tiles.length; i++) {
+      const h = hexAtIndex(map, i);
+      expect(sliceDepthKey(2 * h.r)).toBeLessThan(depthKey(h));
+      expect(sliceDepthKey(2 * h.r + 1)).toBeGreaterThan(depthKey(h));
+      expect(sliceDepthKey(2 * h.r + 1)).toBeLessThan(sliceDepthKey(2 * h.r + 2));
+      if (h.r > 0) expect(sliceDepthKey(2 * h.r - 1)).toBeLessThan(depthKey(h));
+    }
+  });
+
+  it('sliceOfY: half rows by the ground point, back to front', () => {
+    const row = 1.5 * size;
+    expect(sliceOfY(-10, size, 10)).toBe(0);
+    expect(sliceOfY(0, size, 10)).toBe(1);
+    expect(sliceOfY(3 * row - 1, size, 10)).toBe(6);
+    expect(sliceOfY(2.6 * row, size, 10)).toBe(6);
+    expect(sliceOfY(2.4 * row, size, 10)).toBe(5);
+    expect(sliceOfY(3 * row, size, 10)).toBe(7);
+    expect(sliceOfY(3.4 * row, size, 10)).toBe(7);
+    expect(sliceOfY(3.6 * row, size, 10)).toBe(8);
+    expect(sliceOfY(99 * row, size, 10)).toBe(19);
+    // Never out of order: a point further down never lands in an earlier slice
+    let prev = 0;
+    for (let y = -40; y < 600; y += 3) {
+      const s = sliceOfY(y, size, 10);
+      expect(s).toBeGreaterThanOrEqual(prev);
+      prev = s;
+    }
   });
 });
 
@@ -281,5 +320,99 @@ describe('shading textures', () => {
     expect(alpha(n / 2, n - 1)).toBeLessThan(20);
     // Premultiplied: color never above alpha
     for (let i = 0; i < n * n; i++) expect(px[i * 4]).toBeLessThanOrEqual(px[i * 4 + 3]);
+  });
+});
+
+describe('mine and quarry cuts (geometry shared with the art)', () => {
+  const c = { x: 0, y: 0 };
+  /** Canvas units of the art (256 canvas, tile center at 128 / 176) of a landscape point. */
+  const canvas = (p: { x: number; y: number; z: number }): number[] => {
+    const k = (0.92 * Math.sqrt(3) * size) / 208;
+    return [128 + p.x / k, 176 + (p.y - p.z) / k];
+  };
+  const near = (p: { x: number; y: number; z: number }, x: number, y: number): void => {
+    const [cx, cy] = canvas(p);
+    expect(cx).toBeCloseTo(x, 0);
+    expect(cy).toBeCloseTo(y, 0);
+    expect(Math.abs(cx - x)).toBeLessThan(0.15);
+    expect(Math.abs(cy - y)).toBeLessThan(0.15);
+  };
+
+  it('artPoint maps the art world onto the canvas contract', () => {
+    near(artPoint(c, 0, 0, 0, size), 128, 176);
+    // The tunnel opening center (a -10, b -15, z 8)
+    near(artPoint(c, -10, -15, 8, size), 133.4, 151.9);
+  });
+
+  it('the mine face stands where the art expects it', () => {
+    const cut = mineCut(c, size);
+    near(cut.foot[0], 117.2, 154.4);
+    near(cut.foot[1], 149.6, 170.6);
+    near(cut.top[0], 117.2, 117.3);
+    near(cut.top[1], 149.6, 133.5);
+    // The face runs out into the slope on both sides (its outline reaches the ground there)
+    expect(cut.face[0].z).toBe(0);
+    expect(cut.face[3].z).toBe(0);
+  });
+
+  it('the quarry steps stand where the art expects them', () => {
+    const steps = [...quarryCut(c, size).steps].reverse();
+    const feet = [
+      [101.0, 151.7, 144.2, 173.3],
+      [111.8, 134.3, 144.2, 150.6],
+      [122.6, 117.0, 144.2, 127.8],
+    ];
+    const tops = [
+      [101.0, 139.7, 144.2, 161.4],
+      [111.8, 122.4, 144.2, 138.6],
+      [122.6, 105.1, 144.2, 115.9],
+    ];
+    const ends = [
+      [155.0, 156.0],
+      [155.0, 133.2],
+      [155.0, 110.5],
+    ];
+    steps.forEach((step, i) => {
+      near(step.front[0], feet[i][0], feet[i][1]);
+      near(step.front[1], feet[i][2], feet[i][3]);
+      near(step.front[3], tops[i][0], tops[i][1]);
+      near(step.front[2], tops[i][2], tops[i][3]);
+      near(step.end[2], ends[i][0], ends[i][1]);
+    });
+  });
+
+  it('a mine tile keeps its peak and the saddles toward neighboring mountains', () => {
+    const s = makeTestState(['mmmmm', 'mmmmm', 'mmmmm', 'mmmmm', 'mmmmm']);
+    const h = at(2, 2);
+    const fp = { rx: 0.5 * size, ry: 0.3 * size, kind: 'mineCut' as const };
+    const plan = massifPlan(s.map, h, size, fp);
+    const free = massifPlan(s.map, h, size, null);
+    expect(plan.apex.z).toBeGreaterThan(free.apex.z * 0.8);
+    // East, west and the three back edges keep their shared saddle
+    for (const e of [0, 3, 4, 5]) expect(plan.base).toContainEqual(ridgeSaddle(h, e, size));
+    // ... and the face is part of the foot
+    const cut = mineCut(hexToPixel(h, size), size);
+    expect(plan.base).toContainEqual(cut.top[0]);
+    expect(plan.base).toContainEqual(cut.top[1]);
+  });
+
+  it('cut massifs never fold, whatever the neighbors are', () => {
+    const terrains = ['m', 'p', 'c'];
+    for (let combo = 0; combo < 3 ** 6; combo++) {
+      const rows = ['ppppp', 'ppppp', 'ppppp', 'ppppp', 'ppppp'].map((r) => r.split(''));
+      const h = at(2, 2);
+      rows[2][2] = 'm';
+      for (let e = 0; e < 6; e++) {
+        const n = edgeNeighborHex(h, e);
+        const t = terrains[Math.floor(combo / 3 ** e) % 3];
+        const col = n.q + (n.r - (n.r & 1)) / 2;
+        rows[n.r][col] = t;
+      }
+      const s = makeTestState(rows.map((r) => r.join('')));
+      for (const kind of ['mineCut', 'quarryCut'] as const) {
+        const plan = massifPlan(s.map, h, size, { rx: 0.6 * size, ry: 0.4 * size, kind });
+        expect(isStarShaped(plan.apex, plan.base)).toBe(true);
+      }
+    }
   });
 });

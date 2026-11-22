@@ -9,7 +9,6 @@ import {
   fogSignature,
   fogState,
   hpBarColor,
-  unitTokenOffset,
   type FogState,
 } from './fog';
 import { edgeNeighborHex } from './geometry';
@@ -34,13 +33,6 @@ describe('hpBarColor', () => {
     expect(hpBarColor(1)).toBe(theme.hpBarGoodColor);
     expect(hpBarColor(0.5)).toBe(theme.hpBarMidColor);
     expect(hpBarColor(0.1)).toBe(theme.hpBarLowColor);
-  });
-});
-
-describe('unitTokenOffset', () => {
-  it('moves up only on buildings', () => {
-    expect(unitTokenOffset(false, 32)).toBe(0);
-    expect(unitTokenOffset(true, 32)).toBeLessThan(0);
   });
 });
 

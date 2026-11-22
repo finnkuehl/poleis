@@ -6,17 +6,18 @@ import { visibleTiles } from '../core/rules/vision';
 import type { GameState, PlayerId } from '../core/state';
 import { UNITS, type UnitId } from '../data';
 import { createArtObject, NO_ART, setArtLayer, type ArtSet } from './art';
-import { artModeOf, depthKey, drawsOwnerDisc, type ArtMode } from './artLayout';
+import { ART_CANVAS, artModeOf, depthKey, drawsOwnerDisc, type ArtMode } from './artLayout';
 import { hexSize } from './config';
 import {
+  buildingsShownTo,
   fogEdgeMask,
   fogShade,
   fogSignature,
   fogState,
   hpBarColor,
-  unitTokenOffset,
   type FogState,
 } from './fog';
+import { unitsShownTo } from './groundworks';
 import { insetBands } from './geometry';
 import { playerColorOf } from './playerColor';
 import { scaleColor, taperedStroke, tileRng } from './terrain';
@@ -43,6 +44,15 @@ function flatCorners(h: Hex, size = hexSize): number[] {
 
 /** Unexplored tiles use this many slightly different shades of the fog color (soft patches). */
 const FOG_SHADES = 5;
+
+/**
+ * Lowest top edge of an HP bar (below the tile center, world px) that keeps the whole bar inside
+ * the tile: its lower corners must stay clear of the two lower hex edges.
+ */
+export function hpBarLowest(barW: number, barH: number, size = hexSize): number {
+  // Below y = size / 2 the hex narrows: half width = (size - y) * sqrt(3)
+  return size - (barW / 2 + 2) / Math.sqrt(3) - barH;
+}
 
 /** Fills all polygons at once (one draw instruction). */
 function fillAll(g: Graphics, polys: readonly number[][], color: number, alpha: number): void {
@@ -100,24 +110,27 @@ export function createUnitLayers(art: ArtSet = NO_ART): UnitLayers {
   /** Latest state, for the colors of the drag ghost. */
   let lastState: GameState | null = null;
 
-  function drawUnits(state: GameState, viewer: PlayerId, visible: readonly boolean[]): void {
+  function drawUnits(state: GameState, viewer: PlayerId, visible: readonly boolean[] | null): void {
     tokens.clear();
     bars.clear();
     const seen = new Set<number>();
+    // On a tile with a building the viewer sees, the unit steps aside to the front of the tile
     const buildingTiles = new Set<number>();
-    for (const b of state.buildings) buildingTiles.add(tileIndex(state.map, b.hex));
+    for (const b of buildingsShownTo(state, viewer, revealAll)) {
+      buildingTiles.add(tileIndex(state.map, b.hex));
+    }
     const radius = hexSize * theme.unitRadiusFactor;
     const barW = hexSize * theme.hpBarWidthFactor;
     const barH = hexSize * theme.hpBarHeightFactor;
-    for (const u of state.units) {
+    // Enemy units only where the viewer currently sees (the same filter as the unit footprints)
+    for (const u of unitsShownTo(state, viewer, revealAll, visible)) {
       const idx = tileIndex(state.map, u.hex);
-      // Enemy units only where the viewer currently sees
-      if (u.owner !== viewer && !visible[idx]) continue;
       seen.add(u.id);
       const def = UNITS[u.type];
       const base = hexToPixel(u.hex, hexSize);
       const cx = base.x;
-      const cy = base.y + unitTokenOffset(buildingTiles.has(idx), hexSize);
+      const front = buildingTiles.has(idx);
+      const cy = base.y + (front ? theme.ground.unitFrontOffset * hexSize : 0);
       const done = u.owner === viewer && u.movesLeft === 0 && (u.attacked || u.hasMoved);
       const alpha = done ? theme.unitDoneAlpha : 1;
       const color = playerColorOf(state, u.owner);
@@ -136,16 +149,26 @@ export function createUnitLayers(art: ArtSet = NO_ART): UnitLayers {
       v.root.alpha = alpha;
       if (v.accent) v.accent.tint = color;
 
-      if (drawsOwnerDisc(v.mode)) {
+      const disc = drawsOwnerDisc(v.mode);
+      if (disc) {
+        // A drawn token gets a soft ground shadow to the lower right (the art has its own)
+        tokens.ellipse(cx + radius * 0.12, cy + radius * 0.35, radius * 1.05, radius * 0.5).fill({
+          color: theme.terrainPaint.shadowColor,
+          alpha: theme.ground.unitShadowAlpha * alpha,
+        });
         tokens
           .circle(cx, cy, radius)
           .fill({ color, alpha })
           .stroke({ color: theme.unitRimColor, width: theme.unitRimWidth, alpha });
       }
-      // HP bar under the token
+      // HP bar under the token (the art's token is a flat 2:1 ellipse); at the front of a tile it
+      // moves up onto the token's front rim, so it stays inside the tile
+      const asset = art.units[u.type];
+      const tokenBottom =
+        disc || !asset ? radius : (ART_CANVAS.unit.baseWidth / 4) * asset.placement.scale;
       const share = Math.max(0, Math.min(1, u.hp / def.hp));
       const bx = cx - barW / 2;
-      const by = cy + radius + 2;
+      const by = Math.min(cy + tokenBottom + 2, base.y + hpBarLowest(barW, barH));
       bars.rect(bx, by, barW, barH).fill({ color: theme.hpBarBackColor, alpha });
       bars.rect(bx, by, barW * share, barH).fill({ color: hpBarColor(share), alpha });
     }
@@ -299,11 +322,7 @@ export function createUnitLayers(art: ArtSet = NO_ART): UnitLayers {
     update(state, viewer) {
       lastState = state;
       if (revealAll) {
-        drawUnits(
-          state,
-          viewer,
-          state.map.tiles.map(() => true),
-        );
+        drawUnits(state, viewer, null);
         fog.clear();
         fogSig = '';
         return;

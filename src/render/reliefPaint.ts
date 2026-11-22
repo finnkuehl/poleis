@@ -9,7 +9,9 @@ import type { TerrainId } from '../data/terrain';
 import {
   faceShadePixels,
   massifFacets,
+  mineCut,
   moundOutline,
+  quarryCut,
   moundShadePixels,
   project,
   softSpotPixels,
@@ -18,6 +20,7 @@ import {
   type MassifPlan,
   type P3,
 } from './relief';
+import type { TreePlan } from './forest';
 import { ellipsePoints, taperedStroke, tileRng, type FootprintShape } from './terrain';
 import { theme } from './theme';
 
@@ -25,6 +28,7 @@ const P = theme.terrainPaint;
 const H = P.hills;
 const M = P.mountains;
 const T = P.terrace;
+const C = P.cuts;
 
 /** A filled polygon; with `texture` the texture is stretched over the polygon's bounds and tinted. */
 export interface Shape {
@@ -41,6 +45,11 @@ export interface Standing {
   shadow: number[] | null;
   shadowAlpha: number;
   shapes: Shape[];
+  /**
+   * True: always painted in the back slice of its own tile's row, i.e. behind the building on
+   * that tile (terraces, the massif of a mine), whatever its ground point.
+   */
+  behindBuilding?: boolean;
 }
 
 /** A flat decal (grass, flower, pebble), ground point in world px. */
@@ -115,33 +124,48 @@ function lerp3(a: P3, b: P3, t: number): P3 {
  * shaded body (lit upper left, fading into the ground at its foot) and a sunlit rim on the crest.
  */
 export function paintHillMounds(g: Graphics, mounds: readonly HillMound[], size: number): void {
-  for (const m of mounds) {
-    const d = m.w * H.depth;
-    fillShape(g, {
+  for (const m of mounds) for (const shape of moundShapes(m, size)) fillShape(g, shape);
+}
+
+/** One hill mound: soft shadow, shaded body, sunlit rim along the left part of the crest. */
+function moundShapes(m: HillMound, size: number, shadow = true): Shape[] {
+  const d = m.w * H.depth;
+  const outline = moundOutline(m);
+  const shapes: Shape[] = [];
+  if (shadow) {
+    shapes.push({
       poly: ellipsePoints(m.x + 0.3 * m.w, m.y + 0.25 * d, m.w * 1.08, d * 1.25 + 0.1 * m.h, 14),
       color: P.shadowColor,
       alpha: H.shadowAlpha,
       texture: 'spot',
     });
-    const outline = moundOutline(m);
-    fillShape(g, { poly: flat(outline), color: H.tones[m.tone], alpha: 1, texture: 'mound' });
-    // Sunlit rim along the left part of the crest
-    const crest = outline.slice(1, 8);
-    g.poly(taperedStroke(crest, Math.max(1, 0.05 * size * (m.h / (H.centerH * size)))));
-    g.fill({ color: H.crestColor, alpha: H.crestAlpha });
   }
+  shapes.push({ poly: flat(outline), color: H.tones[m.tone], alpha: 1, texture: 'mound' });
+  shapes.push({
+    poly: taperedStroke(outline.slice(1, 8), Math.max(1, 0.05 * size * (m.h / (H.centerH * size)))),
+    color: H.crestColor,
+    alpha: H.crestAlpha,
+  });
+  return shapes;
 }
 
-/** Decals and standing objects on one hill tile (world px; `ok` says whether a spot is usable). */
+/**
+ * Decals, standing objects and tree sprites on one hill tile (world px; `ok` says whether a spot
+ * is usable). Olive trees and maquis shrubs become sprites when their art is loaded (`art`),
+ * else they are drawn in code.
+ */
 export function hillDetails(
   center: Point,
   size: number,
   rng: () => number,
   ok: (rel: Point, margin: number) => boolean,
-): { decals: Decal[]; standing: Standing[] } {
+  art: { olive: boolean; shrub: boolean } = { olive: false, shrub: false },
+): { decals: Decal[]; standing: Standing[]; sprites: TreePlan[] } {
   const k = size / 32;
   const decals: Decal[] = [];
   const standing: Standing[] = [];
+  const sprites: TreePlan[] = [];
+  const variant = (): number => Math.floor(rng() * 1000);
   const spot = (margin: number, clear: number): Point | null => {
     const p = { x: (rng() - 0.5) * 1.5 * size, y: (rng() - 0.5) * 1.6 * size };
     if (Math.hypot(p.x, p.y * 1.4) < clear * size) return null;
@@ -189,8 +213,14 @@ export function hillDetails(
     const p = spot(0.24, 0.2);
     const r = (0.055 + rng() * 0.035) * size;
     const shapeRng = tileRng(Math.round(center.x), Math.round(center.y), 650 + i);
+    const v = variant();
     if (!p) continue;
-    standing.push(maquis(center.x + p.x, center.y + p.y, r, shapeRng));
+    if (art.shrub) {
+      const scale = (r / (0.075 * size)) * (0.9 + shapeRng() * 0.2);
+      sprites.push({ x: center.x + p.x, y: center.y + p.y, kind: 'shrub', variant: v, scale });
+    } else {
+      standing.push(maquisStanding(center.x + p.x, center.y + p.y, r, shapeRng));
+    }
   }
   // A few olive trees
   let olives = rng() < H.oliveChance ? 1 : 0;
@@ -199,11 +229,16 @@ export function hillDetails(
     const p = spot(0.3, H.tokenClear + 0.05);
     const scale = 0.85 + rng() * 0.3;
     const shapeRng = tileRng(Math.round(center.x), Math.round(center.y), 660 + i);
+    const v = variant();
     if (!p) continue;
-    standing.push(oliveTree(center.x + p.x, center.y + p.y, scale * size, shapeRng));
+    if (art.olive) {
+      sprites.push({ x: center.x + p.x, y: center.y + p.y, kind: 'olive', variant: v, scale });
+    } else {
+      standing.push(oliveTree(center.x + p.x, center.y + p.y, scale * size, shapeRng));
+    }
   }
   standing.sort((a, b) => a.y - b.y);
-  return { decals, standing };
+  return { decals, standing, sprites };
 }
 
 function limestone(x: number, y: number, r: number, rng: () => number): Standing {
@@ -234,7 +269,8 @@ function limestone(x: number, y: number, r: number, rng: () => number): Standing
   };
 }
 
-function maquis(x: number, y: number, r: number, rng: () => number): Standing {
+/** A maquis shrub drawn in code (dark green clumps, lit top-left). */
+export function maquisStanding(x: number, y: number, r: number, rng: () => number): Standing {
   const shapes: Shape[] = [];
   const blobs = 2 + Math.floor(rng() * 2);
   for (let i = 0; i < blobs; i++) {
@@ -371,7 +407,14 @@ export function massifStanding(plan: MassifPlan, size: number, seed: number): St
       }
     }
   }
-  return { x: plan.apex.x, y: plan.apex.y, shadow: null, shadowAlpha: 0, shapes };
+  return {
+    x: plan.apex.x,
+    y: plan.apex.y,
+    shadow: null,
+    shadowAlpha: 0,
+    shapes,
+    behindBuilding: true,
+  };
 }
 
 /** A thin line across a facet at `share` of its height range (null if too short). */
@@ -521,6 +564,7 @@ export function terraceStanding(
             shadow: null,
             shadowAlpha: 0,
             shapes: terraceBackSlope(center, fp, size, rng),
+            behindBuilding: true,
           },
         ];
   // Soft shadow on the ground at the foot of the bank
@@ -607,7 +651,10 @@ export function terraceStanding(
       }
     }
   }
-  return [...back, { x: mid.x, y: mid.y, shadow: null, shadowAlpha: 0, shapes }];
+  return [
+    ...back,
+    { x: mid.x, y: mid.y, shadow: null, shadowAlpha: 0, shapes, behindBuilding: true },
+  ];
 }
 
 /**
@@ -637,4 +684,126 @@ function terraceBackSlope(
       alpha: H.crestAlpha,
     },
   ];
+}
+
+// ---------------------------------------------------------------------------------------------
+// Mine and quarry cuts
+// ---------------------------------------------------------------------------------------------
+
+/** A thin mark across a face between two edges (at share t of the way from `lo` to `hi`). */
+function faceMark(lo: [P3, P3], hi: [P3, P3], t: number, inset: number): number[] {
+  const at = (p: P3, q: P3): Point => project(lerp3(p, q, t));
+  const a = at(lo[0], hi[0]);
+  const b = at(lo[1], hi[1]);
+  const s = { x: a.x + (b.x - a.x) * inset, y: a.y + (b.y - a.y) * inset };
+  const e = { x: a.x + (b.x - a.x) * (1 - inset), y: a.y + (b.y - a.y) * (1 - inset) };
+  return taperedStroke([s, e], 0.8);
+}
+
+/**
+ * The cut of a mine (`'mineCut'`: one vertical rock face) or quarry (`'quarryCut'`: three stepped
+ * terraces) into its tile's slope, painted over the tile's massif (mountains; the massif itself
+ * comes from massifPlan with the cut footprint) or over a hill rising behind it (hills). The
+ * art draws the works in front of it (docs/ART.md "Mines and quarries dig into the real slope").
+ */
+export function cutStanding(
+  center: Point,
+  kind: 'mineCut' | 'quarryCut',
+  terrain: TerrainId,
+  size: number,
+): Standing {
+  const rock = terrain === 'mountains';
+  const faceColor = rock ? C.rockFace : C.hillFace;
+  const endColor = rock ? C.rockEnd : C.hillEnd;
+  const topColor = rock ? C.rockTop : C.hillTop;
+  const shapes: Shape[] = [];
+  const poly = (pts: readonly P3[]): number[] => flat(pts.map(project));
+  const lip = (a: P3, b: P3): void => {
+    shapes.push({
+      poly: taperedStroke([project(a), project(b)], 1.2),
+      color: C.lipColor,
+      alpha: 0.9,
+    });
+  };
+  if (kind === 'mineCut') {
+    const cut = mineCut(center, size);
+    if (!rock) {
+      // The hill rises behind the face
+      const top = project(cut.top[0]);
+      const topR = project(cut.top[1]);
+      shapes.push(
+        ...moundShapes(
+          {
+            x: (top.x + topR.x) / 2 + 0.06 * size,
+            y: (cut.foot[0].y + cut.foot[1].y) / 2 - 0.06 * size,
+            w: 0.56 * size,
+            h: 0.46 * size,
+            tone: 0,
+          },
+          size,
+          false,
+        ),
+      );
+    }
+    shapes.push({ poly: poly(cut.face), color: faceColor, alpha: 1, texture: 'face' });
+    for (const t of [0.34, 0.66]) {
+      shapes.push({
+        poly: faceMark(cut.foot, cut.top, t, 0.08),
+        color: C.markColor,
+        alpha: C.markAlpha,
+      });
+    }
+    lip(cut.top[0], cut.top[1]);
+  } else {
+    const cut = quarryCut(center, size);
+    if (!rock) {
+      // The hill rises behind the steps and runs down on their left
+      const back = cut.front[4];
+      const left = cut.front[cut.front.length - 2];
+      shapes.push(
+        ...moundShapes(
+          {
+            x: back.x + 0.08 * size,
+            y: back.y + 0.02 * size,
+            w: 0.62 * size,
+            h: 0.44 * size,
+            tone: 0,
+          },
+          size,
+          false,
+        ),
+        ...moundShapes(
+          {
+            x: left.x - 0.04 * size,
+            y: left.y + 0.06 * size,
+            w: 0.38 * size,
+            h: 0.32 * size,
+            tone: 0,
+          },
+          size,
+          false,
+        ),
+      );
+    }
+    for (const step of cut.steps) {
+      shapes.push({ poly: poly(step.top), color: topColor, alpha: 1 });
+      shapes.push({ poly: poly(step.end), color: endColor, alpha: 1, texture: 'face' });
+      shapes.push({ poly: poly(step.front), color: faceColor, alpha: 1, texture: 'face' });
+      const [f0, f1, f2, f3] = step.front;
+      shapes.push({
+        poly: faceMark([f0, f1], [f3, f2], 0.5, 0.06),
+        color: C.markColor,
+        alpha: C.markAlpha,
+      });
+      lip(f3, f2);
+    }
+  }
+  return {
+    x: center.x,
+    y: center.y - 0.01 * size,
+    shadow: null,
+    shadowAlpha: 0,
+    shapes,
+    behindBuilding: true,
+  };
 }

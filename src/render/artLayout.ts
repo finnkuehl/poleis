@@ -2,6 +2,7 @@
 // and how large a sprite is placed, how large the texture is rasterized, draw order and fallbacks.
 import type { Hex, Point } from '../core/hex';
 import { BUILDING_IDS, type BuildingId } from '../data/buildings';
+import type { TerrainId } from '../data/terrain';
 import { cameraConfig } from './config';
 import { theme } from './theme';
 
@@ -150,25 +151,54 @@ export function edgeArtId(type: BuildingId, edge: number): string {
   return `${type}.e${edge}`;
 }
 
-/** Every building art file to load (without extension): each building, then its direction versions. */
+/**
+ * Buildings with a map version for hills and mountains, `<id>.slope`: only the works (portal,
+ * rails, cart, heap; crane, blocks, shed), the terrain cuts the rock face or terraces into its own
+ * slope (docs/ART.md "Mines and quarries dig into the real slope"). `<id>` stays the icon and the
+ * version on plains.
+ */
+export const SLOPE_ART_BUILDINGS: readonly BuildingId[] = ['mine', 'quarry'];
+
+/** Art id of the slope version of `type` (e.g. 'mine.slope'). */
+export function slopeArtId(type: BuildingId): string {
+  return `${type}.slope`;
+}
+
+/** Hills and mountains: the terrain under a slope version. */
+export function isSlopeTerrain(terrain: TerrainId | undefined): boolean {
+  return terrain === 'hills' || terrain === 'mountains';
+}
+
+/**
+ * Every building art file to load (without extension): each building, then its direction
+ * versions and its slope versions.
+ */
 export function buildingArtIds(): string[] {
   const ids: string[] = [...BUILDING_IDS];
   for (const type of EDGE_ART_BUILDINGS) {
     for (let e = 0; e < 6; e++) ids.push(edgeArtId(type, e));
   }
+  for (const type of SLOPE_ART_BUILDINGS) ids.push(slopeArtId(type));
   return ids;
 }
 
 /**
- * Which art a building on the map uses: its direction version toward `edge` if it has those and
- * that one loaded, else its own art. `edge` is null when the tile has no fitting edge (e.g. a
- * fishery without water around).
+ * Which art a building on the map uses:
+ * - on hills / mountains (`terrain`): its slope version if it has one and that one loaded;
+ * - its direction version toward `edge` if it has those and that one loaded (`edge` is null when
+ *   the tile has no fitting edge, e.g. a fishery without water around);
+ * - else its own art.
  */
 export function buildingArtId(
   type: BuildingId,
   edge: number | null,
   loaded: (id: string) => boolean,
+  terrain?: TerrainId,
 ): string {
+  if (isSlopeTerrain(terrain) && SLOPE_ART_BUILDINGS.includes(type)) {
+    const slope = slopeArtId(type);
+    return loaded(slope) ? slope : type;
+  }
   if (edge === null || !EDGE_ART_BUILDINGS.includes(type)) return type;
   const id = edgeArtId(type, edge);
   return loaded(id) ? id : type;

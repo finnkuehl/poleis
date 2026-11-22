@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Point } from '../core/hex';
 import { tileIndex } from '../core/map';
-import { addBuilding, at, makeTestState } from '../core/testing';
+import { addBuilding, addUnit, at, makeTestState } from '../core/testing';
 import type { GameState } from '../core/state';
 import { BUILDING_IDS } from '../data/buildings';
 import { hexSize } from './config';
@@ -25,7 +25,9 @@ import {
   fieldTiles,
   fieldWarp,
   fisheryYardOffset,
+  footprintKindOf,
   footprintOf,
+  footprintSignature,
   groundFootprints,
   groundSide,
   groundSignature,
@@ -43,6 +45,8 @@ import {
   patchRadii,
   polygonArea,
   slopeOutline,
+  unitFootprints,
+  unitsShownTo,
   withinLimits,
   type OutlineSample,
 } from './groundworks';
@@ -189,16 +193,80 @@ describe('groundFootprints for a fishery', () => {
     expect(fps[1]).toMatchObject({ hex: edgeNeighborHex(h, e ?? 0), rx: size, ry: size });
   });
 
-  it("covers the fishery's yard, which is shifted toward the water", () => {
+  it("covers only the fishery's yard, around its shifted center", () => {
     const state = makeTestState(['ccccc', 'ppppp', 'ppppp']);
     const h = at(2, 1);
     addBuilding(state, 'fishery', h, 0);
     const [own] = groundFootprints(state, 0, false, size);
     const { rx, ry } = patchRadii('fishery', size);
     const o = fisheryYardOffset(jettyEdge(state.map, h), size);
-    // The ellipse around the tile center reaches past the shifted yard's far side
-    expect(own.rx).toBeGreaterThanOrEqual(rx + Math.abs(o.x));
-    expect(own.ry).toBeGreaterThanOrEqual(ry + Math.abs(o.y));
+    const k = theme.ground.fishery.footprintGrow;
+    expect(own).toMatchObject({ hex: h, cx: o.x, cy: o.y });
+    expect(own.rx).toBeCloseTo(rx * k);
+    expect(own.ry).toBeCloseTo(ry * k);
+    // Small: the terrain's grass and flowers stay on the rest of the tile
+    expect(own.rx).toBeLessThan(0.6 * size);
+    expect(own.kind).toBeUndefined();
+  });
+});
+
+describe('footprint kinds', () => {
+  it('a mine or quarry on hills / mountains cuts into the slope; on plains it does not', () => {
+    expect(footprintKindOf('mine', 'mountains')).toBe('mineCut');
+    expect(footprintKindOf('quarry', 'hills')).toBe('quarryCut');
+    expect(footprintKindOf('quarry', 'mountains')).toBe('quarryCut');
+    expect(footprintKindOf('quarry', 'plains')).toBe('building');
+    expect(footprintKindOf('house', 'hills')).toBe('building');
+    const state = makeTestState(['mhp', 'ppp']);
+    addBuilding(state, 'mine', at(0, 0));
+    addBuilding(state, 'quarry', at(1, 0));
+    addBuilding(state, 'quarry', at(2, 0));
+    const kinds = groundFootprints(state, 0, false, size).map((f) => f.kind);
+    expect(kinds).toEqual(['mineCut', 'quarryCut', undefined]);
+  });
+});
+
+describe('unit footprints', () => {
+  /** Own unit, enemy unit on a tile the viewer sees and one far away in the dark. */
+  function withUnits(): GameState {
+    const state = makeTestState(['pppppppppppp', 'pppppppppppp', 'pppppppppppp'], {
+      explored: false,
+    });
+    state.players.push({ ...state.players[0], id: 1, isHuman: false, explored: [] });
+    addUnit(state, 'scout', at(1, 1), { owner: 0 });
+    addUnit(state, 'scout', at(2, 1), { owner: 1 }); // next to the own scout: seen
+    addUnit(state, 'scout', at(11, 1), { owner: 1 }); // far away: not seen
+    return state;
+  }
+
+  it('only under units the viewer sees, like the unit sprites', () => {
+    const state = withUnits();
+    const shown = unitsShownTo(state, 0, false).map((u) => u.hex);
+    expect(shown).toEqual([at(1, 1), at(2, 1)]);
+    const fps = unitFootprints(state, 0, false, size);
+    expect(fps.map((f) => f.hex)).toEqual(shown);
+    for (const f of fps) {
+      expect(f.kind).toBe('unit');
+      expect(f.rx).toBeCloseTo(theme.ground.unitFootprint.rx * size);
+      expect(f.ry).toBeCloseTo(theme.ground.unitFootprint.ry * size);
+    }
+    // The test option shows everything
+    expect(unitFootprints(state, 0, true, size)).toHaveLength(3);
+  });
+
+  it('none on tiles with a building the viewer sees (its footprint covers the spot), one per tile', () => {
+    const state = withUnits();
+    addBuilding(state, 'house', at(1, 1));
+    addUnit(state, 'spearman', at(2, 1), { owner: 1 });
+    expect(unitFootprints(state, 0, false, size).map((f) => f.hex)).toEqual([at(2, 1)]);
+  });
+
+  it('the footprint list key changes when a unit moves', () => {
+    const state = withUnits();
+    const before = footprintSignature(unitFootprints(state, 0, false, size));
+    expect(footprintSignature(unitFootprints(state, 0, false, size))).toBe(before);
+    state.units[0].hex = at(1, 2);
+    expect(footprintSignature(unitFootprints(state, 0, false, size))).not.toBe(before);
   });
 });
 

@@ -1,6 +1,6 @@
 // Loads the drawn SVG art (public/assets, see docs/ART.md) once at startup and rasterizes every file
 // into a shared texture. Missing or broken files simply have no entry: the map then draws the old
-// colored plate / token with an emoji instead.
+// colored plate / token with an emoji instead, and the terrain its own painted trees.
 import { Container, ImageSource, Sprite, Texture } from 'pixi.js';
 import { UNIT_IDS } from '../data';
 import { hexSize } from './config';
@@ -16,6 +16,7 @@ import {
   type ArtPlacement,
   type ViewBox,
 } from './artLayout';
+import { TREE_ART_IDS, type TerrainArt, type TreeArtId, type TreeSprite } from './terrainArt';
 
 /** One drawn object: the art and its optional owner-color layer, both on the same canvas. */
 export interface ArtAsset {
@@ -34,6 +35,8 @@ export interface ArtAsset {
 export interface ArtSet {
   buildings: Readonly<Partial<Record<string, ArtAsset>>>;
   units: Readonly<Partial<Record<string, ArtAsset>>>;
+  /** Drawn trees and shrubs for the terrain (public/assets/terrain, see terrainArt.ts). */
+  terrain: TerrainArt;
 }
 
 /** Gives `sprite` one layer of `asset` (shared texture, the asset's anchor and scale). */
@@ -65,7 +68,7 @@ export function createArtObject(asset: ArtAsset): ArtObject {
 }
 
 /** No art at all: everything is drawn with plates / tokens and emoji. */
-export const NO_ART: ArtSet = { buildings: {}, units: {} };
+export const NO_ART: ArtSet = { buildings: {}, units: {}, terrain: { trees: {} } };
 
 /** Ships have art but no unit type yet (seafaring comes with M6). */
 const EXTRA_UNIT_ART_IDS = ['transport', 'trireme'] as const;
@@ -175,11 +178,70 @@ async function loadAsset(kind: ArtKind, id: string, dpr: number): Promise<LoadRe
   };
 }
 
+/** Fetches an SVG's text; null when missing or unreadable. */
+type SvgFetcher = (url: string) => Promise<string | null>;
+/** Rasterizes an SVG at `sizePx` (longer side); null when it fails. */
+type SvgRasterizer = (svg: string, vb: ViewBox, sizePx: number) => Promise<Texture | null>;
+
 /**
- * Loads all building and unit art in parallel, including the direction versions of buildings
- * like the fishery (`fishery.e0` ... `fishery.e5`, see artLayout.ts `buildingArtIds`). `dpr` is
- * the renderer's device pixel ratio (the texture size follows it). Never rejects: failed files
- * are left out.
+ * Where a tree's texture goes: the trunk foot (root `data-anchor`) on the spot the terrain picks,
+ * at the buildings' world scale (208 units = 0.92 x the hex width). null if the file has no
+ * readable canvas.
+ */
+export function treePlacement(svg: string): { vb: ViewBox; placement: ArtPlacement } | null {
+  const vb = parseSvgViewBox(svg);
+  if (!vb) return null;
+  // Building kind: the same world scale; a canvas without data-anchor uses the building anchor
+  const placement = artPlacement('building', vb, hexSize, parseSvgAnchor(svg));
+  return placement.style === 'diorama' ? { vb, placement } : null;
+}
+
+/**
+ * Loads the tree and shrub art (`terrain/<id>.svg` for every id in TREE_ART_IDS), rasterized
+ * like the buildings (same density rule). No owner-color layer. Missing or broken files are
+ * simply left out of `trees` (the terrain draws its own trees there). Never rejects.
+ */
+export async function loadTerrainArt(
+  dpr: number,
+  fetchText: SvgFetcher = fetchSvg,
+  rasterizeSvg: SvgRasterizer = rasterize,
+): Promise<{ terrain: TerrainArt; missing: string[] }> {
+  const missing: string[] = [];
+  const trees: Partial<Record<TreeArtId, TreeSprite>> = {};
+  await Promise.all(
+    TREE_ART_IDS.map(async (id) => {
+      const file = `terrain/${id}.svg`;
+      try {
+        const svg = await fetchText(`${import.meta.env.BASE_URL}assets/${file}`);
+        const fit = svg ? treePlacement(svg) : null;
+        const texture =
+          svg && fit
+            ? await rasterizeSvg(svg, fit.vb, rasterSizePx(fit.placement, dpr, hexSize))
+            : null;
+        if (!fit || !texture) {
+          missing.push(file);
+          return;
+        }
+        trees[id] = {
+          texture,
+          anchorX: fit.placement.anchorX,
+          anchorY: fit.placement.anchorY,
+          // World width of the canvas divided by the texture width
+          scale: fit.placement.width / texture.width,
+        };
+      } catch {
+        missing.push(file);
+      }
+    }),
+  );
+  return { terrain: { trees }, missing };
+}
+
+/**
+ * Loads all building, unit and terrain art in parallel, including the extra versions of
+ * buildings (the fishery's direction versions `fishery.e0` ... `fishery.e5`, the slope versions
+ * `mine.slope` / `quarry.slope`, see artLayout.ts `buildingArtIds`). `dpr` is the renderer's
+ * device pixel ratio (the texture size follows it). Never rejects: failed files are left out.
  */
 export async function loadArt(dpr: number): Promise<ArtSet> {
   const jobs: { kind: ArtKind; id: string }[] = [
@@ -189,7 +251,10 @@ export async function loadArt(dpr: number): Promise<ArtSet> {
       id,
     })),
   ];
-  const results = await Promise.all(jobs.map((j) => loadAsset(j.kind, j.id, dpr)));
+  const [results, terrainResult] = await Promise.all([
+    Promise.all(jobs.map((j) => loadAsset(j.kind, j.id, dpr))),
+    loadTerrainArt(dpr),
+  ]);
   const buildings: Partial<Record<string, ArtAsset>> = {};
   const units: Partial<Record<string, ArtAsset>> = {};
   const missing: string[] = [];
@@ -198,10 +263,11 @@ export async function loadArt(dpr: number): Promise<ArtSet> {
     if (r.asset) (kind === 'building' ? buildings : units)[id] = r.asset;
     missing.push(...r.missing);
   });
+  missing.push(...terrainResult.missing);
   if (import.meta.env.DEV && missing.length > 0) {
     console.warn(
       `[art] ${missing.length} art files missing or unreadable, using the fallback look: ${missing.join(', ')}`,
     );
   }
-  return { buildings, units };
+  return { buildings, units, terrain: terrainResult.terrain };
 }

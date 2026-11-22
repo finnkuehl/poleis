@@ -81,8 +81,3 @@ export function hpBarColor(share: number): number {
   if (share > 0.3) return theme.hpBarMidColor;
   return theme.hpBarLowColor;
 }
-
-/** Vertical offset of a unit token (negative = up): up when a building shares the tile. */
-export function unitTokenOffset(hasBuilding: boolean, hexSize: number): number {
-  return hasBuilding ? -hexSize * theme.unitOnBuildingOffsetFactor : 0;
-}

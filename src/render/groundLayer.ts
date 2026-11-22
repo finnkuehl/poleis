@@ -436,14 +436,54 @@ function paintClearing(p: Painter, s: Site, rx: number, ry: number): void {
  * Quarry ground: a stony apron with rubble and gravel and a soft rim. The quarry itself (rock
  * face or pit, cut blocks, crane) is part of the drawn art.
  */
+/**
+ * Mine or quarry on a slope: the terrain cuts the rock face or terraces into its own slope and
+ * the art shows the works; the ground is only a narrow, ragged ledge of scree and gravel in
+ * front of them, with stones on it.
+ */
+function paintLedge(
+  p: Painter,
+  s: Site,
+  stones: { count: number; colors: readonly number[] },
+  gravel: { count: number; colors: readonly number[] },
+): void {
+  const L = G.slope.ledge;
+  const { c, size, rng, limits } = s;
+  const o = { x: 0, y: L.y * size };
+  const rx = L.rx * size;
+  const ry = L.ry * size;
+  const shape = translate(organicBlob(rx, ry, rng, 0.25), o);
+  softPatch(p, c, shape, limits, patchColor(s, G.mine.color, 'stone'), G.slope.coreAlpha + 0.1, o);
+  const place = (count: number, colors: readonly number[], r0: number, dr: number): void => {
+    for (let i = 0; i < count; i++) {
+      const q = add(o, spotIn(rng, rx * 0.95, ry * 0.9));
+      if (!withinLimits(q, limits, 1)) continue;
+      const r = (r0 + rng() * dr) * size;
+      dab(p, colors[i % colors.length], 1, c.x + q.x, c.y + q.y, r, r * 0.7, rng, 5);
+    }
+  };
+  place(stones.count, stones.colors, 0.014, 0.016);
+  place(gravel.count, gravel.colors, 0.007, 0.006);
+}
+
 function paintQuarry(p: Painter, s: Site, rx: number, ry: number): void {
   const Q = G.quarry;
+  // On hills tan gravel, elsewhere stone grey
+  const gravelColors = s.sloped === 'hills' ? G.slope.hillGravelColors : Q.gravelColors;
+  if (s.slope) {
+    paintLedge(
+      p,
+      s,
+      { count: Q.rubbleCount, colors: Q.rubbleColors },
+      { count: Q.gravelCount, colors: gravelColors },
+    );
+    return;
+  }
+  // On plains: a stony apron around the quarry
   const shape = organicBlob(rx, ry, s.rng, G.wobble);
-  const d = patchBase(p, s, rx, ry, shape, patchColor(s, Q.color, 'stone'));
-  // On hills a dusty tan apron with tan gravel; elsewhere stone grey
-  const gravel = s.sloped === 'hills' ? G.slope.hillGravelColors : Q.gravelColors;
+  const d = patchBase(p, s, rx, ry, shape, Q.color);
   scatter(p, s, d.rx, d.ry, Q.rubbleCount, Q.rubbleColors, 0.018, 0.018);
-  scatter(p, s, d.rx, d.ry, Q.gravelCount, gravel, 0.008, 0.006);
+  scatter(p, s, d.rx, d.ry, Q.gravelCount, gravelColors, 0.008, 0.006);
 }
 
 /**
@@ -474,6 +514,15 @@ function scatter(
  */
 function paintMine(p: Painter, s: Site, rx: number, ry: number): void {
   const M = G.mine;
+  if (s.slope) {
+    paintLedge(
+      p,
+      s,
+      { count: M.stoneCount, colors: M.stoneColors },
+      { count: G.quarry.gravelCount, colors: G.quarry.gravelColors },
+    );
+    return;
+  }
   const shape = organicBlob(rx, ry, s.rng, G.wobble);
   const d = patchBase(p, s, rx, ry, shape, patchColor(s, M.color, 'stone'));
   scatter(p, s, d.rx, d.ry, M.stoneCount, M.stoneColors, 0.016, 0.018);
@@ -501,6 +550,21 @@ function paintFishery(p: Painter, s: Site, rx: number, ry: number, edge: number 
     if (!withinLimits(q, limits, 1)) continue;
     const color = G.yard.pebbleColors[i % G.yard.pebbleColors.length];
     dab(p, color, 1, c.x + q.x, c.y + q.y, 0.022 * size, 0.016 * size, rng, 5);
+  }
+  // Around the yard: sparse beach grass, a few shells and pebbles
+  for (let i = 0; i < F.litterCount; i++) {
+    const a = rng() * Math.PI * 2;
+    const d = 0.85 + rng() * 0.45;
+    const q = add(o, { x: Math.cos(a) * rx * d, y: Math.sin(a) * ry * d });
+    if (!withinLimits(q, limits, 1)) continue;
+    const x = c.x + q.x;
+    const y = c.y + q.y;
+    const k = i % 3;
+    if (k === 0) tuft(p, F.beachGrass, x, y, size, rng);
+    else if (k === 1) {
+      const color = F.shellColors[Math.floor(rng() * F.shellColors.length)];
+      dab(p, color, 1, x, y, 0.016 * size, 0.011 * size, undefined, 5);
+    } else dab(p, F.pebbleColor, 1, x, y, 0.02 * size, 0.014 * size, rng, 5);
   }
 }
 

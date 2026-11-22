@@ -1,6 +1,7 @@
 // Map view: the painted terrain (drawn once, statically) with the dynamic layers above it.
 import { Container, Graphics } from 'pixi.js';
 import { inBounds } from '../core/map';
+import { visibleTiles } from '../core/rules/vision';
 import { hexCorners, hexToPixel, type Hex } from '../core/hex';
 import type { BuildingStatus } from '../core/rules/production';
 import type { GameState, MapState, PlayerId } from '../core/state';
@@ -11,7 +12,7 @@ import { hexSize } from './config';
 import { createEconomyLayers } from './economyLayers';
 import { roadGeometry } from './geometry';
 import { createGroundLayer } from './groundLayer';
-import { groundFootprints } from './groundworks';
+import { footprintSignature, groundFootprints, unitFootprints } from './groundworks';
 import { createOrderLayers, type OrderPath } from './orderLayers';
 import { playerColorOf } from './playerColor';
 import { createTerrainLayer } from './terrainLayer';
@@ -45,11 +46,14 @@ export interface MapView {
   setOrderPaths(paths: readonly OrderPath[]): void;
 }
 
-/** `art`: the loaded building and unit art (see art.ts); without it the map uses plates and emoji. */
+/**
+ * `art`: the loaded building, unit and terrain art (see art.ts); without it the map uses plates
+ * and emoji, and the terrain its own painted trees.
+ */
 export function createMapView(map: MapState, art: ArtSet = NO_ART): MapView {
   const container = new Container();
-  // Static painted terrain, built once (see terrainLayer.ts)
-  const terrain = createTerrainLayer(map, hexSize);
+  // Static painted terrain, built once (see terrainLayer.ts), with the drawn trees and shrubs
+  const terrain = createTerrainLayer(map, hexSize, art.terrain);
   // Ground under the buildings (yards, plazas, fields, the fishery's sandy yard), see groundLayer.ts
   const ground = createGroundLayer(hexSize);
   const selection = new Graphics();
@@ -58,6 +62,8 @@ export function createMapView(map: MapState, art: ArtSet = NO_ART): MapView {
   const orders = createOrderLayers();
   /** Test option "no fog"; the ground footprints use the same filter as the buildings. */
   let revealAll = false;
+  /** Key of the footprints last sent to the terrain (it repaints only when they change). */
+  let footprintKey = '';
 
   // Terrain rows (trees, hills' texture, mountains) sort together with the buildings: a
   // mountain in front covers a building behind it and the other way round
@@ -87,9 +93,19 @@ export function createMapView(map: MapState, art: ArtSet = NO_ART): MapView {
     },
     update(state, statuses, viewer = 0) {
       economy.update(state, statuses, viewer);
-      // The terrain makes room (no trees, rocks, flowers) where the ground under a building lies
-      if (ground.update(state, viewer)) {
-        terrain.setFootprints(groundFootprints(state, viewer, revealAll, hexSize));
+      ground.update(state, viewer);
+      // The terrain makes room (no trees, rocks, flowers) where the ground under a building lies,
+      // and its trees, shrubs and rocks step aside under the units the viewer can see (the same
+      // filter as the unit sprites, so no hidden unit shows through a gap in the forest)
+      const visible = revealAll ? null : visibleTiles(state, viewer);
+      const footprints = [
+        ...groundFootprints(state, viewer, revealAll, hexSize),
+        ...unitFootprints(state, viewer, revealAll, hexSize, visible),
+      ];
+      const key = footprintSignature(footprints);
+      if (key !== footprintKey) {
+        footprintKey = key;
+        terrain.setFootprints(footprints);
       }
       // ... keeps its trees and shrubs off the roads, and shows nothing on unexplored tiles
       terrain.setRoads(roadGeometry(state));

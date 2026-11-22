@@ -260,7 +260,9 @@ describe('direction versions of building art', () => {
     const ids = buildingArtIds();
     for (const id of BUILDING_IDS) expect(ids).toContain(id);
     for (let e = 0; e < 6; e++) expect(ids).toContain(`fishery.e${e}`);
-    expect(ids).toHaveLength(BUILDING_IDS.length + 6);
+    expect(ids).toContain('mine.slope');
+    expect(ids).toContain('quarry.slope');
+    expect(ids).toHaveLength(BUILDING_IDS.length + 8);
   });
 
   it('uses the version toward the edge if it loaded, else the normal art', () => {
@@ -273,6 +275,19 @@ describe('direction versions of building art', () => {
     expect(buildingArtId('fishery', null, all)).toBe('fishery');
     // Buildings without direction versions keep their art
     expect(buildingArtId('house', 1, all)).toBe('house');
+  });
+
+  it('mines and quarries on hills / mountains use their slope version if it loaded', () => {
+    const all = (): boolean => true;
+    const none = (): boolean => false;
+    expect(buildingArtId('mine', null, all, 'mountains')).toBe('mine.slope');
+    expect(buildingArtId('quarry', null, all, 'hills')).toBe('quarry.slope');
+    // A quarry on plains keeps its normal art
+    expect(buildingArtId('quarry', null, all, 'plains')).toBe('quarry');
+    // Fallback while the slope version is missing
+    expect(buildingArtId('mine', null, none, 'mountains')).toBe('mine');
+    // Other buildings on slopes keep their art
+    expect(buildingArtId('house', null, all, 'hills')).toBe('house');
   });
 
   it("faces the fishery's water: the version follows its jetty edge", () => {
