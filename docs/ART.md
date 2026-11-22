@@ -165,6 +165,17 @@ are faint. Everything must stay smooth (60 fps) on a 40 × 40 map on a mid-range
 - **Buildings on slopes stand on a terrace:** the slope stays around the building (rising behind it);
   the building stands on a flat terrace cut into it with a small earth bank (hills) or stone edge
   (mountains) in front. A mine sits at the foot of its peak.
+- **Mines and quarries dig into the real slope** (decided after the hills/mountains playtest): the
+  mountain or hill stays whole; the game cuts a rock face (mine) or stepped terraces (quarry) into
+  the terrain's own massif or hill, and the map art (`mine.slope.svg`, `quarry.slope.svg`) shows only
+  the works: timber tunnel portal, rails, ore cart, spoil heap; crane, cut blocks, shed. No hollow
+  and no second rock. `mine.svg` / `quarry.svg` stay as icons (and the quarry on plains).
+- **Forests: dense woodland** of drawn trees in the building style (umbrella pines, cypresses, holm
+  oaks; maquis shrubs and wild olives on hills): crowns overlap into a continuous canopy that fills
+  the tile and joins neighboring forest tiles, with single trees and shrubs at the forest edge.
+  Tree art lives in `public/assets/terrain/` (same world scale as the buildings, no owner color).
+- **Units:** keep their token; trees and shrubs make room under it, the token sits on the ground
+  with a soft shadow, and on a tile with a building the unit stands at the front of the tile.
 - **Draw order:** terrain shapes and buildings are sorted together by row, so a mountain in front
   covers a building behind it and vice versa. Units stay on top.
 
