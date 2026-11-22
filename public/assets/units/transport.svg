@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+  <!-- Transport ship: round-bellied merchant ship with a square linen sail -->
+  <ellipse cx="50" cy="80" rx="34" ry="5" fill="#1d2b36" opacity="0.22"/>
+  <g stroke="#1d2b36" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
+    <!-- mast and yard -->
+    <line x1="48" y1="12" x2="48" y2="58" stroke-width="6.5"/>
+    <line x1="48" y1="12" x2="48" y2="58" stroke="#8a5a34" stroke-width="3"/>
+    <!-- sail -->
+    <path d="M25 17 L71 17 Q76 32 71 47 L25 47 Q30 32 25 17 Z" fill="#eceee8"/>
+    <path d="M61 17 L71 17 Q76 32 71 47 L61 47 Q65 32 61 17 Z" fill="#c9cdc2" stroke="none"/>
+    <path d="M27.5 27 L73.4 27 L74 34 L27.6 34 Z" fill="#2e6da4" stroke="none"/>
+    <path d="M25 17 L71 17 Q76 32 71 47 L25 47 Q30 32 25 17 Z" fill="none"/>
+    <line x1="22" y1="17" x2="74" y2="17" stroke-width="6.5"/>
+    <line x1="22" y1="17" x2="74" y2="17" stroke="#8a5a34" stroke-width="3"/>
+    <!-- hull -->
+    <path d="M10 46 L17 45 Q18 53 24 56 L72 56 Q78 54 79 46 L86 47 Q86 68 66 77 L30 77 Q12 70 10 46 Z" fill="#8a5a34"/>
+    <path d="M14 62 L83 62 Q78 73 66 77 L30 77 Q18 72 14 62 Z" fill="#5e3b22" stroke="none"/>
+    <path d="M10 46 L17 45 Q18 53 24 56 L72 56 Q78 54 79 46 L86 47 Q86 68 66 77 L30 77 Q12 70 10 46 Z" fill="none"/>
+    <path d="M14 62 L83 62" fill="none" stroke="#d9a35a" stroke-width="2.2"/>
+    <!-- amphorae on deck -->
+    <path d="M30 56 L30 51 Q33 47 36 51 L36 56 M39 56 L39 51 Q42 47 45 51 L45 56" fill="#b5523b" stroke-width="2"/>
+  </g>
+  <!-- bow wave -->
+  <path d="M16 79 Q24 74 32 79 Q40 84 48 79 Q56 74 64 79 Q72 84 80 79" fill="none" stroke="#eceee8" stroke-width="3" stroke-linecap="round"/>
+</svg>

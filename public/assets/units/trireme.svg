@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+  <!-- Trireme: long warship with oars, bronze ram and a red sail -->
+  <ellipse cx="50" cy="78" rx="36" ry="5" fill="#1d2b36" opacity="0.22"/>
+  <g stroke="#1d2b36" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
+    <!-- mast, sail and yard -->
+    <line x1="44" y1="16" x2="44" y2="54" stroke-width="6"/>
+    <line x1="44" y1="16" x2="44" y2="54" stroke="#8a5a34" stroke-width="2.6"/>
+    <path d="M28 21 L60 21 Q64 32 60 43 L28 43 Q32 32 28 21 Z" fill="#b5523b"/>
+    <path d="M52 21 L60 21 Q64 32 60 43 L52 43 Q56 32 52 21 Z" fill="#8a3b2a" stroke="none"/>
+    <path d="M28 21 L60 21 Q64 32 60 43 L28 43 Q32 32 28 21 Z" fill="none"/>
+    <line x1="25" y1="21" x2="63" y2="21" stroke-width="6"/>
+    <line x1="25" y1="21" x2="63" y2="21" stroke="#8a5a34" stroke-width="2.6"/>
+    <!-- bronze ram -->
+    <path d="M74 58 L88 62.5 L74 67 Z" fill="#d9a35a"/>
+    <!-- hull with curled stern and bow post -->
+    <path d="M26 53 L69 53 Q71 48 71 42 L78 42 Q79 52 77 58 L77 67 L22 67 Q8 60 10 36 L17 35 Q16 47 26 53 Z" fill="#8a5a34"/>
+    <path d="M14 60 L77 60 L77 67 L22 67 Q17 64 14 60 Z" fill="#5e3b22" stroke="none"/>
+    <path d="M26 53 L69 53 Q71 48 71 42 L78 42 Q79 52 77 58 L77 67 L22 67 Q8 60 10 36 L17 35 Q16 47 26 53 Z" fill="none"/>
+    <!-- eye on the bow -->
+    <ellipse cx="70" cy="59" rx="3.6" ry="2.6" fill="#eceee8" stroke-width="1.5"/>
+    <circle cx="70.5" cy="59" r="1.2" fill="#1d2b36" stroke="none"/>
+    <!-- oars -->
+    <path d="M27 61 L21 78 M35 61 L29 78 M43 61 L37 78 M51 61 L45 78 M59 61 L53 78" fill="none" stroke-width="5"/>
+    <path d="M27 61 L21 78 M35 61 L29 78 M43 61 L37 78 M51 61 L45 78 M59 61 L53 78" fill="none" stroke="#d9a35a" stroke-width="2"/>
+  </g>
+  <!-- wake -->
+  <path d="M58 79 Q64 75 70 79 Q76 83 82 79" fill="none" stroke="#eceee8" stroke-width="3" stroke-linecap="round"/>
+</svg>

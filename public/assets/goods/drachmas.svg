@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Drachmas: a silver coin with a simple owl mark -->
+  <g stroke="#1d2b36" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round">
+    <circle cx="33" cy="34.5" r="25" fill="#8a8178"/>
+    <circle cx="31" cy="31" r="25" fill="#eceee8"/>
+    <circle cx="31" cy="31" r="20" fill="none" stroke="#c9cdc2" stroke-width="2"/>
+    <!-- owl -->
+    <path d="M21 26 L22 18 L27 21 H35 L40 18 L41 26 V38 C41 46 21 46 21 38 z" fill="#8a8178" stroke-width="1.8"/>
+    <circle cx="26.5" cy="28" r="4.6" fill="#eceee8" stroke-width="1.6"/>
+    <circle cx="35.5" cy="28" r="4.6" fill="#eceee8" stroke-width="1.6"/>
+    <circle cx="26.5" cy="28" r="1.6" fill="#1d2b36" stroke="none"/>
+    <circle cx="35.5" cy="28" r="1.6" fill="#1d2b36" stroke="none"/>
+    <path d="M31 32 L29.2 35.5 H32.8 z" fill="#d9a35a" stroke-width="1.2"/>
+  </g>
+</svg>

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Stone: a cut ashlar block and a smaller one -->
+  <g stroke="#1d2b36" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round">
+    <!-- large block: top, front, right side -->
+    <path d="M6 24 L16 14 H48 L38 24 z" fill="#eceee8"/>
+    <path d="M6 24 H38 V50 H6 z" fill="#c9cdc2"/>
+    <path d="M38 24 L48 14 V40 L38 50 z" fill="#8a8178"/>
+    <path d="M12 32 H22 M24 42 H32" fill="none" stroke="#8a8178" stroke-width="1.8"/>
+    <!-- small block in front -->
+    <path d="M32 44 L38 38 H60 L54 44 z" fill="#eceee8"/>
+    <path d="M32 44 H54 V58 H32 z" fill="#c9cdc2"/>
+    <path d="M54 44 L60 38 V52 L54 58 z" fill="#8a8178"/>
+  </g>
+</svg>

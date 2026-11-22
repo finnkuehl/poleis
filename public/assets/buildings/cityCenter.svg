@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+  <!-- Poleis building miniature: city center (agora with civic hall and bronze statue).
+       Original work for Poleis, CC0 1.0. -->
+  <ellipse cx="52" cy="82" rx="40" ry="6.5" fill="#1d2b36" opacity="0.22"/>
+  <g stroke="#1d2b36" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
+    <!-- paved agora platform -->
+    <path d="M71 74 L85 66 L85 72 L71 80 Z" fill="#c9cdc2"/>
+    <path d="M9 74 L71 74 L85 66 L23 66 Z" fill="#e8d29a"/>
+    <rect x="9" y="74" width="62" height="6" fill="#eceee8"/>
+    <!-- civic hall: shaded side wall and entablature -->
+    <path d="M55 50 L65 44 L65 66 L55 72 Z" fill="#c9cdc2"/>
+    <path d="M55 44 L66 37.5 L66 44 L55 50 Z" fill="#c9cdc2"/>
+    <!-- colonnade: dark interior, four marble columns -->
+    <rect x="15" y="50" width="40" height="22" fill="#c9cdc2"/>
+    <rect x="15" y="50" width="40" height="22" fill="#1d2b36" fill-opacity="0.72"/>
+    <rect x="16" y="50" width="6" height="22" fill="#eceee8"/>
+    <rect x="26.5" y="50" width="6" height="22" fill="#eceee8"/>
+    <rect x="37.5" y="50" width="6" height="22" fill="#eceee8"/>
+    <rect x="48" y="50" width="6" height="22" fill="#eceee8"/>
+    <rect x="14" y="44" width="42" height="6" fill="#eceee8"/>
+    <!-- terracotta roof slope and marble pediment -->
+    <path d="M35 29 L57 44 L67 38 L45 23 Z" fill="#b5523b"/>
+    <path d="M12 44 L58 44 L35 29 Z" fill="#eceee8"/>
+  </g>
+  <path d="M20 41.5 L50 41.5 L35 32 Z" fill="#c9cdc2"/>
+  <g fill="none" stroke="#8a3b2a" stroke-width="1.5" stroke-linecap="round">
+    <path d="M42 33.5 L52 27 M49 38.5 L59 32"/>
+  </g>
+  <g stroke="#1d2b36" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
+    <!-- statue plinth -->
+    <path d="M75 55 L79 53 L79 71 L75 73 Z" fill="#c9cdc2"/>
+    <rect x="65" y="55" width="10" height="18" fill="#eceee8"/>
+    <rect x="63.5" y="52" width="13" height="4" fill="#eceee8"/>
+    <!-- bronze statue: robed figure with shield and raised spear -->
+    <path d="M77 52 L77 17" fill="none"/>
+    <path d="M66 52 L68 38 Q70.5 36 73 38 L75 52 Z" fill="#b0793a"/>
+    <path d="M73 39 L77 31" fill="none"/>
+    <circle cx="70.5" cy="33" r="3.5" fill="#b0793a"/>
+    <circle cx="66.5" cy="44.5" r="5" fill="#d9a35a"/>
+  </g>
+  <path d="M69.5 39 L68 51" stroke="#d9a35a" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M77 52 L77 17" stroke="#b0793a" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M74.5 19 L77 13 L79.5 19 Z" fill="#d9a35a" stroke="#1d2b36" stroke-width="2" stroke-linejoin="round"/>
+</svg>

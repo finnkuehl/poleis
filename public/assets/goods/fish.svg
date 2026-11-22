@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Fish: a sardine, turquoise-blue back and silver belly -->
+  <g stroke="#1d2b36" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M44 30 L59 16 C56 26 56 38 59 48 L44 36 z" fill="#3fb3b8"/>
+    <path d="M51 29 L59 16 C56 26 56 38 59 48 L51 37 z" fill="#2e6da4" stroke="none"/>
+    <path d="M44 30 L59 16 C56 26 56 38 59 48 L44 36 z" fill="none"/>
+    <path d="M27 20 L36 11 L41 24 z" fill="#2e6da4"/>
+    <path d="M4 33 C12 17 35 14 47 30 V36 C35 51 12 48 4 33 z" fill="#eceee8"/>
+    <path d="M4 33 C12 17 35 14 47 30 V33 C34 28 17 28 4 33 z" fill="#3fb3b8" stroke="none"/>
+    <path d="M4 33 C12 17 35 14 47 30 V36 C35 51 12 48 4 33 z" fill="none"/>
+    <path d="M21 24 C24.5 30 24.5 37 21 43" fill="none" stroke-width="1.6"/>
+    <path d="M29 39 H40" fill="none" stroke="#c9cdc2" stroke-width="2"/>
+    <circle cx="13.5" cy="30" r="2.8" fill="#eceee8" stroke-width="1.5"/>
+    <circle cx="13.5" cy="30" r="1.1" fill="#1d2b36" stroke="none"/>
+  </g>
+</svg>
