@@ -9,9 +9,18 @@ import type { MapState } from '../core/state';
 import type { TerrainId } from '../data/terrain';
 import { depthKey } from './artLayout';
 import { edgeNeighborHex, mapEdgeNeighborIndex, type RoadGeometry } from './geometry';
-import { distanceToEdges, isWater, smoothNoise, tileRng, type FootprintShape } from './terrain';
+import {
+  distanceToEdges,
+  edgeWave,
+  isWater,
+  smoothNoise,
+  tileRng,
+  WAVE_SEGMENTS,
+  type FootprintShape,
+} from './terrain';
 import { theme } from './theme';
 
+const P = theme.terrainPaint;
 const H = theme.terrainPaint.hills;
 const M = theme.terrainPaint.mountains;
 const CUT = theme.terrainPaint.cuts;
@@ -326,14 +335,26 @@ export function cornerPoint(h: Hex, corner: number, size: number): Point {
 
 /**
  * Height of a hex corner in a mountain range: raised when all three tiles around it are
- * mountains (inside a range), else on the ground. The same for all three tiles.
+ * mountains (inside a range), at cliff height where a mountain meets the sea, else on the ground.
+ * The same for all three tiles.
  */
 export function cornerHeight(map: MapState, h: Hex, corner: number, size: number): number {
-  const tiles = [h, edgeNeighborHex(h, corner), edgeNeighborHex(h, (corner + 5) % 6)];
-  if (!tiles.every((t) => terrainOf(map, t) === 'mountains')) return 0;
+  const tiles = [h, edgeNeighborHex(h, corner), edgeNeighborHex(h, (corner + 5) % 6)].map((t) =>
+    terrainOf(map, t),
+  );
   const o = cornerOwner(h, corner);
   const rng = tileRng(o.hex.q, o.hex.r, 720 + o.corner);
-  return (M.cornerMin + rng() * (M.cornerMax - M.cornerMin)) * size;
+  const v = rng();
+  if (tiles.every((t) => t === 'mountains'))
+    return (M.cornerMin + v * (M.cornerMax - M.cornerMin)) * size;
+  // A mountain corner on the coast: the top of the cliff that drops into the sea there
+  const mountain = tiles.some((t) => t === 'mountains');
+  const water = tiles.some((t) => t !== null && isWater(t));
+  if (mountain && water) {
+    const [lo, hi] = M.coastCorner;
+    return (lo + v * (hi - lo)) * size;
+  }
+  return 0;
 }
 
 /**
@@ -364,21 +385,25 @@ export interface MassifPlan {
 }
 
 /**
- * The massif of a mountain tile. Its foot runs around the tile: at edges toward other mountain
- * tiles along the shared corners and saddle (so the slopes of both tiles meet there), else a bit
- * inside the tile (further inside toward water). With a building (`fp`) the massif sits at the
- * back of the tile: its front foot follows the back of the footprint, so the building stands at
- * the foot of its peak.
+ * A cliff where a mountain drops into the sea, on an edge facing the viewer: its top runs along
+ * the massif's foot at the shore (corner, middle, corner; raised), its foot along the waterline
+ * (the tile's wavy shore, at water level).
  */
-export function massifPlan(
-  map: MapState,
-  h: Hex,
-  size: number,
-  fp: FootprintShape | null,
-): MassifPlan {
+export interface CoastCliff {
+  top: P3[];
+  water: Point[];
+}
+
+/** Edges whose cliff face can be seen (their outward normal points down the screen). */
+export const FRONT_EDGES: readonly number[] = [1, 2];
+const SIDE_EDGES: readonly number[] = [0, 3];
+
+/** The 12 foot points of a mountain tile (corner e at 2e, middle of edge e at 2e + 1). */
+function footLoop(map: MapState, h: Hex, size: number): P3[] {
   const c = hexToPixel(h, size);
   const corners = hexCorners(c, size);
   const rng = tileRng(h.q, h.r, 730);
+  const coastRng = tileRng(h.q, h.r, 735);
   const across: (TerrainId | null)[] = [];
   for (let e = 0; e < 6; e++) across.push(terrainOf(map, edgeNeighborHex(h, e)));
   const mountain = (e: number): boolean => across[(e + 6) % 6] === 'mountains';
@@ -391,41 +416,99 @@ export function massifPlan(
     y: c.y + (p.y - c.y) * f,
     z: 0,
   });
-  // 12 foot points: corner e, then the middle of edge e
   const loop: P3[] = [];
   for (let e = 0; e < 6; e++) {
     const jitter = (rng() - 0.5) * 0.08;
-    if (mountain(e - 1) || mountain(e)) {
+    if (mountain(e - 1) || mountain(e) || water(e - 1) || water(e)) {
+      // Shared with a mountain neighbor, or on the coast: right on the hex corner
       const p = cornerPoint(h, e, size);
       loop.push({ ...p, z: cornerHeight(map, h, e, size) });
     } else {
-      const f = (water(e - 1) || water(e) ? M.shoreInset : M.footInset) + jitter;
-      loop.push(inset(corners[e], f));
+      loop.push(inset(corners[e], M.footInset + jitter));
     }
-    const mid = {
-      x: (corners[e].x + corners[(e + 1) % 6].x) / 2,
-      y: (corners[e].y + corners[(e + 1) % 6].y) / 2,
-    };
+    const a = corners[e];
+    const b = corners[(e + 1) % 6];
     const midJitter = (rng() - 0.5) * 0.1;
-    if (mountain(e)) loop.push(ridgeSaddle(h, e, size));
-    else loop.push(inset(mid, (water(e) ? M.shoreInset : M.footInset) + midJitter));
+    const cliff = coastRng();
+    if (mountain(e)) {
+      loop.push(ridgeSaddle(h, e, size));
+    } else if (water(e)) {
+      // On the shoreline (the middle of the wavy shore), at the top of the cliff
+      const wave = edgeWave(h, e, P.shoreWave * size)[WAVE_SEGMENTS / 2];
+      const out = { x: Math.cos((Math.PI / 3) * e), y: Math.sin((Math.PI / 3) * e) };
+      const [lo, hi] = FRONT_EDGES.includes(e)
+        ? M.coastFront
+        : SIDE_EDGES.includes(e)
+          ? M.coastSide
+          : M.coastBack;
+      loop.push({
+        x: (a.x + b.x) / 2 + out.x * (wave - 0.5),
+        y: (a.y + b.y) / 2 + out.y * (wave - 0.5),
+        z: (lo + cliff * (hi - lo)) * size,
+      });
+    } else {
+      loop.push(inset({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, M.footInset + midJitter));
+    }
   }
+  return loop;
+}
+
+/** Cliffs into the sea on the tile's water edges that face the viewer. */
+export function coastCliffs(map: MapState, h: Hex, size: number): CoastCliff[] {
+  const loop = footLoop(map, h, size);
+  const c = hexToPixel(h, size);
+  const corners = hexCorners(c, size);
+  const out: CoastCliff[] = [];
+  for (const e of FRONT_EDGES) {
+    const t = terrainOf(map, edgeNeighborHex(h, e));
+    if (t === null || !isWater(t)) continue;
+    const offsets = edgeWave(h, e, P.shoreWave * size);
+    const n = { x: Math.cos((Math.PI / 3) * e), y: Math.sin((Math.PI / 3) * e) };
+    const a = corners[e];
+    const b = corners[(e + 1) % 6];
+    const water = offsets.map((w, i) => {
+      const u = i / WAVE_SEGMENTS;
+      return { x: a.x + (b.x - a.x) * u + n.x * w, y: a.y + (b.y - a.y) * u + n.y * w };
+    });
+    out.push({ top: [loop[2 * e], loop[2 * e + 1], loop[(2 * e + 2) % 12]], water });
+  }
+  return out;
+}
+
+/**
+ * The massif of a mountain tile. Its foot runs around the tile: at edges toward other mountain
+ * tiles along the shared corners and saddle (so the slopes of both tiles meet there), toward the
+ * sea right on the shore at the top of a cliff, else a bit inside the tile. With a building
+ * (`fp`) the massif sits at the back of the tile, so the building stands at the foot of its
+ * peak; a mine or quarry instead cuts into a whole massif whose flanks wrap around it (several
+ * plans: the main massif first, then the flanks).
+ */
+export function massifPlans(
+  map: MapState,
+  h: Hex,
+  size: number,
+  fp: FootprintShape | null,
+): MassifPlan[] {
+  const c = hexToPixel(h, size);
+  const loop = footLoop(map, h, size);
   const peakRng = tileRng(h.q, h.r, 731);
   // Whole ranges higher or lower (smooth noise), each peak a little different
   const high = smoothNoise(c.x / (6 * size), c.y / (6 * size), 21) * 0.65 + peakRng() * 0.35;
   const peak = (M.peakMin + high * (M.peakMax - M.peakMin)) * size;
   if (fp?.kind === 'mineCut' || fp?.kind === 'quarryCut') {
-    return cutMassifPlan(c, loop, fp.kind, peak, peakRng, size);
+    return cutMassifPlans(c, loop, fp.kind, peak, peakRng, size);
   }
   if (!fp) {
-    return {
-      apex: {
-        x: c.x + (peakRng() - 0.5) * 0.24 * size,
-        y: c.y + (-0.04 + (peakRng() - 0.5) * 0.16) * size,
-        z: peak,
+    return [
+      {
+        apex: {
+          x: c.x + (peakRng() - 0.5) * 0.24 * size,
+          y: c.y + (-0.04 + (peakRng() - 0.5) * 0.16) * size,
+          z: peak,
+        },
+        base: loop,
       },
-      base: loop,
-    };
+    ];
   }
   // With a building: keep the back of the foot (upper left corner .. upper right corner, over
   // the top) and close it along the back of the footprint, from east to west
@@ -440,14 +523,26 @@ export function massifPlan(
   }
   // The loop: the back (west -> east), then the arc (east -> over the back -> west)
   const yMid = -(fp.ry + 0.9 * size) / 2;
-  return {
-    apex: {
-      x: c.x + (peakRng() - 0.5) * 0.2 * size,
-      y: c.y + Math.max(yMid, -0.8 * size),
-      z: M.buildingPeak * size * (0.92 + peakRng() * 0.16),
+  return [
+    {
+      apex: {
+        x: c.x + (peakRng() - 0.5) * 0.2 * size,
+        y: c.y + Math.max(yMid, -0.8 * size),
+        z: M.buildingPeak * size * (0.92 + peakRng() * 0.16),
+      },
+      base: [...back, ...arc],
     },
-    base: [...back, ...arc],
-  };
+  ];
+}
+
+/** The main massif of a mountain tile (see `massifPlans`). */
+export function massifPlan(
+  map: MapState,
+  h: Hex,
+  size: number,
+  fp: FootprintShape | null,
+): MassifPlan {
+  return massifPlans(map, h, size, fp)[0];
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -468,6 +563,22 @@ export function artPoint(c: Point, a: number, b: number, z: number, size: number
   return { x: c.x + k * (a - b), y: c.y + (k * (a + b)) / 2, z: k * CUT.artHeight * z };
 }
 
+/**
+ * Where the mine's scene stands (docs/ART.md "Mine at the mountain's foot"): its anchor relative
+ * to the tile center (world px) and its scale. The drawn works (economyLayers.ts), the cut face
+ * and the ledge all use this one transform, so they stay aligned with each other.
+ */
+export function mineArtTransform(size: number): { x: number; y: number; scale: number } {
+  return { x: 0, y: CUT.mineShift * size, scale: CUT.mineScale };
+}
+
+/** Like `artPoint`, but for the mine's scene: moved and scaled by `mineArtTransform`. */
+export function mineArtPoint(c: Point, a: number, b: number, z: number, size: number): P3 {
+  const t = mineArtTransform(size);
+  const p = artPoint({ x: 0, y: 0 }, a, b, z, size);
+  return { x: c.x + t.x + p.x * t.scale, y: c.y + t.y + p.y * t.scale, z: p.z * t.scale };
+}
+
 /** The mine's rock face and the front of the massif's foot on its tile. */
 export interface MineCut {
   /** The face as one outline: left run-out, foot line, right run-out, top line (6 points). */
@@ -479,18 +590,19 @@ export interface MineCut {
   front: P3[];
 }
 
-/** The mine cut on the tile centered at `c` (theme cuts.face*). */
+/** The mine cut on the tile centered at `c` (theme cuts.face*, moved to the mountain's foot). */
 export function mineCut(c: Point, size: number): MineCut {
   const [a0, a1] = CUT.faceA;
   const b = CUT.faceB;
   const h = CUT.faceH;
   const [ra, rb] = CUT.faceRunOut;
-  const footL = artPoint(c, a0, b, 0, size);
-  const footR = artPoint(c, a1, b, 0, size);
-  const topL = artPoint(c, a0, b, h, size);
-  const topR = artPoint(c, a1, b, h, size);
-  const runR = artPoint(c, a1 + ra, b + rb, 0, size);
-  const runL = artPoint(c, a0 - ra, b - rb, 0, size);
+  const at = (a: number, bb: number, z: number): P3 => mineArtPoint(c, a, bb, z, size);
+  const footL = at(a0, b, 0);
+  const footR = at(a1, b, 0);
+  const topL = at(a0, b, h);
+  const topR = at(a1, b, h);
+  const runR = at(a1 + ra, b + rb, 0);
+  const runL = at(a0 - ra, b - rb, 0);
   return {
     face: [runL, footL, footR, runR, topR, topL],
     foot: [footL, footR],
@@ -540,10 +652,10 @@ export function quarryCut(c: Point, size: number): QuarryCut {
 
 /** Where the peak of a cut tile may stand (hex sizes from the tile center), first choice first. */
 const MINE_PEAKS: readonly (readonly [number, number])[] = [
-  [0, -CUT.peakBack],
-  [0, -0.42],
-  [0.05, -0.36],
-  [0.1, -0.3],
+  [0.02, -0.06],
+  [0.06, -0.14],
+  [-0.04, -0.14],
+  [0.04, -0.24],
 ];
 const QUARRY_PEAKS: readonly (readonly [number, number])[] = [
   [0.36, -CUT.peakBack],
@@ -553,40 +665,264 @@ const QUARRY_PEAKS: readonly (readonly [number, number])[] = [
 ];
 
 /**
- * The massif of a mine or quarry tile: the peak stays whole behind the cut, its foot runs along
- * the back and the sides of the tile (with the shared saddles and corners toward neighboring
- * mountain tiles: east, west and the back edges) and in front along the cut (`loop` = the 12
- * foot points of the plain massif: corner e at 2e, the middle of edge e at 2e + 1).
+ * The niche of a mine or quarry: the works stand in it, the mountain wraps around it. A back wall
+ * (the cut face, as high as it), two side walls running forward to the front of the tile
+ * (symmetric about the niche's axis; their tops lean outward and get lower toward the front),
+ * the scree floor between them and the ridge points where the flanks meet the main massif.
  */
-function cutMassifPlan(
+export interface Niche {
+  /** Back wall: foot (left, right) on the ground, top (left, right). */
+  backFoot: [P3, P3];
+  backTop: [P3, P3];
+  /** Side walls at their front ends: foot (left, right) and top (left, right). */
+  frontFoot: [P3, P3];
+  frontTop: [P3, P3];
+  /** The niche's axis (x, world px): the walls are mirror images about it. */
+  axis: number;
+  /** Ridge points where the left / right flank meets the main massif, and the flank peaks. */
+  joins: [P3, P3];
+  peaks: [P3, P3];
+}
+
+function niche(c: Point, backFoot: [P3, P3], backTop: [P3, P3], axis: number, size: number): Niche {
+  const half = CUT.nicheFrontHalf * size;
+  const y = c.y + CUT.nicheFrontY * size;
+  const h = CUT.nicheFrontH * size;
+  const lean = CUT.nicheLean * size;
+  const at = (v: readonly number[], z: number): P3 => ({
+    x: c.x + v[0] * size,
+    y: c.y + v[1] * size,
+    z,
+  });
+  const fh = CUT.flankH * size;
+  return {
+    backFoot,
+    backTop,
+    frontFoot: [
+      { x: axis - half, y, z: 0 },
+      { x: axis + half, y, z: 0 },
+    ],
+    frontTop: [
+      { x: axis - half - lean, y, z: h },
+      { x: axis + half + lean, y, z: h },
+    ],
+    axis,
+    joins: [
+      at(CUT.nicheJoinLeft, CUT.nicheJoinH * size),
+      at(CUT.nicheJoinRight, CUT.nicheJoinH * size),
+    ],
+    peaks: [
+      { x: axis - CUT.flankHalf * size, y: c.y + CUT.flankY * size, z: fh },
+      { x: axis + CUT.flankHalf * size, y: c.y + CUT.flankY * size, z: fh },
+    ],
+  };
+}
+
+/** The niche of the quarry on the tile centered at `c`: in front of its lowest step. */
+export function quarryNiche(c: Point, size: number): Niche {
+  const [a0, a1, bf, , zt] = CUT.steps[0];
+  return niche(
+    c,
+    [artPoint(c, a0, bf, 0, size), artPoint(c, a1, bf, 0, size)],
+    [artPoint(c, a0, bf, zt, size), artPoint(c, a1, bf, zt, size)],
+    artPoint(c, (a0 + a1) / 2, bf, 0, size).x,
+    size,
+  );
+}
+
+/**
+ * The massifs of a mine or quarry tile: the main massif with the peak behind the cut (its foot
+ * runs along the back and the sides of the tile, with the shared saddles and corners toward the
+ * mountain neighbors, and in front along the top of the cut), plus a left and a right flank that
+ * reach forward on both sides of the niche to the front of the tile (`loop` = the 12 foot points
+ * of the plain massif: corner e at 2e, the middle of edge e at 2e + 1).
+ */
+function cutMassifPlans(
   c: Point,
   loop: readonly P3[],
   kind: 'mineCut' | 'quarryCut',
   peak: number,
   rng: () => number,
   size: number,
-): MassifPlan {
-  const mine = kind === 'mineCut';
-  const front = mine ? mineCut(c, size).front : quarryCut(c, size).front;
+): MassifPlan[] {
   const jitter = (rng() - 0.5) * 0.06 * size;
-  // East middle, the cut, west middle, then over the back (upper left .. upper right corner)
-  const base = [loop[1], ...front, loop[7], loop[8], loop[9], loop[10], loop[11], loop[0]];
-  // Points shared with neighboring mountain tiles (raised saddles and corners, or corners right
-  // on the hex corner) always stay; an inset point or a run-out may go if it would fold a face
-  const keep: number[] = [0];
-  base.forEach((p, i) => {
-    if (p.z > 0 || Math.abs(Math.hypot(p.x - c.x, p.y - c.y) - size) < 1e-6) keep.push(i);
-  });
-  // The peak behind the cut: the first spot (further forward when water eats into the back of
-  // the tile) from which no face folds
-  const spots = mine ? MINE_PEAKS : QUARRY_PEAKS;
-  let plan: MassifPlan | null = null;
-  for (const [dx, dy] of spots) {
+  const shared = (p: P3): boolean =>
+    p.z > 0 || Math.abs(Math.hypot(p.x - c.x, p.y - c.y) - size) < 1e-6;
+  const fan = (apex: P3, base: P3[]): MassifPlan | null => {
+    const keep: number[] = [0];
+    base.forEach((p, i) => {
+      if (shared(p)) keep.push(i);
+    });
+    const plan = { apex, base: starShaped(apex, base, keep) };
+    return isStarShaped(plan.apex, plan.base) ? plan : null;
+  };
+  if (kind === 'mineCut') return mineMassifPlans(c, loop, peak, jitter, fan, size);
+  const n = quarryNiche(c, size);
+  const [joinL, joinR] = n.joins;
+  const [backL, backR] = n.backTop;
+  // The top of the cut from east to west: the step outline, then down the left side
+  const q = quarryCut(c, size);
+  // front: run-out, the right-end top corners (steps 1..3), top back left, then the left side
+  const [, c1, c2, c3, c4, lb] = q.front;
+  const cutTop = [c1, c2, c3, c4, lb];
+  const rightSide = [backR, c1];
+  const leftSide = [lb, backL];
+  // Main massif: east middle, its join with the right flank, the cut, the join with the left
+  // flank, then over the back (upper left .. upper right corner)
+  const mainBase = [
+    loop[1],
+    joinR,
+    ...cutTop,
+    joinL,
+    loop[8],
+    loop[9],
+    loop[10],
+    loop[11],
+    loop[0],
+  ];
+  let main: MassifPlan | null = null;
+  for (const [dx, dy] of QUARRY_PEAKS) {
     const apex = { x: c.x + dx * size + jitter, y: c.y + dy * size, z: peak * CUT.peakFactor };
-    plan = { apex, base: starShaped(apex, base, keep) };
-    if (isStarShaped(plan.apex, plan.base)) return plan;
+    main = fan(apex, mainBase);
+    if (main) break;
   }
-  return plan as MassifPlan;
+  if (!main) {
+    const apex = { x: c.x + jitter, y: c.y - CUT.peakBack * size, z: peak * CUT.peakFactor };
+    main = { apex, base: starShaped(apex, mainBase, []) };
+  }
+  // Flanks (left skipped / right skipped if they would fold, e.g. squeezed by the coast)
+  const [peakL, peakR] = n.peaks;
+  const [topL, topR] = n.frontTop;
+  const right = fan(peakR, [loop[1], loop[2], topR, ...rightSide, joinR]);
+  const left = fan(peakL, [joinL, ...leftSide, topL, loop[6], loop[7], loop[8]]);
+  return [main, ...(left ? [left] : []), ...(right ? [right] : [])];
+}
+
+/**
+ * A mine tile: a whole mountain with its peak near the tile center (like an unbuilt one, all
+ * shared saddles and corners around the back and the sides) whose front foot is the cut face at
+ * the front of the tile. Toward a mountain (or the coast) on a front edge a small flank joins
+ * the face's side to that edge; nothing else stands in front of the face, only the works.
+ */
+function mineMassifPlans(
+  c: Point,
+  loop: readonly P3[],
+  peak: number,
+  jitter: number,
+  fan: (apex: P3, base: P3[]) => MassifPlan | null,
+  size: number,
+): MassifPlan[] {
+  const face = mineCut(c, size);
+  const [runR, topR, topL, runL] = face.front;
+  // East middle, lower right corner, the face (right run-out, top right, top left, left run-out),
+  // lower left corner, west middle, then over the back
+  const base = [
+    loop[1],
+    loop[2],
+    runR,
+    topR,
+    topL,
+    runL,
+    loop[6],
+    loop[7],
+    loop[8],
+    loop[9],
+    loop[10],
+    loop[11],
+    loop[0],
+  ];
+  let main: MassifPlan | null = null;
+  for (const [dx, dy] of MINE_PEAKS) {
+    main = fan({ x: c.x + dx * size + jitter, y: c.y + dy * size, z: peak }, base);
+    if (main) break;
+  }
+  if (!main) {
+    const apex = { x: c.x + jitter, y: c.y + MINE_PEAKS[0][1] * size, z: peak };
+    main = { apex, base: starShaped(apex, base, []) };
+  }
+  const plans = [main];
+  // Small flanks to a shared middle of a front edge (a saddle toward a mountain, a cliff top)
+  const flank = (mid: P3, a: P3, b: P3): void => {
+    if (mid.z <= 0) return;
+    const apex = {
+      x: (mid.x + a.x + b.x) / 3,
+      y: (mid.y + a.y + b.y) / 3,
+      z: Math.max(mid.z, a.z, b.z),
+    };
+    const plan = fan(apex, [a, mid, b]);
+    if (plan) plans.push(plan);
+  };
+  flank(loop[3], loop[2], runR);
+  flank(loop[5], runL, loop[6]);
+  return plans;
+}
+
+/**
+ * The scree floor of a niche (ground points, clockwise): the back wall's foot, the right wall,
+ * a rounded front reaching toward the tile's front edges (inside the hex), the left wall.
+ */
+export function nicheFloor(c: Point, n: Niche, size: number): Point[] {
+  const [bl, br] = n.backFoot;
+  const [fl, fr] = n.frontFoot;
+  const r = M.footInset * size;
+  const front = [60, 75, 90, 105, 120].map((deg) => {
+    const a = (deg * Math.PI) / 180;
+    return { x: c.x + Math.cos(a) * r, y: c.y + Math.sin(a) * r };
+  });
+  // Keep the rounded front between the two walls
+  const inner = front.filter((p) => p.x > fl.x && p.x < fr.x);
+  return [bl, br, fr, ...inner, fl].map((p) => ({ x: p.x, y: p.y }));
+}
+
+/** True when `p` lies inside the convex polygon `poly` (either orientation). */
+export function insideConvexPolygon(p: Point, poly: readonly Point[]): boolean {
+  let sign = 0;
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    const cross = (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
+    if (cross === 0) continue;
+    const s = cross > 0 ? 1 : -1;
+    if (sign === 0) sign = s;
+    else if (s !== sign) return false;
+  }
+  return poly.length >= 3;
+}
+
+/**
+ * The part of polygon `poly` inside the convex polygon `clip` (both clockwise on screen):
+ * Sutherland-Hodgman clipping. Empty if they do not overlap.
+ */
+export function clipConvex(poly: readonly Point[], clip: readonly Point[]): Point[] {
+  let out: Point[] = [...poly];
+  // Orientation of the clip polygon: inside lies on this side of every edge
+  let area = 0;
+  for (let i = 0; i < clip.length; i++) {
+    const a = clip[i];
+    const b = clip[(i + 1) % clip.length];
+    area += a.x * b.y - b.x * a.y;
+  }
+  const sign = area >= 0 ? 1 : -1;
+  for (let i = 0; i < clip.length && out.length > 0; i++) {
+    const a = clip[i];
+    const b = clip[(i + 1) % clip.length];
+    const side = (p: Point): number =>
+      sign * ((b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x));
+    const input = out;
+    out = [];
+    for (let k = 0; k < input.length; k++) {
+      const p = input[k];
+      const q = input[(k + 1) % input.length];
+      const sp = side(p);
+      const sq = side(q);
+      if (sp >= 0) out.push(p);
+      if (sp >= 0 !== sq >= 0) {
+        const t = sp / (sp - sq);
+        out.push({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t });
+      }
+    }
+  }
+  return out;
 }
 
 /**

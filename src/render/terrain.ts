@@ -226,6 +226,30 @@ export function footprintRowsToRepaint(
   return [...rows].sort((x, y) => x - y);
 }
 
+/**
+ * Edges of a land tile where the shore is a cliff instead of a beach: every water edge of a
+ * mountain (the massif drops into the sea), the water edges of hills below them (facing the
+ * viewer, edges 1 and 2) where `chance(e)` < hillCliffChance. Others: none.
+ */
+export function cliffEdges(
+  terrain: TerrainId,
+  shore: readonly boolean[],
+  chance: (edge: number) => number,
+): boolean[] {
+  return shore.map((s, e) => {
+    if (!s) return false;
+    if (terrain === 'mountains') return true;
+    return (
+      terrain === 'hills' && (e === 1 || e === 2) && chance(e) < theme.terrainPaint.hillCliffChance
+    );
+  });
+}
+
+/** Edges with a beach: water edges without a cliff. */
+export function beachEdges(shore: readonly boolean[], cliffs: readonly boolean[]): boolean[] {
+  return shore.map((s, e) => s && !cliffs[e]);
+}
+
 /** True when the terrain is water (ocean or coast). */
 export function isWater(t: TerrainId): boolean {
   return TERRAIN[t].isWater;

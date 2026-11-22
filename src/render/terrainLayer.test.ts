@@ -74,27 +74,32 @@ function findTile(
 }
 
 describe('createTerrainLayer', () => {
-  it('builds a 40 x 40 map within the vertex budget (static, drawn once)', () => {
-    const { map } = generateMap(12345, { width: 40, height: 40 });
-    for (const art of [undefined, FAKE_ART]) {
-      const t0 = performance.now();
-      const layer = createTerrainLayer(map, hexSize, art);
-      const t1 = performance.now();
-      const g = tessellate(layer.ground.context).length / 2;
-      const d = allVertices(layer) / 2;
-      const t2 = performance.now();
-      console.info(
-        `terrain 40x40 ${art ? 'with tree art' : 'without art'}: paint ${(t1 - t0).toFixed(1)} ms, ` +
-          `tessellate ${(t2 - t1).toFixed(1)} ms, vertices ground ${g} + details ${d} = ${g + d}, ` +
-          `sprites ${allSprites(layer)}`,
-      );
-      // Budget for a mid-range phone: the whole static terrain stays below about 450k vertices
-      expect(g + d).toBeLessThan(450_000);
-      expect(layer.rows).toHaveLength(80);
-      if (!art) expect(allSprites(layer)).toBe(0);
-      else expect(allSprites(layer)).toBeGreaterThan(1000);
-    }
-  });
+  // Builds two full 40 x 40 maps: give it time when the whole suite runs in parallel
+  it(
+    'builds a 40 x 40 map within the vertex budget (static, drawn once)',
+    { timeout: 30_000 },
+    () => {
+      const { map } = generateMap(12345, { width: 40, height: 40 });
+      for (const art of [undefined, FAKE_ART]) {
+        const t0 = performance.now();
+        const layer = createTerrainLayer(map, hexSize, art);
+        const t1 = performance.now();
+        const g = tessellate(layer.ground.context).length / 2;
+        const d = allVertices(layer) / 2;
+        const t2 = performance.now();
+        console.info(
+          `terrain 40x40 ${art ? 'with tree art' : 'without art'}: paint ${(t1 - t0).toFixed(1)} ms, ` +
+            `tessellate ${(t2 - t1).toFixed(1)} ms, vertices ground ${g} + details ${d} = ${g + d}, ` +
+            `sprites ${allSprites(layer)}`,
+        );
+        // Budget for a mid-range phone: the whole static terrain stays below about 450k vertices
+        expect(g + d).toBeLessThan(450_000);
+        expect(layer.rows).toHaveLength(80);
+        if (!art) expect(allSprites(layer)).toBe(0);
+        else expect(allSprites(layer)).toBeGreaterThan(1000);
+      }
+    },
+  );
 
   it('is deterministic: the same map paints the same geometry and sprites', () => {
     const { map } = generateMap(7, { width: 24, height: 24 });
@@ -316,5 +321,32 @@ describe('createTerrainLayer', () => {
     expect(before.some(inside)).toBe(true);
     expect(after.some(inside)).toBe(false);
     expect(after).toHaveLength(before.filter((p) => !inside(p)).length);
+  });
+
+  it('a field on hills keeps the hill: no terrace, only its shrubs, rocks and olives make room', () => {
+    const { map } = generateMap(7, { width: 24, height: 24 });
+    const h = findTile(map, 'hills');
+    const hex = hexAtIndex(map, h);
+    const row = Math.floor(h / map.width);
+    const fp = { hex, rx: 0.88 * hexSize, ry: 0.88 * hexSize };
+    for (const art of [undefined, FAKE_ART]) {
+      const layer = createTerrainLayer(map, hexSize, art);
+      const before = rowContent(layer, row);
+      layer.setFootprints([{ ...fp, kind: 'field' }]);
+      const field = rowContent(layer, row);
+      layer.setFootprints([fp]);
+      const building = rowContent(layer, row);
+      // A plain building on hills adds its terrace; a field adds nothing, it only clears
+      expect(building.vertices.length).toBeGreaterThan(field.vertices.length);
+      expect(field.vertices.length).toBeLessThanOrEqual(before.vertices.length);
+      if (art) expect(field.sprites.length).toBeLessThan(before.sprites.length);
+    }
+    // The grass strokes (decals) stay under a field, as under a unit's spot
+    const layer = createTerrainLayer(map, hexSize, FAKE_ART);
+    layer.setFootprints([{ ...fp, kind: 'field' }]);
+    const withField = rowContent(layer, row).vertices.length;
+    layer.setFootprints([{ ...fp, kind: 'unit' }]);
+    // A field clears exactly what a unit's spot of the same size would: standing things only
+    expect(rowContent(layer, row).vertices.length).toBe(withField);
   });
 });

@@ -3,12 +3,13 @@
 // One static Graphics in map space, between the terrain's flat ground and its standing details.
 // Repainted only when the shown buildings change (compared by a cheap key), never per frame.
 // Light comes from the upper left; shadows fall to the lower right.
-import { Graphics } from 'pixi.js';
+import { Graphics, Matrix } from 'pixi.js';
 import { hexToPixel, type Point } from '../core/hex';
 import { tileIndex } from '../core/map';
 import type { Building, GameState, MapState, PlayerId } from '../core/state';
 import { buildingsShownTo } from './fog';
-import { edgeNeighborHex } from './geometry';
+import { edgeNeighborHex, trackRibbon } from './geometry';
+import type { HillMound } from './relief';
 import {
   ISO_A,
   ISO_B,
@@ -25,6 +26,7 @@ import {
   densify,
   edgeLimits,
   fieldCells,
+  fieldMounds,
   fieldJoinMask,
   fieldOutline,
   fieldTiles,
@@ -33,10 +35,14 @@ import {
   flatPoints,
   groundKindOf,
   groundSignature,
+  hillHeight,
+  hillLight,
+  insideConvex,
   insideOutline,
   isFieldKind,
   jettyEdge,
   longestRun,
+  moundsNear,
   organicBlob,
   outlinePoint,
   parallelLines,
@@ -48,10 +54,13 @@ import {
   slopeOutline,
   translate,
   withinLimits,
+  type FieldMound,
   type GroundKind,
   type OutlineSample,
   type YardLitter,
 } from './groundworks';
+import { mineArtTransform } from './relief';
+import { reliefTexture } from './reliefPaint';
 import {
   ellipsePoints,
   isWater,
@@ -446,12 +455,14 @@ function paintLedge(
   s: Site,
   stones: { count: number; colors: readonly number[] },
   gravel: { count: number; colors: readonly number[] },
+  t: { x: number; y: number; scale: number } = { x: 0, y: 0, scale: 1 },
 ): void {
   const L = G.slope.ledge;
   const { c, size, rng, limits } = s;
-  const o = { x: 0, y: L.y * size };
-  const rx = L.rx * size;
-  const ry = L.ry * size;
+  // `t`: where the works stand and how big (the mine: relief.ts mineArtTransform)
+  const o = { x: t.x, y: t.y + L.y * size * t.scale };
+  const rx = L.rx * size * t.scale;
+  const ry = L.ry * size * t.scale;
   const shape = translate(organicBlob(rx, ry, rng, 0.25), o);
   softPatch(p, c, shape, limits, patchColor(s, G.mine.color, 'stone'), G.slope.coreAlpha + 0.1, o);
   const place = (count: number, colors: readonly number[], r0: number, dr: number): void => {
@@ -520,6 +531,7 @@ function paintMine(p: Painter, s: Site, rx: number, ry: number): void {
       s,
       { count: M.stoneCount, colors: M.stoneColors },
       { count: G.quarry.gravelCount, colors: G.quarry.gravelColors },
+      mineArtTransform(s.size),
     );
     return;
   }
@@ -598,15 +610,25 @@ interface FieldSite extends Site {
   /** Index of the tile and its neighbors (-1 outside the map). */
   index: number;
   neighbors: number[];
+  /** Per edge: the neighbor is a field of another kind (a hedge or wall lies between them). */
+  otherField: boolean[];
+  /**
+   * On hills: the field lies on top of the slopes. Its ground is see-through, so the terrain's
+   * mounds show; its rows drape over them and are shaded like them (`mounds` near the tile).
+   */
+  hill: boolean;
+  mounds: HillMound[];
+  /** The mounds cut to the field's crop area (on hills; else empty). */
+  relief: FieldMound[];
 }
 
 /** Densify step (px) for parcel outlines: fine enough to follow the outline and the warp. */
 const PARCEL_STEP = 3.5;
 
-function fieldSite(map: MapState, s: Site, fields: ReadonlySet<number>): FieldSite {
+function fieldSite(map: MapState, s: Site, fields: ReadonlyMap<number, GroundKind>): FieldSite {
   const F = G.field;
   const { size, rng } = s;
-  const joined = fieldJoinMask(map, s.b.hex, fields);
+  const joined = fieldJoinMask(map, s.b.hex, fields, s.kind);
   const outline = fieldOutline(map, s.b.hex, size, joined);
   const warp = fieldWarp(s.b.hex, size);
   const index = tileIndex(map, s.b.hex);
@@ -628,6 +650,8 @@ function fieldSite(map: MapState, s: Site, fields: ReadonlySet<number>): FieldSi
     true,
   );
   const parcels: FieldParcel[] = [];
+  const hill = s.sloped === 'hills';
+  const mounds = hill ? moundsNear(map, s.b.hex, size) : [];
   // Farms and vineyards: an orderly farmstead in the middle of its fields; olive groves: free
   const layout = s.kind === 'orchard' ? 'free' : 'farmstead';
   fieldCells(rng, size, F.gap * size, layout).forEach((cell, i) => {
@@ -653,6 +677,10 @@ function fieldSite(map: MapState, s: Site, fields: ReadonlySet<number>): FieldSi
       parcels.push({ poly, cell: corners, dir: cell.dir, color });
   });
   const neighbors = [0, 1, 2, 3, 4, 5].map((e) => tileIndex(map, edgeNeighborHex(s.b.hex, e)));
+  const otherField = neighbors.map((n) => {
+    const k = n >= 0 ? fields.get(n) : undefined;
+    return k !== undefined && k !== s.kind;
+  });
   return {
     ...s,
     joined,
@@ -665,6 +693,10 @@ function fieldSite(map: MapState, s: Site, fields: ReadonlySet<number>): FieldSi
     base: mixColor(crop, meadow, F.baseMeadowMix),
     index,
     neighbors,
+    otherField,
+    hill,
+    mounds,
+    relief: hill ? fieldMounds(mounds, s.c, outline, inset, overlap) : [],
   };
 }
 
@@ -698,18 +730,48 @@ function rimBand(f: FieldSite, from: number, to: number): Point[][] {
 function paintFieldBase(p: Painter, f: FieldSite): void {
   const F = G.field;
   const w = F.featherWidth * f.size;
+  // On hills the field ground is see-through: the slopes roll on under the field
+  const share = f.hill ? F.hillFeatherShare : 1;
   F.featherAlpha.forEach((alpha, k) => {
     const color = mixColor(f.base, f.meadow, F.featherMeadowMix[k]);
-    for (const q of rimBand(f, k * w, (k + 1) * w)) p.fill(color, alpha, q);
+    for (const q of rimBand(f, k * w, (k + 1) * w)) p.fill(color, alpha * share, q);
   });
   p.fill(
     f.base,
-    G.coreAlpha,
+    f.hill ? F.hillFillAlpha : G.coreAlpha,
     translate(
       f.outline.map((o) => outlinePoint(o)),
       f.c,
     ),
   );
+}
+
+/**
+ * 1b'. On hills: every mound under the field again in the field's colors, shaded with the
+ * terrain's mound texture (lit upper left, darker lower right, fading at its foot) laid over the
+ * whole mound, and its sunlit crest; so the slopes roll on under the crops.
+ */
+function paintFieldRelief(g: Graphics, p: Painter, f: FieldSite): void {
+  if (f.relief.length === 0) return;
+  const F = G.field;
+  const tex = reliefTexture('mound');
+  const body = scaleColor(f.crop, F.hillLit);
+  const crest = scaleColor(f.crop, F.hillCrestLit);
+  for (const m of f.relief) {
+    const { x, y, w, h } = m.bounds;
+    g.poly(flatPoints(translate(m.poly, f.c))).fill({
+      texture: tex,
+      color: body,
+      alpha: F.hillReliefAlpha,
+      textureSpace: 'global',
+      // Texture pixels -> the whole mound's bounds (world px)
+      matrix: new Matrix(w / tex.width, 0, 0, h / tex.height, x, y),
+    });
+    if (m.crest.length >= 2) {
+      const width = Math.max(1, F.hillCrestWidth * m.h);
+      p.fill(crest, F.hillCrestAlpha, taperedStroke(translate(m.crest, f.c), width));
+    }
+  }
 }
 
 /** Furrow / row lines of a parcel, warped and trimmed to the field, as point runs (relative). */
@@ -726,9 +788,11 @@ function parcelRows(f: FieldSite, parcel: FieldParcel, spacing: number, offset: 
     const len = Math.hypot(b.x - a.x, b.y - a.y);
     if (len <= 2 * end) continue;
     const d = { x: (b.x - a.x) / len, y: (b.y - a.y) / len };
-    const pts = densify([add(a, d, end), add(b, d, -end)], 2.5, false).map(f.warp);
+    let pts = densify([add(a, d, end), add(b, d, -end)], 2.5, false).map(f.warp);
+    // On hills the row lies on the slope: it bows up over every mound
+    if (f.hill) pts = pts.map((q) => ({ x: q.x, y: q.y - G.field.hillDrape * heightAt(f, q) }));
     const run = longestRun(pts, (q) => insideOutline(q, f.outline, keepInset));
-    if (run.length >= 3) runs.push(thin(run, 8));
+    if (run.length >= 3) runs.push(thin(run, f.hill ? 14 : 8));
   }
   return runs;
 }
@@ -746,6 +810,65 @@ function circleChord(a: Point, b: Point, r: number): [Point, Point] | null {
   const t1 = Math.min(1, (-B + sq) / (2 * A));
   if (t1 <= t0) return null;
   return [add(a, d, t0), add(a, d, t1)];
+}
+
+/** Hill height under a point of a field (relative to the tile center), px. */
+function heightAt(f: FieldSite, q: Point): number {
+  return hillHeight(f.mounds, { x: f.c.x + q.x, y: f.c.y + q.y });
+}
+
+/** Light class of a point of a field on hills: 1 lit, 0 middle, -1 shaded (like the mounds). */
+function lightAt(f: FieldSite, q: Point): number {
+  if (!f.hill) return 0;
+  const l = hillLight(f.mounds, { x: f.c.x + q.x, y: f.c.y + q.y }, f.size);
+  return l > G.field.hillLightLevel ? 1 : l < -G.field.hillLightLevel ? -1 : 0;
+}
+
+/** A color a little lighter on lit slopes, darker on shaded ones. */
+function lit(color: number, light: number): number {
+  const F = G.field;
+  return light > 0
+    ? scaleColor(color, F.hillLit)
+    : light < 0
+      ? scaleColor(color, F.hillShade)
+      : color;
+}
+
+/**
+ * A row strip (relative points) tapering at both ends; on hills split where the light changes,
+ * each part lighter or darker like the slope under it.
+ */
+function rowStrip(
+  p: Painter,
+  f: FieldSite,
+  run: readonly Point[],
+  width: number,
+  color: number,
+  alpha: number,
+): void {
+  const pts = translate(run, f.c);
+  if (!f.hill) {
+    p.fill(color, alpha, taperedStroke(pts, width));
+    return;
+  }
+  const n = pts.length;
+  const widths = pts.map((_, i) => width * Math.sqrt(Math.sin((Math.PI * i) / (n - 1))));
+  let start = 0;
+  let cls = lightAt(f, run[0]);
+  for (let i = 1; i <= n; i++) {
+    const next = i < n ? lightAt(f, run[i]) : null;
+    if (next === cls) continue;
+    const end = Math.min(n - 1, i);
+    if (end > start) {
+      p.fill(
+        lit(color, cls),
+        alpha,
+        trackRibbon(pts.slice(start, end + 1), widths.slice(start, end + 1), 1),
+      );
+    }
+    start = end;
+    if (next !== null) cls = next;
+  }
 }
 
 /** Vine rows of a parcel (computed once). */
@@ -777,11 +900,30 @@ function paintFieldRows(p: Painter, f: FieldSite): void {
       for (const run of parcelRows(f, parcel, spacing, spacing / 2)) {
         p.fill(light, F.ridgeAlpha, taperedStroke(translate(run, c), F.ridgeWidth));
       }
+    } else if (f.kind === 'orchard') {
+      // Orchard grass: light tufts and a few flowers between the (drawn) olive trees
+      const O = G.orchard;
+      const inset = 0.08 * size;
+      const spot = (): Point | null => {
+        const q = { x: (f.rng() - 0.5) * 1.7 * size, y: (f.rng() - 0.5) * 1.7 * size };
+        if (!insideOutline(q, f.outline, inset)) return null;
+        if (!insideConvex(q, parcel.poly, 0.5)) return null;
+        return inFieldYard(f, q) ? null : q;
+      };
+      for (let i = 0; i < O.tuftCount / f.parcels.length; i++) {
+        const q = spot();
+        if (q) tuft(p, O.tuftColor, c.x + q.x, c.y + q.y, size, f.rng);
+      }
+      for (let i = 0; i < O.flowerCount / f.parcels.length; i++) {
+        const q = spot();
+        if (!q) continue;
+        const color = O.flowerColors[Math.floor(f.rng() * O.flowerColors.length)];
+        dab(p, color, 1, c.x + q.x, c.y + q.y, 0.018 * size, 0.014 * size, undefined, 4);
+      }
     } else if (f.kind === 'vineyard') {
       const V = G.vineyard;
-      for (const run of vineRows(f, parcel)) {
-        p.fill(V.rowColor, V.rowAlpha, taperedStroke(translate(run, c), V.rowWidth));
-      }
+      for (const run of vineRows(f, parcel))
+        rowStrip(p, f, run, V.rowWidth, V.rowColor, V.rowAlpha);
     }
   }
 }
@@ -825,7 +967,8 @@ function paintFieldRim(p: Painter, f: FieldSite, map: MapState): void {
   const w = F.rimWidth * size;
   const rimColor = mixColor(f.crop, f.meadow, F.rimMeadowMix);
   F.rimAlpha.forEach((alpha, k) => {
-    for (const q of rimBand(f, -(k + 1) * w, -k * w)) p.fill(rimColor, alpha, q);
+    const a = f.hill ? alpha * F.hillFeatherShare : alpha;
+    for (const q of rimBand(f, -(k + 1) * w, -k * w)) p.fill(rimColor, a, q);
   });
   const n = f.outline.length;
   const N = OUTLINE_SAMPLES_PER_EDGE;
@@ -855,10 +998,22 @@ function paintFieldRim(p: Painter, f: FieldSite, map: MapState): void {
       dab(p, color, 1, q.x, q.y, 0.022 * size, 0.018 * size, rng, 5);
     }
   }
+  // Toward a field of another kind: a hedge or a low wall along the rim (drawn by the tile with
+  // the lower index; the grass strip between both rims stays on the vertical edges)
+  for (let e = 0; e < 6; e++) {
+    const nb = f.neighbors[e];
+    if (!f.otherField[e] || nb < f.index || e === 0 || e === 3) continue;
+    const pts: Point[] = [];
+    for (let i = e * N + 1; i <= e * N + N - 2; i++) {
+      pts.push(add(c, outlinePoint(f.outline[i % n], 0.03 * size)));
+    }
+    const hedge = tileHash(Math.min(f.index, nb), Math.max(f.index, nb), 92) < G.wall.hedgeShare;
+    wallLine(p, pts, hedge, size, rng);
+  }
   // Now and then a shrub, a hedge piece or a wall piece on an open land edge
   for (let e = 0; e < 6; e++) {
     const nb = f.neighbors[e];
-    if (f.joined[e] || nb < 0 || isWater(map.tiles[nb])) continue;
+    if (f.joined[e] || f.otherField[e] || nb < 0 || isWater(map.tiles[nb])) continue;
     const h = tileHash(f.b.hex.q, f.b.hex.r, 180 + e);
     const first = e * N;
     if (h < F.shrubChance) {
@@ -969,8 +1124,20 @@ function paintVines(p: Painter, f: FieldSite): void {
         if (inFieldYard(f, pt)) continue;
         const x = c.x + pt.x;
         const y = c.y + pt.y - ry * 0.6;
-        dab(p, V.vineDark, 1, x, y, rx, ry, rng, 5);
-        dab(p, V.vineLight, 1, x - rx * 0.3, y - ry * 0.35, rx * 0.6, ry * 0.5, undefined, 4);
+        // On hills the vines take the light of the slope they stand on
+        const l = lightAt(f, pt);
+        dab(p, lit(V.vineDark, l), 1, x, y, rx, ry, rng, 5);
+        dab(
+          p,
+          lit(V.vineLight, l),
+          1,
+          x - rx * 0.3,
+          y - ry * 0.35,
+          rx * 0.6,
+          ry * 0.5,
+          undefined,
+          4,
+        );
         if (rng() < V.grapeChance) {
           dab(p, V.grapeColor, 1, x + rx * 0.35, y + ry * 0.45, rx * 0.3, ry * 0.35, undefined, 4);
         }
@@ -1017,7 +1184,12 @@ export function paintGround(
   for (const f of fieldSites) paintFieldBase(p, f);
   p.flush(g);
   for (const f of fieldSites)
-    for (const parcel of f.parcels) p.fill(parcel.color, 1, translate(parcel.poly, f.c));
+    for (const parcel of f.parcels) {
+      p.fill(parcel.color, f.hill ? G.field.hillParcelAlpha : 1, translate(parcel.poly, f.c));
+    }
+  p.flush(g);
+  // On hills the mounds roll on under the field, in its own colors
+  for (const f of fieldSites) paintFieldRelief(g, p, f);
   p.flush(g);
   for (const f of fieldSites) paintFieldRows(p, f);
   p.flush(g);

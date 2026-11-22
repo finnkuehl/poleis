@@ -7,6 +7,7 @@ import { depthKey } from './artLayout';
 import { edgeNeighborHex } from './geometry';
 import {
   artPoint,
+  coastCliffs,
   cornerHeight,
   cornerOwner,
   cornerPoint,
@@ -16,7 +17,12 @@ import {
   isStarShaped,
   massifFacets,
   massifPlan,
+  massifPlans,
+  mineArtPoint,
+  mineArtTransform,
   mineCut,
+  nicheFloor,
+  quarryNiche,
   moundShadePixels,
   quarryCut,
   ridgeSaddle,
@@ -28,7 +34,8 @@ import {
   softSpotPixels,
   terraceArc,
 } from './relief';
-import { distanceToEdges, tileRng } from './terrain';
+import { beachEdges, cliffEdges, distanceToEdges, tileRng } from './terrain';
+import { theme } from './theme';
 
 const size = 32;
 const inland = (): number => Infinity;
@@ -344,15 +351,36 @@ describe('mine and quarry cuts (geometry shared with the art)', () => {
     near(artPoint(c, -10, -15, 8, size), 133.4, 151.9);
   });
 
-  it('the mine face stands where the art expects it', () => {
+  it('the mine face stays aligned with the moved and scaled sprite', () => {
+    const t = mineArtTransform(size);
+    expect(t.y).toBeCloseTo(theme.terrainPaint.cuts.mineShift * size, 9);
+    expect(t.scale).toBe(theme.terrainPaint.cuts.mineScale);
+    // The sprite: its anchor (canvas 128 / 176) on the tile center + shift, scaled by t.scale.
+    // So canvas point (x, y) lands on center + shift + (x - 128, y - 176) * k * scale.
+    const k = (0.92 * Math.sqrt(3) * size) / 208;
+    const sprite = (x: number, y: number): { x: number; y: number } => ({
+      x: c.x + t.x + (x - 128) * k * t.scale,
+      y: c.y + t.y + (y - 176) * k * t.scale,
+    });
     const cut = mineCut(c, size);
-    near(cut.foot[0], 117.2, 154.4);
-    near(cut.foot[1], 149.6, 170.6);
-    near(cut.top[0], 117.2, 117.3);
-    near(cut.top[1], 149.6, 133.5);
+    const check = (p: { x: number; y: number; z: number }, x: number, y: number): void => {
+      const s = sprite(x, y);
+      expect(p.x).toBeCloseTo(s.x, 0);
+      expect(p.y - p.z).toBeCloseTo(s.y, 0);
+      expect(Math.abs(p.x - s.x)).toBeLessThan(0.05);
+      expect(Math.abs(p.y - p.z - s.y)).toBeLessThan(0.05);
+    };
+    // The contract points of mine.py: face foot and top, tunnel opening center
+    check(cut.foot[0], 117.2, 154.4);
+    check(cut.foot[1], 149.6, 170.6);
+    check(cut.top[0], 117.2, 117.3);
+    check(cut.top[1], 149.6, 133.5);
+    check(mineArtPoint(c, -10, -15, 8, size), 133.4, 151.9);
     // The face runs out into the slope on both sides (its outline reaches the ground there)
     expect(cut.face[0].z).toBe(0);
     expect(cut.face[3].z).toBe(0);
+    // ... and it now stands in front of the tile center (the mountain's outer foot)
+    expect(Math.min(cut.foot[0].y, cut.foot[1].y)).toBeGreaterThan(c.y);
   });
 
   it('the quarry steps stand where the art expects them', () => {
@@ -381,19 +409,59 @@ describe('mine and quarry cuts (geometry shared with the art)', () => {
     });
   });
 
-  it('a mine tile keeps its peak and the saddles toward neighboring mountains', () => {
+  it('a mine tile is a whole mountain: peak at the center, all saddles, the face at its foot', () => {
     const s = makeTestState(['mmmmm', 'mmmmm', 'mmmmm', 'mmmmm', 'mmmmm']);
     const h = at(2, 2);
+    const c = hexToPixel(h, size);
     const fp = { rx: 0.5 * size, ry: 0.3 * size, kind: 'mineCut' as const };
-    const plan = massifPlan(s.map, h, size, fp);
+    const plans = massifPlans(s.map, h, size, fp);
     const free = massifPlan(s.map, h, size, null);
-    expect(plan.apex.z).toBeGreaterThan(free.apex.z * 0.8);
-    // East, west and the three back edges keep their shared saddle
-    for (const e of [0, 3, 4, 5]) expect(plan.base).toContainEqual(ridgeSaddle(h, e, size));
-    // ... and the face is part of the foot
-    const cut = mineCut(hexToPixel(h, size), size);
-    expect(plan.base).toContainEqual(cut.top[0]);
-    expect(plan.base).toContainEqual(cut.top[1]);
+    // The peak: full height, at or near the tile center (not pulled back)
+    expect(plans[0].apex.z).toBeCloseTo(free.apex.z, 6);
+    expect(Math.abs(plans[0].apex.y - c.y)).toBeLessThan(0.25 * size);
+    expect(Math.abs(plans[0].apex.x - c.x)).toBeLessThan(0.15 * size);
+    // Saddles toward all mountain neighbors (the front ones through small flanks)
+    const all = plans.flatMap((p) => p.base);
+    for (let e = 0; e < 6; e++) expect(all).toContainEqual(ridgeSaddle(h, e, size));
+    // The face is the main massif's front foot
+    const cut = mineCut(c, size);
+    expect(plans[0].base).toContainEqual(cut.top[0]);
+    expect(plans[0].base).toContainEqual(cut.top[1]);
+    // No deep niche: right in front of the face there is no mountain
+    const covered = (p: { x: number; y: number }): boolean =>
+      plans.some((plan) => isInside(p, plan.base));
+    const front = { x: (cut.foot[0].x + cut.foot[1].x) / 2, y: cut.foot[1].y + 0.12 * size };
+    expect(covered(front)).toBe(false);
+    // ... and behind the face, mountain everywhere back to the rear edges
+    expect(covered({ x: c.x, y: c.y - 0.5 * size })).toBe(true);
+    expect(covered({ x: c.x - 0.6 * size, y: c.y })).toBe(true);
+    expect(covered({ x: c.x + 0.6 * size, y: c.y })).toBe(true);
+  });
+
+  it('without mountain neighbors in front a mine tile has no flanks', () => {
+    const s = makeTestState(['mmmmm', 'mmmmm', 'mmmmm', 'ppppp', 'ppppp']);
+    const plans = massifPlans(s.map, at(2, 2), size, { rx: 10, ry: 6, kind: 'mineCut' });
+    expect(plans).toHaveLength(1);
+  });
+
+  it('the quarry niche: flanks mirror each other about its axis and stay inside the tile', () => {
+    const c = hexToPixel(at(2, 2), size);
+    const n = quarryNiche(c, size);
+    const [fl, fr] = n.frontFoot;
+    expect(n.axis - fl.x).toBeCloseTo(fr.x - n.axis, 9);
+    expect(fl.y).toBeCloseTo(fr.y, 9);
+    const [pl, pr] = n.peaks;
+    expect(n.axis - pl.x).toBeCloseTo(pr.x - n.axis, 9);
+    expect(pl.y).toBeCloseTo(pr.y, 9);
+    const all = [1, 1, 1, 1, 1, 1].map(Boolean);
+    for (const p of [...n.frontFoot, ...n.frontTop, ...n.backFoot, ...n.peaks, ...n.joins]) {
+      expect(distanceToEdges({ x: p.x - c.x, y: p.y - c.y }, all, size)).toBeGreaterThan(0);
+    }
+    expect(n.frontTop[0].z).toBeLessThan(n.backTop[0].z);
+    const floor = nicheFloor(c, n, size);
+    for (const p of floor) {
+      expect(distanceToEdges({ x: p.x - c.x, y: p.y - c.y }, all, size)).toBeGreaterThan(-1e-9);
+    }
   });
 
   it('cut massifs never fold, whatever the neighbors are', () => {
@@ -410,9 +478,63 @@ describe('mine and quarry cuts (geometry shared with the art)', () => {
       }
       const s = makeTestState(rows.map((r) => r.join('')));
       for (const kind of ['mineCut', 'quarryCut'] as const) {
-        const plan = massifPlan(s.map, h, size, { rx: 0.6 * size, ry: 0.4 * size, kind });
-        expect(isStarShaped(plan.apex, plan.base)).toBe(true);
+        const plans = massifPlans(s.map, h, size, { rx: 0.6 * size, ry: 0.4 * size, kind });
+        for (const plan of plans) expect(isStarShaped(plan.apex, plan.base)).toBe(true);
       }
     }
+  });
+});
+
+/** Point inside a closed polygon of P3 (ground x / y; even-odd rule). */
+function isInside(p: { x: number; y: number }, poly: readonly { x: number; y: number }[]): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i];
+    const b = poly[j];
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+describe('coast mountains drop into the sea', () => {
+  // A mountain with water below (south-east, south-west) and behind (north-west)
+  const s = makeTestState(['ccccc', 'ccccc', 'ccmpc', 'ccccc', 'ccccc']);
+  const h = at(2, 2);
+  const c = hexToPixel(h, size);
+
+  it('the massif runs to the shoreline, at cliff height', () => {
+    const plan = massifPlan(s.map, h, size, null);
+    for (const e of [1, 2, 3, 4, 5]) {
+      const mid = plan.base[2 * e + 1];
+      const r = Math.hypot(mid.x - c.x, mid.y - c.y);
+      // On the (wavy) shore, about the apothem away, and raised
+      expect(Math.abs(r - (Math.sqrt(3) / 2) * size)).toBeLessThan(0.15 * size);
+      expect(mid.z).toBeGreaterThan(0.1 * size);
+    }
+  });
+
+  it('cliff faces on the water edges facing the viewer, none on the back edges', () => {
+    const cliffs = coastCliffs(s.map, h, size);
+    expect(cliffs).toHaveLength(2);
+    for (const cliff of cliffs) {
+      expect(cliff.top.every((p) => p.z > 0)).toBe(true);
+      // Its foot is the waterline at the shore, in front of (below) its top on screen
+      expect(cliff.water[0]).toEqual({ x: cliff.top[0].x, y: cliff.top[0].y });
+    }
+  });
+
+  it('no beach in front of mountains; hills keep theirs (or a low cliff below them)', () => {
+    const shore = [true, true, true, true, true, true];
+    const never = (): number => 1;
+    const always = (): number => 0;
+    expect(beachEdges(shore, cliffEdges('mountains', shore, never))).toEqual(
+      shore.map(() => false),
+    );
+    expect(beachEdges(shore, cliffEdges('hills', shore, never))).toEqual(shore);
+    const hillCliffs = cliffEdges('hills', shore, always);
+    expect(hillCliffs).toEqual([false, true, true, false, false, false]);
+    expect(beachEdges(shore, cliffEdges('plains', shore, always))).toEqual(shore);
   });
 });

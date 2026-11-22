@@ -45,5 +45,7 @@ export interface TerrainArt {
  * - 'unit': the small spot under a unit's token (only trees, shrubs and rocks make room)
  * - 'mineCut' / 'quarryCut': a mine or quarry on hills/mountains; the terrain cuts a rock face or
  *   stepped terraces into its own slope there (the map art `<id>.slope.svg` shows only the works)
+ * - 'field': fields (vineyard, olive grove, farm) on hills: the hill keeps its shape (no terrace
+ *   bank, no crest), only standing objects make room; the fields lie on top of the slopes
  */
-export type FootprintKind = 'building' | 'unit' | 'mineCut' | 'quarryCut';
+export type FootprintKind = 'building' | 'unit' | 'mineCut' | 'quarryCut' | 'field';

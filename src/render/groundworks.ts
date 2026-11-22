@@ -2,15 +2,16 @@
 // "Grounded buildings"): which ground every building gets, organic outlines fitted to the hex,
 // fields cut into parcels, the fishery's water edge and the footprints the terrain keeps free of
 // trees and rocks. No PixiJS; deterministic (tile hashes only).
-import type { Hex, Point } from '../core/hex';
+import { hexToPixel, pixelToHex, type Hex, type Point } from '../core/hex';
 import { tileIndex } from '../core/map';
 import { visibleTiles } from '../core/rules/vision';
 import type { Building, GameState, MapState, PlayerId, Unit } from '../core/state';
 import type { BuildingId } from '../data/buildings';
 import { buildingsShownTo } from './fog';
+import { hillMounds, mineArtTransform, moundOutline, type HillMound } from './relief';
 import type { FootprintKind } from './terrainArt';
 import { edgeNeighborHex } from './geometry';
-import { apothem, isWater, tileHash } from './terrain';
+import { apothem, distanceToEdges, isWater, shoreMask, tileHash } from './terrain';
 import { theme } from './theme';
 
 const G = theme.ground;
@@ -179,11 +180,16 @@ export interface GroundFootprint {
   cy?: number;
 }
 
-/** Footprint kind of a building: a mine or quarry on hills / mountains cuts into the slope. */
+/**
+ * Footprint kind of a building: a mine or quarry on hills / mountains cuts into the slope; a
+ * field on hills lies on top of the slopes (the terrain keeps its rolling mounds there, no
+ * terrace, and only clears its shrubs, rocks and trees).
+ */
 export function footprintKindOf(type: BuildingId, terrain: string | undefined): FootprintKind {
   const slope = terrain === 'hills' || terrain === 'mountains';
   if (slope && type === 'mine') return 'mineCut';
   if (slope && type === 'quarry') return 'quarryCut';
+  if (terrain === 'hills' && isFieldKind(GROUND_KIND[type])) return 'field';
   return 'building';
 }
 
@@ -220,6 +226,12 @@ export function groundFootprints(
     const fp = footprintOf(b.type, size);
     if (GROUND_KIND[b.type] !== 'fishery') {
       const kind = footprintKindOf(b.type, state.map.tiles[tileIndex(state.map, b.hex)]);
+      if (kind === 'mineCut') {
+        // The mine stands at the mountain's outer foot, bigger (relief.ts mineArtTransform)
+        const t = mineArtTransform(size);
+        out.push({ hex: b.hex, rx: fp.rx * t.scale, ry: fp.ry * t.scale, kind, cx: t.x, cy: t.y });
+        continue;
+      }
       out.push(kind === 'building' ? { hex: b.hex, ...fp } : { hex: b.hex, ...fp, kind });
       continue;
     }
@@ -290,6 +302,130 @@ export function footprintSignature(list: readonly GroundFootprint[]): string {
         `${f.hex.q}.${f.hex.r}.${f.rx.toFixed(2)}.${f.ry.toFixed(2)}.${f.kind ?? ''}.${(f.cx ?? 0).toFixed(1)}.${(f.cy ?? 0).toFixed(1)}`,
     )
     .join(',');
+}
+
+// ---------------------------------------------------------------------------------------------
+// Hill relief under fields (fields on hills lie on top of the slopes, docs/ART.md)
+// ---------------------------------------------------------------------------------------------
+
+/** The rolling mounds of the terrain's hills (relief.ts), per map (they never change). */
+const moundCache = new WeakMap<MapState, Map<number, HillMound[]>>();
+
+/**
+ * The terrain's hill mounds near one tile (world px), as relief.ts lays them out. Used to drape
+ * vine rows over the slopes and to shade them like the mounds; near the shore the terrain may
+ * leave out a mound this keeps, which only changes the shading slightly.
+ */
+export function moundsNear(map: MapState, h: Hex, size: number): HillMound[] {
+  let byTile = moundCache.get(map);
+  if (!byTile) {
+    byTile = new Map();
+    const shoreDist = (p: Point): number => {
+      const hex = pixelToHex(p, size);
+      const c = hexToPixel(hex, size);
+      return distanceToEdges({ x: p.x - c.x, y: p.y - c.y }, shoreMask(map, hex), size);
+    };
+    const mounds = hillMounds(map, size, shoreDist);
+    for (const m of mounds) {
+      // Index every mound by the tiles its body touches
+      for (const q of [
+        { x: m.x - m.w, y: m.y },
+        { x: m.x + m.w, y: m.y },
+        { x: m.x, y: m.y - m.h },
+        { x: m.x, y: m.y },
+        { x: m.x, y: m.y + m.w * 0.4 },
+      ]) {
+        const i = tileIndex(map, pixelToHex(q, size));
+        if (i < 0) continue;
+        const list = byTile.get(i);
+        if (!list) byTile.set(i, [m]);
+        else if (!list.includes(m)) list.push(m);
+      }
+    }
+    moundCache.set(map, byTile);
+  }
+  return byTile.get(tileIndex(map, h)) ?? [];
+}
+
+/**
+ * Height of the hill surface at a world point (px; 0 off the mounds): a soft bump over every
+ * mound's body (from its crest to the front of its base).
+ */
+export function hillHeight(mounds: readonly HillMound[], p: Point): number {
+  let best = 0;
+  for (const m of mounds) {
+    const d = m.w * 0.34;
+    const cy = m.y + (d - m.h) / 2;
+    const ry = (m.h + d) / 2;
+    const u = (p.x - m.x) / m.w;
+    const v = (p.y - cy) / ry;
+    const r2 = u * u + v * v;
+    if (r2 >= 1) continue;
+    best = Math.max(best, m.h * (1 - r2) ** 1.2);
+  }
+  return best;
+}
+
+/**
+ * Light on the hill surface at a world point, -1 (shaded) .. 1 (lit), like the mounds: light
+ * from the upper left, so a slope rising to the right (the left flank) is lit.
+ */
+export function hillLight(mounds: readonly HillMound[], p: Point, size: number): number {
+  const dx = 0.08 * size;
+  const slope =
+    (hillHeight(mounds, { x: p.x + dx, y: p.y }) - hillHeight(mounds, { x: p.x - dx, y: p.y })) /
+    (2 * dx);
+  return Math.max(-1, Math.min(1, slope * 2.2));
+}
+
+/**
+ * A hill mound as it shows through a field on hills: its body cut to the field (`poly`,
+ * relative to the tile center), the bounds of the WHOLE body (world px: its shading texture is
+ * laid over these, so the parts in neighboring fields and on the bare hill line up) and the part
+ * of its sunlit crest inside the field (`crest`, relative; may be empty).
+ */
+export interface FieldMound {
+  poly: Point[];
+  bounds: { x: number; y: number; w: number; h: number };
+  crest: Point[];
+  /** Mound height (px), for the crest width. */
+  h: number;
+}
+
+/**
+ * The mounds near a field cut to its crop area: `inset` / `overlap` as for the parcels (see
+ * `cropInset`); mounds outside the field are left out.
+ */
+export function fieldMounds(
+  mounds: readonly HillMound[],
+  center: Point,
+  outline: readonly OutlineSample[],
+  inset: number,
+  overlap: number,
+): FieldMound[] {
+  const out: FieldMound[] = [];
+  const back = { x: -center.x, y: -center.y };
+  for (const m of mounds) {
+    const body = moundOutline(m);
+    const xs = body.map((q) => q.x);
+    const ys = body.map((q) => q.y);
+    const x0 = Math.min(...xs);
+    const y0 = Math.min(...ys);
+    const rel = translate(body, back);
+    const poly = dedupe(clampToOutline(densify(rel, 2.5, true), outline, inset, overlap), 0.4);
+    if (poly.length < 3 || polygonArea(poly) < 1) continue;
+    // The sunlit rim along the upper left of the crest (as the terrain draws it)
+    const crest = longestRun(densify(rel.slice(1, 8), 2.5, false), (q) =>
+      insideOutline(q, outline, Math.max(0, inset)),
+    );
+    out.push({
+      poly,
+      bounds: { x: x0, y: y0, w: Math.max(...xs) - x0, h: Math.max(...ys) - y0 },
+      crest: crest.length >= 2 ? crest : [],
+      h: m.h,
+    });
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -950,22 +1086,31 @@ export function fisheryYardOffset(edge: number | null, size: number): Point {
 }
 
 /** Tile indices of the shown field buildings (farm, vineyard, olive grove). */
-export function fieldTiles(map: MapState, shown: readonly Building[]): Set<number> {
-  const out = new Set<number>();
+export function fieldTiles(map: MapState, shown: readonly Building[]): Map<number, GroundKind> {
+  const out = new Map<number, GroundKind>();
   for (const b of shown) {
-    if (!isFieldKind(GROUND_KIND[b.type])) continue;
+    const kind = GROUND_KIND[b.type];
+    if (!isFieldKind(kind)) continue;
     const i = tileIndex(map, b.hex);
-    if (i >= 0) out.add(i);
+    if (i >= 0) out.set(i, kind);
   }
   return out;
 }
 
-/** One boolean per edge: is the neighbor across it a field too (the fields join there)? */
-export function fieldJoinMask(map: MapState, h: Hex, fields: ReadonlySet<number>): boolean[] {
+/**
+ * One boolean per edge: is the neighbor across it a field of the same kind (the fields join
+ * there)? Different kinds of fields do not join: a grass strip, hedge or wall lies between them.
+ */
+export function fieldJoinMask(
+  map: MapState,
+  h: Hex,
+  fields: ReadonlyMap<number, GroundKind>,
+  kind: GroundKind,
+): boolean[] {
   const mask: boolean[] = [];
   for (let e = 0; e < 6; e++) {
     const n = tileIndex(map, edgeNeighborHex(h, e));
-    mask.push(n >= 0 && fields.has(n));
+    mask.push(n >= 0 && fields.get(n) === kind);
   }
   return mask;
 }

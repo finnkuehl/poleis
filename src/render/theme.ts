@@ -267,10 +267,22 @@ export const theme = {
       saddleMax: 0.72,
       cornerMin: 0.42,
       cornerMax: 0.62,
-      /** Foot of the massif toward other terrain: share of the way from the center to the edge */
+      /** Foot of the massif toward other land: share of the way from the center to the edge */
       footInset: 0.84,
-      /** ... toward water (keeps the pebble beach and cliffs free) */
-      shoreInset: 0.62,
+      /**
+       * Toward water the massif runs to the shoreline and drops into the sea as a cliff: height of
+       * its top at the shore (hex sizes, a range) for the front edges (facing the viewer), the side
+       * edges (east, west), the back edges (only a rocky shore shows there), and at a corner.
+       */
+      coastFront: [0.24, 0.32],
+      coastSide: [0.2, 0.26],
+      coastBack: [0.12, 0.18],
+      coastCorner: [0.16, 0.22],
+      /** The cliff face: strata, a wet dark foot, surf at its base and shade on the water */
+      cliffWetColor: 0x4e463e,
+      cliffWetShare: 0.22,
+      cliffWaterShadeAlpha: 0.28,
+      cliffSurfAlpha: 0.85,
       /** Shoulders halfway up every slope: random extra height (+-) and sideways shift */
       shoulderBump: 0.12,
       shoulderShift: 0.1,
@@ -318,9 +330,42 @@ export const theme = {
         [-35, -5, -20, -30, 18],
         [-35, -15, -30, -40, 27],
       ],
-      /** On a cut tile the peak stands this far behind the tile center (hex sizes), this much lower */
-      peakBack: 0.5,
-      peakFactor: 0.9,
+      /**
+       * The mine sits at the mountain's outer foot: its whole scene (the drawn works and the cut
+       * face) is moved this far toward the front of the tile (hex sizes, screen down) and drawn
+       * this much bigger, around that shifted anchor. The art contract numbers stay as they are.
+       */
+      mineShift: 0.38,
+      mineScale: 1.3,
+      /** On a quarry tile the peak stands this far behind the tile center (hex sizes), this much lower */
+      peakBack: 0.3,
+      peakFactor: 0.95,
+      /**
+       * Quarry niche in a mountain: the massif's flanks reach forward on both sides of the steps;
+       * the side walls run forward to the tile front, symmetric about the steps: half width and
+       * depth of their front ends (hex sizes), their height there, how far their top leans outward.
+       */
+      nicheFrontHalf: 0.42,
+      nicheFrontY: 0.56,
+      nicheFrontH: 0.08,
+      nicheLean: 0.07,
+      /** Where the flanks meet the main massif (ridge points, hex sizes from the center) and how high */
+      nicheJoinLeft: [-0.62, -0.28],
+      nicheJoinRight: [0.5, 0.02],
+      nicheJoinH: 0.3,
+      /** Flank peaks: this far left and right of the niche's axis, this far in front (hex sizes), this high */
+      flankHalf: 0.52,
+      flankY: 0.18,
+      flankH: 0.36,
+      /** Scree slope in the quarry niche: rock colors, darker toward its front lip, stones and boulders */
+      screeColor: 0xa99c86,
+      screeShade: 0x7c705f,
+      screeLip: 0x5c5347,
+      screeStones: 22,
+      screeBoulders: 3,
+      screeStreaks: 7,
+      /** In front of a mine only a few loose stones lie at the lip of its ledge */
+      mineLipStones: 7,
       /** Hills: the cut face is dusty limestone, the step tops hill gold */
       hillFace: 0xe2d8c2,
       hillEnd: 0xb7ab92,
@@ -441,18 +486,6 @@ export const theme = {
   territoryInnerLineWidth: 1.1,
   territoryInnerLineInset: 4.9,
   territoryInnerLineAlpha: 0.9,
-  /** Roads: dirt road with a darker rim and a lighter worn center; width is a fraction of the hex size */
-  roadColor: 0xa88150,
-  roadWidthFactor: 0.22,
-  roadRimColor: 0x6b4f30,
-  /** Rim: extra width in px on top of the road width */
-  roadRimExtra: 1.8,
-  roadCenterColor: 0xd8bb85,
-  /** Worn center line: fraction of the road width */
-  roadCenterFactor: 0.36,
-  /** Tiny stones along the road (light and dark), radius as a fraction of the road width */
-  roadStoneColors: [0xe6ddc8, 0x7d6a52],
-  roadStoneRadiusFactor: 0.13,
   /**
    * Drawn art (SVG files in public/assets, see docs/ART.md and src/render/art.ts).
    * Diorama art: the scale reference of the canvas (208 units, once the base's width) as a share
@@ -508,9 +541,8 @@ export const theme = {
   highlightColor: 0xffffff,
   highlightFillAlpha: 0.28,
   highlightWidth: 2,
-  /** Road preview: bronze-verdigris, a bit wider than roads */
+  /** Road preview (the ghost track is in ground.road): verdigris ruts, dots on new road tiles */
   previewColor: 0x3e7d6b,
-  previewWidthFactor: 0.3,
   previewDotRadiusFactor: 0.12,
   /** Fog of war: unexplored tiles opaque dark sea-blue; explored but not visible tiles dimmed */
   fogHiddenColor: 0x15384f,
@@ -666,6 +698,53 @@ export const theme = {
        * half height, how far in front of the tile center; fractions of the hex size)
        */
       ledge: { rx: 0.42, ry: 0.1, y: 0.16 },
+    },
+    /**
+     * Roads: worn dirt tracks that bend smoothly through the tiles (geometry.ts `roadTracks`),
+     * light stone paving on and next to a city center. Sizes: fractions of the hex size.
+     */
+    road: {
+      /** Track width, how much it varies, how far beside edge midpoints / tile centers it runs */
+      width: 0.27,
+      widthVar: 0.12,
+      edgeJitter: 0.07,
+      centerJitter: 0.05,
+      /** Onto a building tile the track ends this share of the way in (the yard); at a city center the plaza */
+      buildingEnd: 0.55,
+      plazaEnd: 0.82,
+      /** Samples per half track (edge to center) */
+      samples: 6,
+      /** Soft grassy edge fading into the terrain: width (share of the track), color, alpha */
+      edgeGrow: 1.7,
+      edgeColor: 0xa89e66,
+      edgeAlpha: 0.3,
+      /** Earth band */
+      earthColor: 0xb39566,
+      earthAlpha: 0.85,
+      /** Two wheel ruts: color, alpha, their distance from the middle and width (shares of the track) */
+      rutColor: 0x8a6c45,
+      rutAlpha: 0.5,
+      rutOffset: 0.26,
+      rutWidth: 0.14,
+      /** Grassy strip between the ruts */
+      grassColor: 0x9db35c,
+      grassAlpha: 0.55,
+      grassWidth: 0.16,
+      /** Stones and pebbles along the sides: every this many hex sizes, chance, size, colors */
+      stoneStep: 0.09,
+      stoneChance: 0.4,
+      stoneSize: 0.02,
+      stoneColors: [0xe6ddc8, 0x8c7a62],
+      /** Paving next to a city center: stone, joints (color, alpha), edge stones, joint spacing, width share */
+      paveColor: 0xd5cab2,
+      paveJoint: 0xa39880,
+      paveJointAlpha: 0.45,
+      paveEdge: 0xa89c84,
+      paveStep: 0.12,
+      paveWidth: 0.95,
+      /** Road preview: a light ghost of the track */
+      previewColor: 0xffffff,
+      previewAlpha: 0.6,
     },
     /** Under a unit's token on a tile without a building, the terrain makes room (half axes) */
     unitFootprint: { rx: 0.3, ry: 0.18 },
@@ -842,6 +921,25 @@ export const theme = {
       balkMeadowMix: 0.35,
       /** The terrain keeps this much of the tile (as a share of the hex size) free for the field */
       footprint: 0.88,
+      /**
+       * Fields on hills lie on top of the slopes: their ground is see-through (alphas of the
+       * ground and of the parcels, share of the soft rim's alpha) and the hill's mounds are
+       * painted again on top in the field's own colors (alpha of the shaded mound bodies; the
+       * sunlit crest: color factor, alpha, width as a share of the mound height). Rows bow up over
+       * the mounds (share of the hill height) and are shaded like them (light above which a slope
+       * counts as lit / shaded, color factors for lit and shaded rows, vines and mound bodies).
+       */
+      hillFillAlpha: 0.45,
+      hillParcelAlpha: 0.5,
+      hillFeatherShare: 0.6,
+      hillReliefAlpha: 0.75,
+      hillCrestLit: 1.3,
+      hillCrestAlpha: 0.5,
+      hillCrestWidth: 0.15,
+      hillDrape: 0.45,
+      hillLightLevel: 0.25,
+      hillLit: 1.14,
+      hillShade: 0.8,
     },
     /** Vineyard: dry soil, rows of vines along the iso axes */
     vineyard: {
@@ -859,9 +957,16 @@ export const theme = {
       grapeColor: 0x6a2a4a,
       grapeChance: 0.3,
     },
-    /** Olive grove: dry-grass parcels with the soft field rim (the art draws the olive trees) */
+    /**
+     * Olive grove: green orchard grass (meadow green with a faint dry tint) with light tufts and
+     * a few flowers, the soft field rim (the art draws the olive trees)
+     */
     orchard: {
-      grassColors: [0xd6c67e, 0xcbb972],
+      grassColors: [0xa9c564, 0xb3c66c],
+      tuftCount: 12,
+      tuftColor: 0xcadb88,
+      flowerCount: 5,
+      flowerColors: [0xfbf7ea, 0xf3d34a, 0xd8483a],
     },
     /** Low dry-stone walls and hedges on the field rims and where fields meet */
     wall: {

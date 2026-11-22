@@ -7,9 +7,16 @@ import { BufferImageSource, Graphics, Texture } from 'pixi.js';
 import type { Point } from '../core/hex';
 import type { TerrainId } from '../data/terrain';
 import {
+  clipConvex,
   faceShadePixels,
+  insideConvexPolygon,
   massifFacets,
+  mineArtTransform,
   mineCut,
+  nicheFloor,
+  quarryNiche,
+  type CoastCliff,
+  type Niche,
   moundOutline,
   quarryCut,
   moundShadePixels,
@@ -36,6 +43,8 @@ export interface Shape {
   color: number;
   alpha: number;
   texture?: ReliefTexture;
+  /** A hole cut out of the polygon (must lie inside it). */
+  hole?: number[];
 }
 
 /** A standing object (tree, shrub, massif, boat ...) with its ground point in world px. */
@@ -103,6 +112,7 @@ export function fillShape(g: Graphics, s: Shape): void {
   } else {
     g.fill({ color: s.color, alpha: s.alpha });
   }
+  if (s.hole && s.hole.length >= 6) g.poly(s.hole).cut();
 }
 
 function flat(points: readonly Point[]): number[] {
@@ -355,7 +365,12 @@ function faceColor(light: number): number {
  * The massif of a mountain tile as one standing object: a soft shadow to the lower right, the
  * rock facets back to front, strata across the sunlit lower faces, snow around the peak.
  */
-export function massifStanding(plan: MassifPlan, size: number, seed: number): Standing {
+export function massifStanding(
+  plan: MassifPlan,
+  size: number,
+  seed: number,
+  cliffs: readonly CoastCliff[] = [],
+): Standing {
   const rng = tileRng(Math.round(plan.apex.x), Math.round(plan.apex.y), seed);
   const facets = massifFacets(plan, size, rng);
   const shapes: Shape[] = [];
@@ -407,6 +422,7 @@ export function massifStanding(plan: MassifPlan, size: number, seed: number): St
       }
     }
   }
+  for (const cliff of cliffs) shapes.push(...cliffShapes(cliff, size, rng));
   return {
     x: plan.apex.x,
     y: plan.apex.y,
@@ -725,8 +741,12 @@ export function cutStanding(
       alpha: 0.9,
     });
   };
+  const rng = tileRng(Math.round(center.x), Math.round(center.y), 790);
   if (kind === 'mineCut') {
+    // The mine at the mountain's (or hill's) outer foot: one rock face, the whole scene moved
+    // to the front of the tile and drawn bigger (mineArtTransform)
     const cut = mineCut(center, size);
+    const t = mineArtTransform(size);
     if (!rock) {
       // The hill rises behind the face
       const top = project(cut.top[0]);
@@ -734,10 +754,10 @@ export function cutStanding(
       shapes.push(
         ...moundShapes(
           {
-            x: (top.x + topR.x) / 2 + 0.06 * size,
-            y: (cut.foot[0].y + cut.foot[1].y) / 2 - 0.06 * size,
-            w: 0.56 * size,
-            h: 0.46 * size,
+            x: (top.x + topR.x) / 2 + 0.06 * size * t.scale,
+            y: (cut.foot[0].y + cut.foot[1].y) / 2 - 0.06 * size * t.scale,
+            w: 0.56 * size * t.scale,
+            h: 0.46 * size * t.scale,
             tone: 0,
           },
           size,
@@ -746,16 +766,18 @@ export function cutStanding(
       );
     }
     shapes.push({ poly: poly(cut.face), color: faceColor, alpha: 1, texture: 'face' });
-    for (const t of [0.34, 0.66]) {
+    for (const share of [0.34, 0.66]) {
       shapes.push({
-        poly: faceMark(cut.foot, cut.top, t, 0.08),
+        poly: faceMark(cut.foot, cut.top, share, 0.08),
         color: C.markColor,
         alpha: C.markAlpha,
       });
     }
     lip(cut.top[0], cut.top[1]);
+    shapes.push(...mineLipStones(center, size, rng, rock));
   } else {
     const cut = quarryCut(center, size);
+    if (rock) shapes.push(...nicheShapes(center, quarryNiche(center, size), size, rng));
     if (!rock) {
       // The hill rises behind the steps and runs down on their left
       const back = cut.front[4];
@@ -806,4 +828,254 @@ export function cutStanding(
     shapes,
     behindBuilding: true,
   };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Coast cliffs and mine / quarry niches
+// ---------------------------------------------------------------------------------------------
+
+/** A point of the cliff's top (corner, middle, corner) at share u along the edge, projected. */
+function cliffTopAt(top: readonly P3[], u: number): Point {
+  const t = Math.max(0, Math.min(1, u)) * 2;
+  const i = Math.min(1, Math.floor(t));
+  return project(lerp3(top[i], top[i + 1], t - i));
+}
+
+/**
+ * A cliff dropping into the sea: shade on the water below, the steep rock face (lit when it
+ * faces the lower left, in shade toward the lower right) with strata, a wet dark foot and surf.
+ */
+function cliffShapes(cliff: CoastCliff, size: number, rng: () => number): Shape[] {
+  const { top, water } = cliff;
+  const n = water.length - 1;
+  const at = (i: number): Point => cliffTopAt(top, i / n);
+  const tops = water.map((_, i) => at(i));
+  const shapes: Shape[] = [];
+  // Shade of the cliff on the water at its foot
+  const shade = water.map((p) => ({ x: p.x + 0.04 * size, y: p.y + 0.12 * size }));
+  shapes.push({
+    poly: flat([...water, ...[...shade].reverse()]),
+    color: P.shadowColor,
+    alpha: M.cliffWaterShadeAlpha,
+  });
+  // The face: its lighting from the direction it faces (the middle of the top toward the water)
+  const dx = water[n].x - water[0].x;
+  const lit = dx < 0;
+  shapes.push({
+    poly: flat([...tops, ...[...water].reverse()]),
+    color: lit ? M.faceColors[1] : M.faceColors[2],
+    alpha: 1,
+    texture: 'face',
+  });
+  // Strata: lines of equal height across the face
+  for (const share of [0.32, 0.62]) {
+    const line = water.map((w, i) => ({
+      x: w.x + (tops[i].x - w.x) * share,
+      y: w.y + (tops[i].y - w.y) * share + (rng() - 0.5) * 0.4,
+    }));
+    shapes.push({ poly: taperedStroke(line, 0.9), color: M.strataColor, alpha: M.strataAlpha });
+  }
+  // A few vertical cracks
+  for (let k = 0; k < 3; k++) {
+    const i = 1 + Math.floor(rng() * (n - 1));
+    const a = { x: tops[i].x, y: tops[i].y + 1 };
+    const b = { x: water[i].x + (rng() - 0.5) * 2, y: water[i].y - 1 };
+    shapes.push({ poly: taperedStroke([a, b], 0.9), color: M.strataColor, alpha: 0.4 });
+  }
+  // Wet dark foot just above the waterline
+  const wet = water.map((w, i) => ({
+    x: w.x + (tops[i].x - w.x) * M.cliffWetShare,
+    y: w.y + (tops[i].y - w.y) * M.cliffWetShare,
+  }));
+  shapes.push({
+    poly: flat([...wet, ...[...water].reverse()]),
+    color: M.cliffWetColor,
+    alpha: 0.75,
+  });
+  // Lit rim along the top, surf at the foot
+  shapes.push({ poly: taperedStroke(tops, 1.4), color: M.faceColors[0], alpha: 0.9 });
+  shapes.push({ poly: taperedStroke(water, 1.8), color: P.foamColor, alpha: M.cliffSurfAlpha });
+  const surf = water.map((p) => ({ x: p.x + 0.02 * size, y: p.y + 0.06 * size }));
+  shapes.push({ poly: taperedStroke(surf.slice(1, -1), 1.1), color: P.foamColor, alpha: 0.45 });
+  return shapes;
+}
+
+/** Wall of a niche between two ground points and their tops, colored by the light it gets. */
+function wallShape(foot: [P3, P3], top: [P3, P3], lit: boolean): Shape {
+  return {
+    poly: flat([project(foot[0]), project(foot[1]), project(top[1]), project(top[0])]),
+    color: lit ? M.faceColors[1] : M.faceColors[3],
+    alpha: 1,
+    texture: 'face',
+  };
+}
+
+/**
+ * The niche of a quarry in a mountain: a scree slope in front of the works (rock colored, darker
+ * toward its front lip, stones and boulders; the ledge under the works stays free) and its shaded
+ * left and lit right wall (light from the upper left).
+ */
+function nicheShapes(center: Point, n: Niche, size: number, rng: () => number): Shape[] {
+  const shapes: Shape[] = [];
+  const floor = nicheFloor(center, n, size);
+  const L = theme.ground.slope.ledge;
+  const ledge: Point[] = [];
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2;
+    ledge.push({
+      x: center.x + Math.cos(a) * L.rx * size * 0.9,
+      y: center.y + L.y * size + Math.sin(a) * L.ry * size * 0.9,
+    });
+  }
+  // The hole must lie inside the floor: clip it, then pull it in a little
+  const hole = clipConvex(ledge, floor);
+  const mid = hole.reduce((m, p) => ({ x: m.x + p.x / hole.length, y: m.y + p.y / hole.length }), {
+    x: 0,
+    y: 0,
+  });
+  const holeIn = hole.map((p) => ({
+    x: mid.x + (p.x - mid.x) * 0.97,
+    y: mid.y + (p.y - mid.y) * 0.97,
+  }));
+  shapes.push({
+    poly: flat(floor),
+    color: C.screeColor,
+    alpha: 1,
+    ...(holeIn.length >= 3 ? { hole: flat(holeIn) } : {}),
+  });
+  // Darker toward the front lip: the scree slopes down toward the viewer
+  const lipY = center.y + (L.y + L.ry) * size;
+  const xs = floor.map((p) => p.x);
+  const ys = floor.map((p) => p.y);
+  const [minX, maxX, minY, maxY] = [
+    Math.min(...xs),
+    Math.max(...xs),
+    Math.min(...ys),
+    Math.max(...ys),
+  ];
+  const below = [
+    { x: minX - 1, y: lipY },
+    { x: maxX + 1, y: lipY },
+    { x: maxX + 1, y: maxY + 1 },
+    { x: minX - 1, y: maxY + 1 },
+  ];
+  // Two steps of shade toward the lip, so the floor reads as a slope falling toward the viewer
+  for (const [share, alpha] of [
+    [0, 0.3],
+    [0.45, 0.35],
+  ] as const) {
+    const y = lipY + (maxY - lipY) * share;
+    const clip = below.map((p, i) => (i < 2 ? { x: p.x, y } : p));
+    const band = clipConvex(floor, clip);
+    if (band.length >= 3) shapes.push({ poly: flat(band), color: C.screeShade, alpha });
+  }
+  // Streaks of loose rock running down the slope from the back wall to the lip
+  const [bl, br] = n.backFoot;
+  const [fl, fr] = n.frontFoot;
+  for (let i = 0; i < C.screeStreaks; i++) {
+    const u = (i + 0.5 + (rng() - 0.5) * 0.6) / C.screeStreaks;
+    const top = { x: bl.x + (br.x - bl.x) * u, y: bl.y + (br.y - bl.y) * u + 1.5 };
+    const end = {
+      x: fl.x + (fr.x - fl.x) * u + (rng() - 0.5) * 3,
+      y: fl.y + (fr.y - fl.y) * u + (maxY - fl.y) * (0.15 + rng() * 0.4),
+    };
+    const a = { x: top.x + (end.x - top.x) * 0.25, y: top.y + (end.y - top.y) * 0.25 };
+    const light = i % 2 === 0;
+    if (!insideConvexPolygon(a, floor) || !insideConvexPolygon(end, floor)) continue;
+    shapes.push({
+      poly: taperedStroke(
+        [a, { x: (a.x + end.x) / 2 + (rng() - 0.5) * 2, y: (a.y + end.y) / 2 }, end],
+        1.6,
+      ),
+      color: light ? M.faceColors[0] : C.screeShade,
+      alpha: light ? 0.24 : 0.32,
+    });
+  }
+  // The front lip: a dark edge with a lit rim just behind it
+  const lip = floor.slice(2);
+  shapes.push({ poly: taperedStroke(lip, 2.2), color: C.screeLip, alpha: 0.45 });
+  shapes.push({
+    poly: taperedStroke(
+      lip.map((p) => ({ x: p.x, y: p.y - 1.5 })),
+      1.1,
+    ),
+    color: M.faceColors[0],
+    alpha: 0.5,
+  });
+  // Walls: the left one faces right (shade), the right one faces left toward the sun (lit)
+  shapes.push(wallShape([n.backFoot[0], n.frontFoot[0]], [n.backTop[0], n.frontTop[0]], false));
+  shapes.push(wallShape([n.backFoot[1], n.frontFoot[1]], [n.backTop[1], n.frontTop[1]], true));
+  // Loose stones and a few boulders on the scree (none on the ledge)
+  const inside = (p: Point, poly: readonly Point[]): boolean => insideConvexPolygon(p, poly);
+  const stones: { p: Point; r: number; light: boolean }[] = [];
+  for (let i = 0; i < C.screeStones + C.screeBoulders; i++) {
+    const p = { x: minX + rng() * (maxX - minX), y: minY + rng() * (maxY - minY) };
+    const boulder = i >= C.screeStones;
+    const r = (boulder ? 0.05 + rng() * 0.03 : 0.015 + rng() * 0.02) * size;
+    const light = rng() < 0.5;
+    if (!inside(p, floor) || (hole.length >= 3 && inside(p, hole))) continue;
+    stones.push({ p, r, light });
+  }
+  stones.sort((a, b) => a.p.y - b.p.y);
+  for (const { p, r, light } of stones) {
+    if (r > 0.04 * size) {
+      shapes.push({
+        poly: ellipsePoints(p.x + r * 0.4, p.y + r * 0.2, r * 1.1, r * 0.4, 8),
+        color: P.shadowColor,
+        alpha: 0.22,
+      });
+      shapes.push({
+        poly: ellipsePoints(p.x, p.y - r * 0.4, r, r * 0.7, 7, 0.2, rng),
+        color: M.faceColors[2],
+        alpha: 1,
+      });
+      shapes.push({
+        poly: ellipsePoints(p.x - r * 0.25, p.y - r * 0.65, r * 0.6, r * 0.38, 6),
+        color: M.faceColors[0],
+        alpha: 1,
+      });
+    } else {
+      shapes.push({
+        poly: ellipsePoints(p.x, p.y, r, r * 0.65, 6, 0.25, rng),
+        color: light ? M.faceColors[0] : M.faceColors[3],
+        alpha: 1,
+      });
+    }
+  }
+  return shapes;
+}
+
+/** A few loose stones at the front lip of the mine's ledge (the ledge itself is the ground's). */
+function mineLipStones(center: Point, size: number, rng: () => number, rock: boolean): Shape[] {
+  const t = mineArtTransform(size);
+  const L = theme.ground.slope.ledge;
+  const cx = center.x + t.x;
+  const cy = center.y + t.y + L.y * size * t.scale;
+  const rx = L.rx * size * t.scale;
+  const ry = L.ry * size * t.scale;
+  const shapes: Shape[] = [];
+  const [lit, , shade] = M.faceColors;
+  for (let i = 0; i < C.mineLipStones; i++) {
+    const a = (0.12 + 0.76 * ((i + rng() * 0.8) / C.mineLipStones)) * Math.PI;
+    const k = 0.9 + rng() * 0.3;
+    const x = cx + Math.cos(a) * rx * k;
+    const y = cy + Math.sin(a) * ry * k + 0.02 * size;
+    const r = (0.016 + rng() * 0.022) * size;
+    shapes.push({
+      poly: ellipsePoints(x + r * 0.35, y + r * 0.2, r * 1.1, r * 0.45, 7),
+      color: P.shadowColor,
+      alpha: 0.2,
+    });
+    shapes.push({
+      poly: ellipsePoints(x, y - r * 0.3, r, r * 0.68, 6, 0.22, rng),
+      color: rock ? shade : C.hillEnd,
+      alpha: 1,
+    });
+    shapes.push({
+      poly: ellipsePoints(x - r * 0.25, y - r * 0.55, r * 0.55, r * 0.34, 5),
+      color: rock ? lit : C.hillFace,
+      alpha: 1,
+    });
+  }
+  return shapes;
 }

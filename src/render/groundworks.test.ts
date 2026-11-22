@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Point } from '../core/hex';
+import { hexToPixel, type Point } from '../core/hex';
 import { tileIndex } from '../core/map';
 import { addBuilding, addUnit, at, makeTestState } from '../core/testing';
 import type { GameState } from '../core/state';
@@ -21,6 +21,7 @@ import {
   edgeNormal,
   fieldCells,
   fieldJoinMask,
+  fieldMounds,
   fieldOutline,
   fieldTiles,
   fieldWarp,
@@ -31,12 +32,15 @@ import {
   groundFootprints,
   groundSide,
   groundSignature,
+  hillHeight,
+  hillLight,
   insideConvex,
   insideOutline,
   isFieldKind,
   isoPoint,
   jettyEdge,
   longestRun,
+  moundsNear,
   organicBlob,
   outlinePoint,
   outlineRadius,
@@ -210,6 +214,54 @@ describe('groundFootprints for a fishery', () => {
   });
 });
 
+describe('fields on hills', () => {
+  it('get the field footprint kind (no terrace), on plains they stay buildings', () => {
+    expect(footprintKindOf('vineyard', 'hills')).toBe('field');
+    expect(footprintKindOf('oliveGrove', 'hills')).toBe('field');
+    expect(footprintKindOf('oliveGrove', 'plains')).toBe('building');
+    expect(footprintKindOf('farm', 'plains')).toBe('building');
+    const state = makeTestState(['hhh', 'hhh', 'hhh']);
+    addBuilding(state, 'vineyard', at(1, 1));
+    expect(groundFootprints(state, 0, false, size)[0].kind).toBe('field');
+  });
+
+  it("find the terrain's mounds and read their height and light", () => {
+    const state = makeTestState(['hhhhh', 'hhhhh', 'hhhhh', 'hhhhh']);
+    const mounds = moundsNear(state.map, at(2, 1), size);
+    expect(mounds.length).toBeGreaterThan(0);
+    expect(moundsNear(makeTestState(['ppp', 'ppp']).map, at(1, 1), size)).toEqual([]);
+    const m = { x: 0, y: 0, w: 20, h: 10, tone: 0 };
+    // Highest in the middle of the mound's body, 0 beside it
+    expect(hillHeight([m], { x: 0, y: (20 * 0.34 - 10) / 2 })).toBeCloseTo(10);
+    expect(hillHeight([m], { x: 40, y: 0 })).toBe(0);
+    // Light from the upper left: the left flank is lit, the right one shaded
+    expect(hillLight([m], { x: -8, y: -2 }, size)).toBeGreaterThan(0);
+    expect(hillLight([m], { x: 8, y: -2 }, size)).toBeLessThan(0);
+    expect(hillLight([m], { x: 60, y: 0 }, size)).toBe(0);
+  });
+
+  it('cut the mounds to the field, keeping the whole mound bounds for the shading', () => {
+    const state = makeTestState(['hhhhh', 'hhhhh', 'hhhhh', 'hhhhh']);
+    const h = at(2, 1);
+    const c = hexToPixel(h, size);
+    const outline = fieldOutline(state.map, h, size, [false, false, false, false, false, false]);
+    const inset = 0.05 * size;
+    const mounds = moundsNear(state.map, h, size);
+    const cut = fieldMounds(mounds, c, outline, inset, 0);
+    expect(cut.length).toBeGreaterThan(0);
+    for (const m of cut) {
+      // Every body point inside the crop area; the bounds are those of a whole mound
+      for (const q of m.poly) expect(insideOutline(q, outline, inset - 0.01)).toBe(true);
+      expect(m.bounds.w).toBeGreaterThan(0);
+      expect(m.bounds.h).toBeGreaterThan(0);
+      for (const q of m.crest) expect(insideOutline(q, outline, inset - 0.01)).toBe(true);
+    }
+    // A mound far away from the field is left out
+    const far = { x: c.x + 10 * size, y: c.y, w: 20, h: 10, tone: 0 };
+    expect(fieldMounds([far], c, outline, inset, 0)).toEqual([]);
+  });
+});
+
 describe('footprint kinds', () => {
   it('a mine or quarry on hills / mountains cuts into the slope; on plains it does not', () => {
     expect(footprintKindOf('mine', 'mountains')).toBe('mineCut');
@@ -333,14 +385,25 @@ function town(): GameState {
 }
 
 describe('field joins', () => {
-  it('mark the edges toward other shown fields', () => {
+  it('only with neighboring fields of the same kind', () => {
     const state = town();
     const a = at(1, 1);
     addBuilding(state, 'farm', a);
+    addBuilding(state, 'farm', edgeNeighborHex(a, 2));
     addBuilding(state, 'vineyard', edgeNeighborHex(a, 1));
     addBuilding(state, 'house', edgeNeighborHex(a, 0));
-    const mask = fieldJoinMask(state.map, a, fieldTiles(state.map, state.buildings));
-    expect(mask).toEqual([false, true, false, false, false, false]);
+    const fields = fieldTiles(state.map, state.buildings);
+    expect(fieldJoinMask(state.map, a, fields, 'farm')).toEqual([
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+    ]);
+    // The vineyard does not join the farm either
+    const v = edgeNeighborHex(a, 1);
+    expect(fieldJoinMask(state.map, v, fields, 'vineyard').some(Boolean)).toBe(false);
   });
 });
 

@@ -23,7 +23,15 @@ import {
   type RoadGeometry,
 } from './geometry';
 import { crownRadius, woodlandTrees, type TreePlan, type WoodKind, type WoodTree } from './forest';
-import { hillMounds, massifPlan, roadDistance, roadMasks, sliceDepthKey, sliceOfY } from './relief';
+import {
+  coastCliffs,
+  hillMounds,
+  massifPlans,
+  roadDistance,
+  roadMasks,
+  sliceDepthKey,
+  sliceOfY,
+} from './relief';
 import {
   cutStanding,
   fillShape,
@@ -42,6 +50,8 @@ import {
   distanceToWavyEdges,
   edgeWave,
   ellipsePoints,
+  beachEdges,
+  cliffEdges,
   footprintRowsToRepaint,
   forestTrees,
   insideFootprint,
@@ -460,11 +470,7 @@ function paintBleed(g: Graphics, tiles: readonly Tile[], size: number): void {
 
 /** Edges of a land tile with a small cliff instead of a beach (water below hills/mountains). */
 function cliffMask(t: Tile): boolean[] {
-  return t.shore.map((s, e) => {
-    if (!s || (e !== 1 && e !== 2)) return false;
-    if (t.terrain === 'mountains') return true;
-    return t.terrain === 'hills' && tileHash(t.hex.q, t.hex.r, 140 + e) < P.hillCliffChance;
-  });
+  return cliffEdges(t.terrain, t.shore, (e) => tileHash(t.hex.q, t.hex.r, 140 + e));
 }
 
 /** Beaches on land tiles along the water (pebbles below mountains), following the curved shore. */
@@ -476,8 +482,7 @@ function paintBeaches(g: Graphics, tiles: readonly Tile[], size: number): void {
   const wet: number[][] = [];
   for (const t of tiles) {
     if (isWater(t.terrain) || !t.shore.some(Boolean)) continue;
-    const cliffs = cliffMask(t);
-    const beach = t.shore.map((s, e) => s && !cliffs[e]);
+    const beach = beachEdges(t.shore, cliffMask(t));
     const rocky = t.terrain === 'mountains';
     const amount = P.beachWobble * size;
     for (let e = 0; e < 6; e++) {
@@ -643,9 +648,10 @@ function paintCliffs(g: Graphics, tiles: readonly Tile[], size: number): void {
     return k * k * (3 - 2 * k);
   };
   for (const t of tiles) {
-    if (t.terrain !== 'hills' && t.terrain !== 'mountains') continue;
+    // Mountains drop into the sea with their own massif (reliefPaint.ts); low cliffs on hills
+    if (t.terrain !== 'hills') continue;
     const cliffs = cliffMask(t);
-    const height = P.cliffHeight * size * (t.terrain === 'mountains' ? 1 : 0.75);
+    const height = P.cliffHeight * size * 0.75;
     for (let e = 0; e < 6; e++) {
       if (!cliffs[e]) continue;
       const rng = tileRng(t.hex.q, t.hex.r, 150 + e);
@@ -1128,9 +1134,18 @@ interface LoadedTree {
   sprite: TreeSprite;
 }
 
+/** Which kind wins when two footprints share a tile: a cut, then a building, then a field. */
+const KIND_RANK: Readonly<Record<FootprintKind, number>> = {
+  field: 0,
+  unit: 0,
+  building: 1,
+  mineCut: 2,
+  quarryCut: 2,
+};
+
 /**
  * Merges footprints per tile; `keep` selects which kinds. Two on one tile: the larger radii win,
- * the center offset of the larger one stays, and a cut wins over a plain building footprint.
+ * the center offset of the larger one stays, and the kind by KIND_RANK.
  */
 function mergeFootprints(
   map: MapState,
@@ -1155,7 +1170,7 @@ function mergeFootprints(
     const merged: FootprintShape = {
       rx: Math.max(old.rx, fp.rx),
       ry: Math.max(old.ry, fp.ry),
-      kind: old.kind !== 'building' ? old.kind : kind,
+      kind: KIND_RANK[kind] > KIND_RANK[old.kind ?? 'building'] ? kind : old.kind,
     };
     if (bigger.cx) merged.cx = bigger.cx;
     if (bigger.cy) merged.cy = bigger.cy;
@@ -1190,7 +1205,8 @@ function paintSlice(
     const c = hexToPixel(h, size);
     const rel = { x: x - c.x, y: y - c.y };
     const fp = footprints.get(i);
-    if (fp && insideFootprint(rel, fp, size)) return false;
+    // Fields on hills lie on top of the slope: only standing objects make room there
+    if (fp && (standing || fp.kind !== 'field') && insideFootprint(rel, fp, size)) return false;
     const unit = units.get(i);
     if (standing && unit && insideFootprint(rel, unit, size)) return false;
     const clear = standing ? ROAD_CLEAR : ROAD_CLEAR_DECAL;
@@ -1212,13 +1228,20 @@ function paintSlice(
   for (const i of items.relief) {
     if (!shown(i)) continue;
     const t = tiles[i];
-    const fp = footprints.get(i) ?? null;
+    // A field keeps the hill (or mountain) whole: no terrace, no cut
+    const tileFp = footprints.get(i) ?? null;
+    const fp = tileFp?.kind === 'field' ? null : tileFp;
     // A mine or quarry digs into the slope; any other building stands on a terrace
     const cut = fp?.kind === 'mineCut' || fp?.kind === 'quarryCut' ? fp.kind : null;
     if (cut) visible.push(cutStanding(t.center, cut, t.terrain, size));
     else if (fp) visible.push(...terraceStanding(t.center, fp, t.terrain, size));
     if (t.terrain === 'mountains') {
-      massifs.push(massifStanding(massifPlan(map, t.hex, size, fp), size, 760));
+      // The main massif, then the flanks around a mine or quarry; cliffs into the sea in front
+      const plans = massifPlans(map, t.hex, size, fp);
+      const cliffs = cut ? [] : coastCliffs(map, t.hex, size);
+      plans.forEach((plan, k) => {
+        massifs.push(massifStanding(plan, size, 760 + k, k === 0 ? cliffs : []));
+      });
     }
   }
   // Back to front; the massifs stand behind everything else in their slice

@@ -13,16 +13,31 @@ import {
   depthKey,
   drawsOwnerDisc,
   groundRingEllipse,
+  slopeArtId,
   type ArtMode,
   type ArtPlacement,
 } from './artLayout';
 import { hexSize } from './config';
 import { buildingsShownTo } from './fog';
 import { jettyEdge } from './groundworks';
-import { edgeMaskOf, insetRuns, roadGeometry, territoryEdges, type InsetRun } from './geometry';
+import {
+  alongTrack,
+  edgeMaskOf,
+  insetRuns,
+  previewTrack,
+  roadSignature,
+  roadTracks,
+  territoryEdges,
+  trackRibbon,
+  type InsetRun,
+  type RoadTracks,
+  type TrackCrossing,
+  type TrackParams,
+} from './geometry';
 import { playerColorOf } from './playerColor';
+import { mineArtTransform } from './relief';
 import { badgeKind, cityRingStyle } from './style';
-import { ellipsePoints, mixColor, tileHash } from './terrain';
+import { ellipsePoints, mixColor, tileHash, tileRng } from './terrain';
 import { theme } from './theme';
 
 export interface EconomyLayers {
@@ -61,6 +76,138 @@ function strokeRuns(
     if (closed) g.closePath();
   }
   g.stroke({ ...style, cap: 'round', join: 'round' });
+}
+
+/** Track sizes from the theme (see geometry.ts `roadTracks`). */
+function trackParams(): TrackParams {
+  const R = theme.ground.road;
+  return {
+    width: R.width,
+    widthVar: R.widthVar,
+    edgeJitter: R.edgeJitter,
+    centerJitter: R.centerJitter,
+    buildingEnd: R.buildingEnd,
+    plazaEnd: R.plazaEnd,
+    samples: R.samples,
+  };
+}
+
+/** Fills all polygons at once (one draw instruction). */
+function fillPolys(g: Graphics, polys: readonly number[][], color: number, alpha = 1): void {
+  if (polys.length === 0) return;
+  for (const p of polys) g.poly(p);
+  g.fill({ color, alpha });
+}
+
+/**
+ * Paints the road tracks (docs/ART.md "Roads: worn dirt tracks"): soft grassy edges fading into
+ * the terrain, the earth band, two darker wheel ruts, a grassy middle strip and a few stones;
+ * next to a city center light stone paving with edge stones. Junctions overlap into worn
+ * crossings. Every layer is one fill.
+ */
+function paintTracks(g: Graphics, tracks: RoadTracks): void {
+  const R = theme.ground.road;
+  const dirt = tracks.pieces.filter((t) => t.style === 'dirt');
+  const paved = tracks.pieces.filter((t) => t.style === 'paved');
+  const spot = (c: TrackCrossing, k: number): number[] =>
+    ellipsePoints(
+      c.center.x,
+      c.center.y,
+      c.r * k,
+      c.r * k * 0.8,
+      12,
+      0.12,
+      tileRng(c.tile, 0, 310),
+    );
+  // Soft grassy edges under everything (also under the paving)
+  fillPolys(
+    g,
+    [
+      ...tracks.pieces.map((t) => trackRibbon(t.points, t.widths, R.edgeGrow)),
+      ...tracks.crossings.map((c) => spot(c, R.edgeGrow)),
+    ],
+    R.edgeColor,
+    R.edgeAlpha,
+  );
+  // Earth
+  fillPolys(
+    g,
+    [
+      ...dirt.map((t) => trackRibbon(t.points, t.widths, 1)),
+      ...tracks.crossings.filter((c) => c.style === 'dirt').map((c) => spot(c, 1)),
+    ],
+    R.earthColor,
+    R.earthAlpha,
+  );
+  // Wheel ruts and the grassy strip between them; in a junction they fade out toward the middle
+  // of the curves, so the crossing reads as one worn place
+  const rutWidths = (t: (typeof dirt)[number]): number[] =>
+    t.widths.map((w, i) => {
+      const u = i / (t.widths.length - 1);
+      if (t.junction) return w * Math.max(0, 1 - Math.sin(Math.PI * u) * 1.6);
+      if (t.yard) return w * Math.max(0, 1 - u * 1.3);
+      return w;
+    });
+  fillPolys(
+    g,
+    dirt.flatMap((t) =>
+      [-1, 1].map((k) => trackRibbon(t.points, rutWidths(t), R.rutWidth, k * R.rutOffset)),
+    ),
+    R.rutColor,
+    R.rutAlpha,
+  );
+  fillPolys(
+    g,
+    dirt.map((t) => trackRibbon(t.points, rutWidths(t), R.grassWidth)),
+    R.grassColor,
+    R.grassAlpha,
+  );
+  // A few stones and pebbles along the sides
+  const stones: number[][][] = R.stoneColors.map(() => []);
+  dirt.forEach((t, k) => {
+    alongTrack(t.points, t.widths, R.stoneStep * hexSize).forEach(({ p, dir, w }, i) => {
+      const hash = tileHash(t.tile, k, i);
+      if (hash > R.stoneChance || w < 0.3 * R.width * hexSize) return;
+      const side = hash < R.stoneChance / 2 ? 1 : -1;
+      const off = w * (0.5 + 0.12 * hash);
+      const r = R.stoneSize * hexSize * (0.7 + hash);
+      stones[i % stones.length].push(
+        ellipsePoints(p.x - dir.y * off * side, p.y + dir.x * off * side, r, r * 0.72, 6),
+      );
+    });
+  });
+  R.stoneColors.forEach((color, i) => fillPolys(g, stones[i], color));
+  // Light stone paving next to a city center, with edge stones and joints
+  fillPolys(
+    g,
+    [
+      ...paved.map((t) => trackRibbon(t.points, t.widths, R.paveWidth)),
+      ...tracks.crossings.filter((c) => c.style === 'paved').map((c) => spot(c, 1)),
+    ],
+    R.paveColor,
+  );
+  const joints: Point[][] = [];
+  const edges: number[][] = [];
+  for (const t of paved) {
+    for (const { p, dir, w } of alongTrack(t.points, t.widths, R.paveStep * hexSize)) {
+      const half = (w * R.paveWidth) / 2;
+      joints.push([
+        { x: p.x - dir.y * half * 0.85, y: p.y + dir.x * half * 0.85 },
+        { x: p.x + dir.y * half * 0.85, y: p.y - dir.x * half * 0.85 },
+      ]);
+      const r = R.stoneSize * hexSize * 1.15;
+      for (const side of [-1, 1]) {
+        edges.push(
+          ellipsePoints(p.x - dir.y * half * side, p.y + dir.x * half * side, r, r * 0.7, 6),
+        );
+      }
+    }
+  }
+  if (joints.length > 0) {
+    for (const [a, b] of joints) g.moveTo(a.x, a.y).lineTo(b.x, b.y);
+    g.stroke({ color: R.paveJoint, width: 0.6, alpha: R.paveJointAlpha, cap: 'butt' });
+  }
+  fillPolys(g, edges, R.paveEdge);
 }
 
 /** `art`: the loaded building art (missing entries fall back to plate + emoji). */
@@ -119,62 +266,15 @@ export function createEconomyLayers(art: ArtSet = NO_ART): EconomyLayers {
     }
   }
 
+  /** Key of the road network last painted (the tracks are repainted only when it changes). */
+  let roadKey: string | null = null;
+
   function drawRoads(state: GameState): void {
+    const key = roadSignature(state);
+    if (key === roadKey) return;
+    roadKey = key;
     roads.clear();
-    const { segments, stubs } = roadGeometry(state);
-    const width = hexSize * theme.roadWidthFactor;
-    const center = (i: number): Point => hexToPixel(hexAtIndex(state.map, i), hexSize);
-    const lines = segments.map(([a, b]) => [center(a), center(b)] as const);
-    const isStub = new Set(stubs);
-    const roadTiles: { p: Point; stub: boolean }[] = [];
-    for (let i = 0; i < state.roads.length; i++) {
-      if (state.roads[i]) roadTiles.push({ p: center(i), stub: isStub.has(i) });
-    }
-    // Dirt road in three opaque layers (dark rim, dirt, light worn center). Segments have flat
-    // ends and every road tile gets a round disc: looks like round joins, but costs far fewer
-    // vertices than round caps (~30 each). Opaque, so overlaps at junctions do not show.
-    const layers = [
-      { color: theme.roadRimColor, w: width + theme.roadRimExtra },
-      { color: theme.roadColor, w: width },
-      { color: theme.roadCenterColor, w: width * theme.roadCenterFactor },
-    ];
-    for (const { color, w } of layers) {
-      if (lines.length > 0) {
-        for (const [pa, pb] of lines) roads.moveTo(pa.x, pa.y).lineTo(pb.x, pb.y);
-        roads.stroke({ color, width: w, cap: 'butt' });
-      }
-      if (roadTiles.length > 0) {
-        for (const { p, stub } of roadTiles) {
-          const r = stub ? w * 0.8 : w / 2;
-          roads.poly(ellipsePoints(p.x, p.y, r, r, 12));
-        }
-        roads.fill(color);
-      }
-    }
-    // Tiny stones on the dirt, fixed per road segment (same place on every redraw)
-    const stoneR = width * theme.roadStoneRadiusFactor;
-    const stones: number[][][] = theme.roadStoneColors.map(() => []);
-    segments.forEach(([a, b], k) => {
-      const [pa, pb] = lines[k];
-      const len = Math.hypot(pb.x - pa.x, pb.y - pa.y) || 1;
-      const nx = (-(pb.y - pa.y) / len) * width * 0.34;
-      const ny = ((pb.x - pa.x) / len) * width * 0.34;
-      for (const [t, side] of [
-        [0.3, 1],
-        [0.62, -1],
-      ]) {
-        const hash = tileHash(a, b, t * 10);
-        if (hash < 0.35) continue;
-        const x = pa.x + (pb.x - pa.x) * t + nx * side;
-        const y = pa.y + (pb.y - pa.y) * t + ny * side;
-        stones[hash < 0.7 ? 0 : 1].push(ellipsePoints(x, y, stoneR, stoneR * 0.75, 6));
-      }
-    });
-    theme.roadStoneColors.forEach((color, i) => {
-      if (stones[i].length === 0) return;
-      for (const p of stones[i]) roads.poly(p);
-      roads.fill(color);
-    });
+    paintTracks(roads, roadTracks(state, hexSize, trackParams()));
   }
 
   /** Visuals of one building, created/destroyed only when buildings appear/disappear. */
@@ -306,7 +406,12 @@ export function createEconomyLayers(art: ArtSet = NO_ART): EconomyLayers {
         v = createVisual(b.type, artId, b.hex);
         visuals.set(b.id, v);
       }
-      v.root.position.set(p.x, p.y);
+      // A mine on a slope stands at the mountain's (hill's) outer foot, bigger: the same move
+      // and scale as its cut face in the terrain (relief.ts mineArtTransform)
+      const mine = v.artId === slopeArtId('mine');
+      const shift = mine ? mineArtTransform(hexSize) : { x: 0, y: 0, scale: 1 };
+      v.root.position.set(p.x + shift.x, p.y + shift.y);
+      v.root.scale.set(shift.scale);
       // Owner color (changes when a city is captured)
       if (v.accent) v.accent.tint = color;
       const diorama = v.style === 'diorama';
@@ -394,14 +499,28 @@ export function createEconomyLayers(art: ArtSet = NO_ART): EconomyLayers {
     setPathPreview(path, newTiles) {
       preview.clear();
       if (!path || path.length === 0) return;
-      const width = hexSize * theme.previewWidthFactor;
-      const pts = path.map((h) => hexToPixel(h, hexSize));
-      if (pts.length === 1) {
-        preview.circle(pts[0].x, pts[0].y, width * 0.8).fill(theme.previewColor);
+      const R = theme.ground.road;
+      const w = R.width * hexSize;
+      if (path.length === 1) {
+        const p = hexToPixel(path[0], hexSize);
+        preview.circle(p.x, p.y, w * 0.6).fill({ color: R.previewColor, alpha: R.previewAlpha });
       } else {
-        preview.moveTo(pts[0].x, pts[0].y);
-        for (const p of pts.slice(1)) preview.lineTo(p.x, p.y);
-        preview.stroke({ color: theme.previewColor, width, cap: 'round', join: 'round' });
+        // The planned road as a ghost of the real track: the same smooth course, light
+        const pts = previewTrack(path, hexSize);
+        const widths = pts.map(() => w);
+        preview.poly(trackRibbon(pts, widths, R.edgeGrow)).fill({
+          color: R.previewColor,
+          alpha: R.previewAlpha * 0.45,
+        });
+        preview
+          .poly(trackRibbon(pts, widths, 1))
+          .fill({ color: R.previewColor, alpha: R.previewAlpha });
+        for (const k of [-1, 1]) {
+          preview.poly(trackRibbon(pts, widths, R.rutWidth, k * R.rutOffset)).fill({
+            color: theme.previewColor,
+            alpha: R.previewAlpha,
+          });
+        }
       }
       for (const h of newTiles) {
         const p = hexToPixel(h, hexSize);
