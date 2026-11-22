@@ -721,9 +721,14 @@ addControl('Start menu: no saves', () => {
 });
 addControl('Game menu', () => gameMenu.open());
 addControl('Scores', () => scores.open(game, 0));
-addControl('End: victory', () => {
+addControl('End: victory, wonder', () => {
   const s = createGameState('preview', { settings: { aiCount: 3 } });
   s.result = { winner: 0, reason: 'wonder', turn: 64 };
+  endScreen.show(s);
+});
+addControl('End: victory, points (gold)', () => {
+  const s = createGameState('preview', { settings: { aiCount: 3, playerColor: 3 } });
+  s.result = { winner: 0, reason: 'points', turn: 120 };
   endScreen.show(s);
 });
 addControl('End: defeat', () => {
@@ -740,6 +745,16 @@ addControl('Turn summary: rivals', () => {
   const lines = eventLines({ ...game, events: sampleEvents }, 0);
   lines.forEach((line, i) => window.setTimeout(() => toast.show(line.text, line.kind), i * 3200));
 });
+
+// Open a screen straight from the address, e.g. /ui-preview.html#Start%20menu (screenshots).
+function runFromHash(): void {
+  const label = decodeURIComponent(window.location.hash.slice(1));
+  const target = Array.from(controls?.querySelectorAll('button') ?? []).find(
+    (b) => b.textContent === label,
+  );
+  target?.click();
+}
+window.setTimeout(runFromHash, 0);
 
 // ---- Drawn art: every icon at the sizes the components use (missing files show the emoji) ----
 const artSheet = el('section', 'sheet economy-sheet');

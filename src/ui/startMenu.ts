@@ -1,9 +1,10 @@
 // Start menu: continue, load, and the new game form with a preview of the map for the seed.
-import { gameConfig, MAP_SIZES, mapgenConfig, type MapSize } from '../data';
+import { gameConfig, MAP_SIZES, mapgenConfig, type BuildingId, type MapSize } from '../data';
 import { en } from '../i18n/en';
 import { fill, formatTurns } from '../i18n/format';
 import { SAVE_SLOT_COUNT, type SaveListEntry, type SaveSlot } from '../save';
 import type { GameSettings } from '../core/state';
+import { buildingIcon } from './art';
 import { button, el } from './dom';
 import { PLAYER_COLOR_COUNT, playerColorName, playerCssColor } from './playerColors';
 import { findSave, savedAtText, saveSummaryText } from './saveText';
@@ -34,6 +35,16 @@ const SIZE_LABEL: Record<MapSize, string> = {
   large: en.startMenu.sizeLarge,
 };
 
+/**
+ * The miniatures standing on the front edge of the map card, back to front (later ones are
+ * drawn on top). Their place and size are set in ui.css (`.start-menu__piece.is-…`).
+ */
+const VIGNETTE: readonly { id: BuildingId; className: string }[] = [
+  { id: 'house', className: 'is-house' },
+  { id: 'temple', className: 'is-temple' },
+  { id: 'cityCenter', className: 'is-center' },
+];
+
 let uid = 0;
 
 /** Seed text as the game uses it: trimmed and shortened to the maximum length. */
@@ -50,6 +61,27 @@ interface ChoiceOption {
   value: string;
   label: string;
   sub?: string;
+}
+
+/** The cluster of miniatures in the player's color; `setColor` recolors them in place. */
+function createVignette(color: string): { root: HTMLElement; setColor(color: string): void } {
+  const root = el('div', 'start-menu__vignette');
+  root.setAttribute('aria-hidden', 'true');
+  for (const piece of VIGNETTE) {
+    const slot = el('span', `start-menu__piece ${piece.className}`);
+    slot.appendChild(buildingIcon(piece.id, color));
+    root.appendChild(slot);
+  }
+  return {
+    root,
+    setColor(next) {
+      // The owner-color layer of the drawn art (src/ui/art.ts): change its color without
+      // reloading the images, so the pieces do not flicker or settle in again.
+      root.querySelectorAll<HTMLElement>('.art__tint').forEach((tint) => {
+        tint.style.backgroundColor = next;
+      });
+    },
+  };
 }
 
 /** Radio group drawn as a segmented control (native radio inputs: keyboard and screen reader friendly). */
@@ -90,7 +122,9 @@ export function createStartMenu(root: HTMLElement, opts: StartMenuOptions): Star
   screen.hidden = true;
   screen.setAttribute('aria-label', en.gameTitle);
 
-  // ---- Left: title and map preview ----
+  let color = gameConfig.defaultSettings.playerColor;
+
+  // ---- Left: title and the map card with miniatures standing on its front edge ----
   const hero = el('div', 'start-menu__hero');
   const head = el('header', 'start-menu__head');
   head.append(
@@ -98,10 +132,14 @@ export function createStartMenu(root: HTMLElement, opts: StartMenuOptions): Star
     el('p', 'start-menu__tagline', en.startMenu.tagline),
   );
   const previewBox = el('figure', 'start-menu__preview');
+  const board = el('div', 'start-menu__board');
   const canvas = el('canvas', 'start-menu__canvas');
   canvas.setAttribute('role', 'img');
   canvas.setAttribute('aria-label', en.startMenu.previewLabel);
-  previewBox.append(canvas, el('figcaption', 'start-menu__caption', en.startMenu.previewLabel));
+  const vignette = createVignette(playerCssColor(color));
+  board.append(canvas, vignette.root);
+  const caption = el('figcaption', 'start-menu__caption');
+  previewBox.append(board, caption);
   hero.append(head, previewBox);
 
   // ---- Right: continue, load, new game ----
@@ -145,12 +183,12 @@ export function createStartMenu(root: HTMLElement, opts: StartMenuOptions): Star
   nameInput.autocomplete = 'off';
   nameField.append(nameLabel, nameInput);
 
-  // Color
-  let color = gameConfig.defaultSettings.playerColor;
+  // Color (the miniatures on the map card follow it)
   const colorField = el('fieldset', 'field');
   colorField.appendChild(el('legend', 'field__label', en.startMenu.colorLabel));
   const swatches = el('div', 'swatches');
   const colorGroup = `start-${uid++}`;
+  const colorName = el('p', 'field__hint', playerColorName(color));
   for (let i = 0; i < PLAYER_COLOR_COUNT; i++) {
     const label = el('label', 'swatch');
     const input = el('input', 'swatch__input');
@@ -161,6 +199,8 @@ export function createStartMenu(root: HTMLElement, opts: StartMenuOptions): Star
     input.setAttribute('aria-label', playerColorName(i));
     input.addEventListener('change', () => {
       color = i;
+      colorName.textContent = playerColorName(i);
+      vignette.setColor(playerCssColor(i));
     });
     const dot = el('span', 'swatch__dot');
     dot.style.background = playerCssColor(i);
@@ -168,7 +208,7 @@ export function createStartMenu(root: HTMLElement, opts: StartMenuOptions): Star
     label.append(input, dot);
     swatches.appendChild(label);
   }
-  colorField.appendChild(swatches);
+  colorField.append(swatches, colorName);
 
   // Rivals
   const rivals = segmented(
@@ -206,10 +246,12 @@ export function createStartMenu(root: HTMLElement, opts: StartMenuOptions): Star
   );
   const currentSize = (): MapSize => size.value() as MapSize;
   const applyAspect = (): void => {
-    canvas.style.aspectRatio = String(previewAspect(currentSize()));
+    previewBox.style.setProperty('--map-aspect', String(previewAspect(currentSize())));
   };
   function redraw(): void {
-    drawSeedPreview(canvas, currentSeed(), currentSize());
+    const seed = currentSeed();
+    caption.textContent = fill(en.startMenu.previewCaption, { seed });
+    drawSeedPreview(canvas, seed, currentSize());
   }
 
   const seedField = el('div', 'field');
