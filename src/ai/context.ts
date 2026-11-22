@@ -47,6 +47,8 @@ export interface AiContext {
   turn: number;
   /** Estimated net change per good next turn. */
   net: Record<GoodId, number>;
+  /** Drachma income per turn before any soldiers' pay (the overview's net hides unpaid pay). */
+  drachmaIncome: number;
   /** Food (fish + grain) produced per turn, and eaten by the residents if they get all they need. */
   foodProd: number;
   foodNeed: number;
@@ -135,6 +137,12 @@ export function buildContext(state: GameState, player: PlayerId): AiContext {
   const net = {} as Record<GoodId, number>;
   for (const id of GOOD_IDS) net[id] = 0;
   for (const flow of overview.goods) net[flow.good] = flow.net;
+  // The overview books only the pay the stock can cover: add it back to see the real income.
+  let drachmaIncome = net.drachmas;
+  for (const flow of overview.goods) {
+    if (flow.good !== 'drachmas') continue;
+    for (const c of flow.consumed) if (c.source === 'units') drachmaIncome += c.amount;
+  }
   const workers = workerSummary(state, player);
   // Food produced vs needed: the overview's net is capped by the stock (residents cannot eat
   // what is not there), so it hides how big a shortage really is.
@@ -231,6 +239,7 @@ export function buildContext(state: GameState, player: PlayerId): AiContext {
     stock: me.goods,
     turn: state.turn,
     net,
+    drachmaIncome,
     foodProd,
     foodNeed: eatenNow + unitCount,
     unitCount,

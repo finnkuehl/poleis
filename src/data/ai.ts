@@ -307,7 +307,9 @@ export const aiConfig = {
     // pay of all units (also the ones in training) and this new one, stays at least this high.
     // This caps the army by the money. Warriors accept a small deficit while the stock is big.
     unitPayMargin: { merchant: 0, warrior: -1, builder: 0 } as Record<Personality, number>,
-    // A warrior may run the income below its margin while the drachma stock is at least this.
+    // The income may be this much below the margin while the drachma stock is at least
+    // `unitPayStockMin` (only warriors use this slack).
+    unitPayStockSlack: { merchant: 0, warrior: 1, builder: 0 } as Record<Personality, number>,
     unitPayStockMin: 60,
     // The food wishes plan for this many wanted-but-missing units at most (they will eat).
     unitFoodPlanCap: 4,
@@ -353,6 +355,9 @@ export const aiConfig = {
     // building or road). A cramped city sends out settlers although the food surplus is too
     // small and although it waits to advance: it cannot grow where it stands.
     crampedFreePlains: 3,
+    // A cramped civilization without a barracks keeps its last free plains tiles (at most this
+    // many) for the barracks: no house is built there.
+    crampedBarracksPlains: 1,
     // While a city waits to advance (enough residents, but oil/goods missing) no settlers go out:
     // they would take the workers the chain needs. Unless the city is this big.
     expandWaitResidents: 40,

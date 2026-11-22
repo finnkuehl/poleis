@@ -114,12 +114,14 @@ export function trainingCandidates(ctx: AiContext): Candidate[] {
   const foodAfter = ctx.foodProd - ctx.foodNeed - 1;
   const margin = M.unitFoodMargin[ctx.personality];
   const foodOk = foodAfter >= 0 || (foodAfter >= margin && foodIn(ctx.stock) >= M.unitFoodStockMin);
-  // Drachma income per turn after the pay of all units, the ones in training and one more.
-  const queued = state.training.filter((t) => t.owner === ctx.player).length;
-  const payAfter = ctx.net.drachmas - (queued + 1) * militaryConfig.upkeepDrachmas;
+  // Drachma income per turn (before any pay) minus the pay of all units, the ones in training
+  // and one more.
+  const payAfter = ctx.drachmaIncome - (ctx.unitCount + 1) * militaryConfig.upkeepDrachmas;
+  const payMargin = M.unitPayMargin[ctx.personality];
   const payOk =
-    payAfter >= M.unitPayMargin[ctx.personality] ||
-    (payAfter >= M.unitPayMargin[ctx.personality] - 1 && ctx.stock.drachmas >= M.unitPayStockMin);
+    payAfter >= payMargin ||
+    (payAfter >= payMargin - M.unitPayStockSlack[ctx.personality] &&
+      ctx.stock.drachmas >= M.unitPayStockMin);
   const keep = advanceKeep(ctx);
   // Does paying for the unit leave what the advance of a city needs?
   const keeps = (unit: UnitId): boolean =>

@@ -15,7 +15,7 @@ function context(units: number, drachmaIncome: number) {
   const ctx = buildContext(s, 0);
   // Isolate the money rule: plenty of food, a chosen drachma income per turn.
   ctx.foodProd = 99;
-  ctx.net.drachmas = drachmaIncome;
+  ctx.drachmaIncome = drachmaIncome;
   return ctx;
 }
 
@@ -30,7 +30,15 @@ describe('AI trains within its money', () => {
 
   it('does not train when the income would drop below the margin', () => {
     expect(trains(context(0, 0))).toEqual([]);
-    // The pay of units already in the field is part of the income figure.
-    expect(trains(context(3, -3))).toEqual([]);
+    // The pay of units already in the field is subtracted from the income.
+    expect(trains(context(3, 3))).toEqual([]);
+  });
+
+  it('sees a hidden deficit: 2 income, 6 units, no drachmas in stock', () => {
+    const ctx = context(6, 2);
+    ctx.personality = 'warrior';
+    ctx.stock.drachmas = 0;
+    // Real income 2 - 6 = -4; even the warrior's margin (-1) is far away.
+    expect(trains(ctx)).toEqual([]);
   });
 });

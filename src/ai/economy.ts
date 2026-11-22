@@ -262,7 +262,11 @@ function houseWishes(g: Gen): void {
   if (aiConfig.houseNeedsFoodCover[ctx.personality] && food.projNet < 0) return;
   for (const ci of ctx.cities) {
     // The last free plains tile of a cramped civilization without a barracks is kept for it.
-    if (ctx.count.barracks === 0 && freePlainsOf(ctx, ci.city) <= 1 && isCramped(ctx, ci.city)) {
+    if (
+      ctx.count.barracks === 0 &&
+      freePlainsOf(ctx, ci.city) <= aiConfig.military.crampedBarracksPlains &&
+      isCramped(ctx, ci.city)
+    ) {
       continue;
     }
     let buffer = aiConfig.houseBuffer[ctx.personality];
