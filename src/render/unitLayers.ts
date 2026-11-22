@@ -17,7 +17,7 @@ import {
   hpBarColor,
   type FogState,
 } from './fog';
-import { unitsShownTo } from './groundworks';
+import { cargoBadgeCount, unitsShownTo } from './groundworks';
 import { insetBands } from './geometry';
 import { playerColorOf } from './playerColor';
 import { scaleColor, taperedStroke, tileRng } from './terrain';
@@ -71,7 +71,10 @@ export function createUnitLayers(art: ArtSet = NO_ART): UnitLayers {
   figures.sortableChildren = true;
   /** HP bars, above all figures so they stay readable. */
   const bars = new Graphics();
-  units.addChild(tokens, figures, bars);
+  /** Cargo badges (count of passengers) on own ships, above the bars. */
+  const badges = new Container();
+  units.addChild(tokens, figures, bars, badges);
+  const badgeTexts = new Map<number, Text>();
   const fog = new Graphics();
   const attack = new Graphics();
 
@@ -113,6 +116,7 @@ export function createUnitLayers(art: ArtSet = NO_ART): UnitLayers {
   function drawUnits(state: GameState, viewer: PlayerId, visible: readonly boolean[] | null): void {
     tokens.clear();
     bars.clear();
+    const badgeSeen = new Set<number>();
     const seen = new Set<number>();
     // On a tile with a building the viewer sees, the unit steps aside to the front of the tile
     const buildingTiles = new Set<number>();
@@ -171,6 +175,43 @@ export function createUnitLayers(art: ArtSet = NO_ART): UnitLayers {
       const by = Math.min(cy + tokenBottom + 2, base.y + hpBarLowest(barW, barH));
       bars.rect(bx, by, barW, barH).fill({ color: theme.hpBarBackColor, alpha });
       bars.rect(bx, by, barW * share, barH).fill({ color: hpBarColor(share), alpha });
+
+      // Cargo badge: a round bubble with the passenger count at the upper right of the token
+      const cargo = cargoBadgeCount(state, u, viewer);
+      if (cargo !== null) {
+        badgeSeen.add(u.id);
+        const br = hexSize * theme.cargoBadgeRadiusFactor;
+        const bxc = cx + radius * 0.85;
+        const byc = cy - radius * 0.85;
+        bars
+          .circle(bxc, byc, br)
+          .fill({ color: theme.cargoBadgeColor, alpha })
+          .stroke({ color: theme.cargoBadgeRimColor, width: theme.unitRimWidth, alpha });
+        let label = badgeTexts.get(u.id);
+        if (!label) {
+          label = new Text({
+            text: '',
+            style: {
+              fontSize: br * 1.5,
+              fontWeight: 'bold',
+              fill: theme.cargoBadgeTextColor,
+              fontFamily: theme.fontFamily,
+            },
+            resolution: 2,
+          });
+          label.anchor.set(0.5);
+          badges.addChild(label);
+          badgeTexts.set(u.id, label);
+        }
+        label.text = String(cargo);
+        label.position.set(bxc, byc);
+        label.alpha = alpha;
+      }
+    }
+    for (const [id, t] of badgeTexts) {
+      if (badgeSeen.has(id)) continue;
+      t.destroy();
+      badgeTexts.delete(id);
     }
     for (const [id, v] of visuals) {
       if (seen.has(id)) continue;

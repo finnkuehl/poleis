@@ -15,6 +15,7 @@ import {
   assignWorkers,
   economyOverview,
   enemiesInSight,
+  passengersOf,
   planMoveOrder,
   canAfford,
   canTrade,
@@ -40,6 +41,7 @@ import {
   BUILDINGS,
   CITY_LEVELS,
   aiConfig,
+  UNITS,
   economyConfig,
   type BuildingId,
   type CityLevel,
@@ -84,6 +86,9 @@ import {
   orderConfirm,
   perTurnText,
   setArtPlayers,
+  aboardState,
+  aboardText,
+  inUnitCycle,
   trainOptions,
   turnSummary,
 } from './index';
@@ -511,7 +516,10 @@ export async function createGame(
                 },
               }
             : undefined,
-        train: building.type === 'barracks' ? trainInfo(building) : undefined,
+        train:
+          building.type === 'barracks' || building.type === 'harbor'
+            ? trainInfo(building)
+            : undefined,
         onDemolish:
           building.type === 'cityCenter' || building.type === 'wonder'
             ? undefined
@@ -544,7 +552,7 @@ export async function createGame(
     return i >= 0 && player?.explored[i] === true;
   }
 
-  /** Training list of a barracks, from its city's level, residents and the player's goods. */
+  /** Training list of a barracks or harbor, from its city's level, residents and the player's goods. */
   function trainInfo(building: GameState['buildings'][number]): {
     options: ReturnType<typeof trainOptions>;
     pending: UnitId | null;
@@ -556,6 +564,7 @@ export async function createGame(
         cityLevel: city?.level ?? 'settlement',
         residents: city?.residents ?? 0,
         stock: stockOf(state),
+        building: building.type === 'harbor' ? 'harbor' : 'barracks',
       }),
       pending: state.training.find((t) => t.barracksId === building.id)?.unit ?? null,
       onTrain: (id) => {
@@ -580,15 +589,53 @@ export async function createGame(
         onFound: () => foundHere(unit),
       };
     }
+    const cap = UNITS[unit.type].capacity;
+    const ship = unit.aboard === null ? null : state.units.find((u) => u.id === unit.aboard);
     panel.showUnit({
       hex: unit.hex,
       terrain,
       unit,
       own,
+      // Cargo is only shown for own ships
+      cargo:
+        own && cap > 0
+          ? {
+              capacity: cap,
+              passengers: passengersOf(state, unit.id),
+              onSelect: (id) => selectPassenger(id),
+            }
+          : undefined,
+      aboard:
+        own && ship
+          ? {
+              state: aboardState(unit, landingTiles(unit)),
+              onShip: () => enterUnitMode(ship),
+            }
+          : undefined,
       hasTargets: own && visibleTargets(unit).length > 0,
       found,
       order: own && unit.order ? orderInfo(unit) : null,
     });
+  }
+
+  /** Number of free shore tiles a passenger could land on (0 for units that are not aboard). */
+  function landingTiles(unit: Unit): number {
+    if (unit.aboard === null) return 0;
+    return reachableTiles(state, unit.id, { ignoreHiddenUnits: true }).filter(
+      (r) => r.kind === 'land',
+    ).length;
+  }
+
+  /** Tap on a passenger in its ship's panel: select it, its landing tiles light up. */
+  function selectPassenger(id: number): void {
+    const p = state.units.find((u) => u.id === id);
+    if (!p) return;
+    const aboard = aboardState(p, landingTiles(p));
+    if (aboard !== 'land') {
+      toast.show(aboardText(aboard), 'error');
+      return;
+    }
+    enterUnitMode(p, false);
   }
 
   /** Panel data of a unit on a move order: turns until arrival and the "Stop" action. */
@@ -681,6 +728,8 @@ export async function createGame(
 
   /** Can the unit still do something this turn (a reachable tile or an attack target)? */
   function canAct(unit: Unit): boolean {
+    // A passenger can only land: a move left and a free shore tile
+    if (unit.aboard !== null) return !unit.attacked && unit.movesLeft > 0 && landingTiles(unit) > 0;
     if (
       !unit.attacked &&
       unit.movesLeft > 0 &&
@@ -706,7 +755,7 @@ export async function createGame(
       ...sorted.filter((u) => u.id === currentId && !inUnitMode),
     ];
     // If the selected unit is the only one that can still act, keep it (and re-center on it).
-    const waiting = (u: Unit): boolean => !u.order && canAct(u);
+    const waiting = (u: Unit): boolean => !u.order && inUnitCycle(u, canAct(u), landingTiles(u));
     const next = ordered.find(waiting) ?? sorted.find((u) => u.id === currentId && waiting(u));
     if (!next) {
       toast.show(en.unitText.allDone);
@@ -850,8 +899,10 @@ export async function createGame(
       showPanel();
       return;
     }
+    const reach = reachableTiles(state, unit.id, { ignoreHiddenUnits: true });
     renderer.setHighlights(
-      reachableTiles(state, unit.id, { ignoreHiddenUnits: true }).map((r) => r.hex),
+      reach.map((r) => r.hex),
+      reach.filter((r) => r.kind === 'board').map((r) => r.hex),
     );
     renderer.setAttackTargets(visibleTargets(unit).map((t) => t.hex));
     showUnitPanel(unit);

@@ -17,6 +17,7 @@ export function checkFoundCity(
   const unit = state.units.find((u) => u.id === unitId);
   if (!unit || unit.owner !== player) return { code: 'notOwnUnit' };
   if (unit.type !== 'settler') return { code: 'notASettler' };
+  if (unit.aboard !== null) return { code: 'passengerCannotAct' };
   if (terrainAt(state.map, unit.hex) !== 'plains') {
     return { code: 'wrongTerrain', terrains: ['plains'] };
   }

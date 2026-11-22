@@ -7,7 +7,7 @@ import { inBounds, terrainAt, tileIndex } from '../map';
 import type { GameState, PlayerId, Unit } from '../state';
 import { updateCapturing } from './capture';
 import type { RuleError } from './errors';
-import { hiddenEnemyIds, stepCost } from './movement';
+import { hiddenEnemyIds, isShip, moveUnitTo, stepCost } from './movement';
 import { updateExplored, visibleTiles } from './vision';
 
 /** Where a unit stands at the end of a turn's walk. */
@@ -66,13 +66,21 @@ export function planMoveOrder(
 ): { ok: true; plan: OrderPlan } | { ok: false; error: RuleError } {
   const unit = state.units.find((u) => u.id === unitId);
   if (!unit) return { ok: false, error: { code: 'notOwnUnit' } };
+  // Passengers have no move orders (they land first).
+  if (unit.aboard !== null) return { ok: false, error: { code: 'passengerCannotAct' } };
   const noPath = { ok: false as const, error: { code: 'noPath' as const } };
   if (hexEquals(unit.hex, to) || !inBounds(state.map, to)) return noPath;
   if (!state.players[unit.owner]?.explored[tileIndex(state.map, to)]) return noPath;
   const terrain = terrainAt(state.map, to);
-  if (!terrain || TERRAIN[terrain].moveCost === null) return noPath;
+  // Ships sail to water tiles, land units walk to walkable land tiles.
+  if (!terrain) return noPath;
+  if (isShip(unit) ? !TERRAIN[terrain].isWater : TERRAIN[terrain].moveCost === null) return noPath;
   const hidden = hiddenEnemyIds(state, unit);
-  if (state.units.some((u) => u.id !== unit.id && hexEquals(u.hex, to) && !hidden.has(u.id))) {
+  if (
+    state.units.some(
+      (u) => u.id !== unit.id && u.aboard === null && hexEquals(u.hex, to) && !hidden.has(u.id),
+    )
+  ) {
     return { ok: false, error: { code: 'destinationOccupied' } };
   }
   const found = findPath(unit.hex, to, (a, b) => stepCost(state, unit, a, b, hidden), {
@@ -104,7 +112,12 @@ export function planMoveOrder(
 /** Ids of enemy units within the unit's vision, ascending. */
 export function enemiesInSight(state: GameState, unit: Unit): number[] {
   return state.units
-    .filter((u) => u.owner !== unit.owner && distance(u.hex, unit.hex) <= militaryConfig.visionUnit)
+    .filter(
+      (u) =>
+        u.owner !== unit.owner &&
+        u.aboard === null &&
+        distance(u.hex, unit.hex) <= militaryConfig.visionUnit,
+    )
     .map((u) => u.id)
     .sort((a, b) => a - b);
 }
@@ -137,11 +150,11 @@ export function walkOrder(state: GameState, unit: Unit): OrderOutcome {
     }
     if (cost > unit.movesLeft && unit.hasMoved) break;
     // Any unit, also an unseen one, stops the walk in front of it.
-    if (state.units.some((u) => u.id !== unit.id && hexEquals(u.hex, next))) {
+    if (state.units.some((u) => u.id !== unit.id && u.aboard === null && hexEquals(u.hex, next))) {
       unit.order = null;
       return 'blocked';
     }
-    unit.hex = next;
+    moveUnitTo(state, unit, next);
     unit.movesLeft = Math.max(0, unit.movesLeft - cost);
     unit.hasMoved = true;
     unit.acted = true;
@@ -181,13 +194,16 @@ export function setMoveOrder(
 ): RuleError | null {
   const unit = state.units.find((u) => u.id === unitId);
   if (!unit || unit.owner !== player) return { code: 'notOwnUnit' };
+  if (unit.aboard !== null) return { code: 'passengerCannotAct' };
   const planned = planMoveOrder(state, unitId, to);
   if (!planned.ok) return planned.error;
   const visible = visibleTiles(state, player);
   unit.order = {
     to,
     seenEnemies: state.units
-      .filter((u) => u.owner !== player && visible[tileIndex(state.map, u.hex)])
+      .filter(
+        (u) => u.owner !== player && u.aboard === null && visible[tileIndex(state.map, u.hex)],
+      )
       .map((u) => u.id)
       .sort((a, b) => a - b),
   };

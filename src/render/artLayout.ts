@@ -144,7 +144,7 @@ export function rasterSizePx(placement: ArtPlacement, dpr: number, hexSize: numb
  * edge of the tile (0 = east, then clockwise in 60° steps; see groundworks.ts `edgeNormal`):
  * the fishery scene with its jetty reaching into the water. `<id>` stays the icon and fallback.
  */
-export const EDGE_ART_BUILDINGS: readonly BuildingId[] = ['fishery'];
+export const EDGE_ART_BUILDINGS: readonly BuildingId[] = ['fishery', 'harbor'];
 
 /** Art id of the direction version of `type` toward `edge` (e.g. 'fishery.e1'). */
 export function edgeArtId(type: BuildingId, edge: number): string {

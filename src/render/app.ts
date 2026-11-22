@@ -30,7 +30,8 @@ export interface Renderer {
   /** Test option: shows the whole map (no fog, all units and buildings); takes effect on the next setState. */
   setRevealAll(value: boolean): void;
   /** Highlights valid tiles; [] clears. */
-  setHighlights(hexes: readonly Hex[]): void;
+  /** `board`: tiles that also get an anchor marker (boarding an own ship). */
+  setHighlights(hexes: readonly Hex[], board?: readonly Hex[]): void;
   /** Road preview along `path` (dots on `newTiles`); null clears. */
   setPathPreview(path: readonly Hex[] | null, newTiles?: readonly Hex[]): void;
   /** Draws move-order paths (faint for units on their way, active for the selected one); [] clears. */

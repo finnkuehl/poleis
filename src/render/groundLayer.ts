@@ -34,6 +34,7 @@ import {
   fieldTiles,
   fieldWarp,
   fisheryYardOffset,
+  shoreConfig,
   flatPoints,
   groundKindOf,
   groundKey,
@@ -555,10 +556,17 @@ function paintMine(p: Painter, s: Site, rx: number, ry: number): void {
  * Sandy yard of a fishery, centered under the hut of the drawn scene (shifted toward its jetty
  * edge, to the shoreline). Toward the water it stops at the beach like every patch.
  */
-function paintFishery(p: Painter, s: Site, rx: number, ry: number, edge: number | null): void {
-  const F = G.fishery;
+function paintFishery(
+  p: Painter,
+  s: Site,
+  rx: number,
+  ry: number,
+  edge: number | null,
+  kind: 'fishery' | 'harbor' = 'fishery',
+): void {
+  const F = shoreConfig(kind);
   const { c, size, rng, limits } = s;
-  const o = fisheryYardOffset(edge, size);
+  const o = fisheryYardOffset(edge, size, kind);
   softPatch(
     p,
     c,
@@ -1550,7 +1558,8 @@ export function paintGround(
         paintMine(p, s, rx, ry);
         break;
       case 'fishery':
-        paintFishery(p, s, rx, ry, jettyEdge(map, s.b.hex));
+      case 'harbor':
+        paintFishery(p, s, rx, ry, jettyEdge(map, s.b.hex), s.kind);
         break;
       default:
         // Plain yards and the small yard in the middle of a field (a town tile has none)

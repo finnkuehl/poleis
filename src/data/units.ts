@@ -5,10 +5,24 @@
 import type { CityLevel } from './buildings';
 import type { Goods } from './goods';
 
-// Ships (transport ship, trireme) follow in milestone M6.
-export type UnitId = 'scout' | 'settler' | 'spearman' | 'archer' | 'hoplite' | 'horseman';
+export type UnitId =
+  'scout' | 'settler' | 'spearman' | 'archer' | 'hoplite' | 'horseman' | 'transport' | 'trireme';
+
+/** Where a unit moves: land units on land tiles, ships on water tiles. */
+export type UnitDomain = 'land' | 'sea';
+
+/** The building types that train units. */
+export type TrainingBuildingId = 'barracks' | 'harbor';
 
 export interface UnitDef {
+  /** 'land' = walks on land (never enters water on its own), 'sea' = sails on coast and ocean. */
+  domain: UnitDomain;
+  /** Which building trains the unit (land units: barracks, ships: harbor). */
+  trainedIn: TrainingBuildingId;
+  /** How many land units a ship carries (0 = carries nobody). */
+  capacity: number;
+  /** Can the unit attack ships? (Trireme and archers; melee land units cannot.) */
+  attacksShips: boolean;
   /** How hard the unit hits. */
   attack: number;
   /** How well the unit holds against an attack. */
@@ -39,11 +53,17 @@ export const UNIT_IDS: readonly UnitId[] = [
   'archer',
   'hoplite',
   'horseman',
+  'transport',
+  'trireme',
 ];
 
 export const UNITS: Record<UnitId, UnitDef> = {
   // Fast and weak: explores the map.
   scout: {
+    domain: 'land',
+    trainedIn: 'barracks',
+    capacity: 0,
+    attacksShips: false,
     attack: 1,
     defense: 1,
     hp: 5,
@@ -57,6 +77,10 @@ export const UNITS: Record<UnitId, UnitDef> = {
   },
   // Founds a new city. Cannot attack and cannot capture cities.
   settler: {
+    domain: 'land',
+    trainedIn: 'barracks',
+    capacity: 0,
+    attacksShips: false,
     attack: 0,
     defense: 1,
     hp: 5,
@@ -70,6 +94,10 @@ export const UNITS: Record<UnitId, UnitDef> = {
   },
   // Cheap all-rounder.
   spearman: {
+    domain: 'land',
+    trainedIn: 'barracks',
+    capacity: 0,
+    attacksShips: false,
     attack: 2,
     defense: 2,
     hp: 10,
@@ -83,6 +111,10 @@ export const UNITS: Record<UnitId, UnitDef> = {
   },
   // Shoots from 2 tiles away.
   archer: {
+    domain: 'land',
+    trainedIn: 'barracks',
+    capacity: 0,
+    attacksShips: true,
     attack: 2,
     defense: 1,
     hp: 8,
@@ -96,6 +128,10 @@ export const UNITS: Record<UnitId, UnitDef> = {
   },
   // Heavy defender.
   hoplite: {
+    domain: 'land',
+    trainedIn: 'barracks',
+    capacity: 0,
+    attacksShips: false,
     attack: 2,
     defense: 3,
     hp: 12,
@@ -109,6 +145,10 @@ export const UNITS: Record<UnitId, UnitDef> = {
   },
   // Fast attacker.
   horseman: {
+    domain: 'land',
+    trainedIn: 'barracks',
+    capacity: 0,
+    attacksShips: false,
     attack: 3,
     defense: 1,
     hp: 10,
@@ -119,5 +159,39 @@ export const UNITS: Record<UnitId, UnitDef> = {
     minLevel: 'metropolis',
     canCapture: true,
     icon: '🐎',
+  },
+  // Carries up to 2 land units over the water (this is how settlers reach islands). Cannot attack.
+  transport: {
+    domain: 'sea',
+    trainedIn: 'harbor',
+    capacity: 2,
+    attacksShips: false,
+    attack: 0,
+    defense: 1,
+    hp: 8,
+    movement: 3,
+    range: 0,
+    cost: { planks: 6 },
+    residents: 0,
+    minLevel: 'polis',
+    canCapture: false,
+    icon: '⛵',
+  },
+  // Warship: attacks ships and land units on the tiles next to it. Never captures cities.
+  trireme: {
+    domain: 'sea',
+    trainedIn: 'harbor',
+    capacity: 0,
+    attacksShips: true,
+    attack: 3,
+    defense: 2,
+    hp: 12,
+    movement: 3,
+    range: 1,
+    cost: { planks: 8, bronze: 2 },
+    residents: 0,
+    minLevel: 'metropolis',
+    canCapture: false,
+    icon: '🚣',
   },
 };

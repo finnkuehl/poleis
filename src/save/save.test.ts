@@ -138,3 +138,31 @@ describe('migration 1 -> 2', () => {
     }
   });
 });
+
+describe('migration 2 -> 3', () => {
+  it('a version 2 save loads: units get aboard = null', () => {
+    const old = structuredClone(state) as unknown as Record<string, unknown>;
+    old.units = [
+      { id: 90, type: 'scout', owner: 0, hex: { q: 1, r: 1 }, hp: 5, movesLeft: 3 },
+      { id: 91, type: 'settler', owner: 0, hex: { q: 2, r: 1 }, hp: 5, movesLeft: 1 },
+    ];
+    const s = fakeStorage();
+    s.setItem(
+      'poleis.save.auto',
+      JSON.stringify({
+        format: 'poleis-save',
+        version: 2,
+        savedAt: t1.toISOString(),
+        summary: { turn: 1 },
+        state: old,
+      }),
+    );
+    const res = loadGame(s, 'auto');
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(SAVE_VERSION).toBe(3);
+      expect(res.state.units).toHaveLength(2);
+      expect(res.state.units.every((u) => u.aboard === null)).toBe(true);
+    }
+  });
+});

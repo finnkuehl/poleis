@@ -12,6 +12,8 @@ export const militaryConfig = {
   healOwnTerritory: 4,
   // Cost multiplier for entering a tile with a road (0.5 = half price).
   roadFactor: 0.5,
+  // Movement points a ship spends per water tile (roads do not matter at sea).
+  seaStepCost: 1,
   // No single step costs less than this, even with a road.
   minStepCost: 0.5,
   // Combat damage = share of attack power x attack x this factor.

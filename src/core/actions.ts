@@ -32,6 +32,10 @@ import {
   orderTraining,
   planRoad,
   reachableTiles,
+  hasFreeCapacity,
+  moveUnitTo,
+  pruneUnits,
+  unitAt,
   scaleGoods,
   setMoveOrder,
   updateAllExplored,
@@ -175,13 +179,40 @@ function applyActionInner(state: GameState, action: Action): ActionResult {
       if (!unit || unit.owner !== player) return fail({ code: 'notOwnUnit' });
       const target = reachableTiles(next, unit.id).find((r) => hexEquals(r.hex, action.to));
       if (!target) {
+        // A land unit that wants onto an own ship that is full.
+        const ship = unitAt(next, action.to);
+        if (
+          unit.aboard === null &&
+          UNITS[unit.type].domain === 'land' &&
+          ship &&
+          ship.owner === player &&
+          UNITS[ship.type].capacity > 0 &&
+          distance(unit.hex, ship.hex) === 1 &&
+          !hasFreeCapacity(next, ship)
+        ) {
+          return fail({ code: 'shipFull' });
+        }
         const seen = reachableTiles(next, unit.id, { ignoreHiddenUnits: true });
         return fail({
           code: seen.some((r) => hexEquals(r.hex, action.to)) ? 'blockedByUnseen' : 'cannotReach',
         });
       }
-      unit.hex = target.hex;
-      unit.movesLeft = Math.max(0, unit.movesLeft - target.cost);
+      if (target.kind === 'board') {
+        // Step onto the ship: share its hex; the move ends.
+        const ship = unitAt(next, target.hex);
+        if (!ship) throw new Error('move: boarding target without a ship');
+        unit.aboard = ship.id;
+        unit.hex = ship.hex;
+        unit.movesLeft = 0;
+      } else if (target.kind === 'land') {
+        // Step off the ship onto land; the move ends.
+        unit.aboard = null;
+        unit.hex = target.hex;
+        unit.movesLeft = 0;
+      } else {
+        moveUnitTo(next, unit, target.hex);
+        unit.movesLeft = Math.max(0, unit.movesLeft - target.cost);
+      }
       unit.hasMoved = true;
       unit.acted = true;
       unit.order = null;
@@ -201,9 +232,16 @@ function applyActionInner(state: GameState, action: Action): ActionResult {
     case 'attack': {
       const unit = next.units.find((u) => u.id === action.unitId);
       if (!unit || unit.owner !== player) return fail({ code: 'notOwnUnit' });
+      if (unit.aboard !== null) return fail({ code: 'passengerCannotAct' });
       const target = next.units.find((u) => u.id === action.targetId);
-      if (!target || target.owner === player) return fail({ code: 'notEnemy' });
+      // Passengers cannot be attacked directly: the attacks hit their ship.
+      if (!target || target.owner === player || target.aboard !== null) {
+        return fail({ code: 'notEnemy' });
+      }
       if (unit.attacked) return fail({ code: 'alreadyAttacked' });
+      if (UNITS[target.type].domain === 'sea' && !UNITS[unit.type].attacksShips) {
+        return fail({ code: 'cannotAttackShip' });
+      }
       const range = UNITS[unit.type].range;
       if (range <= 0 || distance(unit.hex, target.hex) > range) return fail({ code: 'notInRange' });
       const result = combatPreview(next, unit.id, target.id);
@@ -232,7 +270,8 @@ function applyActionInner(state: GameState, action: Action): ActionResult {
         attackerKilled: unit.hp <= 0,
         seenBy: playersSeeing(next, target.hex, [player, target.owner]),
       });
-      next.units = next.units.filter((u) => u.hp > 0);
+      // Dead units are gone; the passengers of a sunk ship go down with it.
+      pruneUnits(next);
       return { ok: true, state: next };
     }
     case 'foundCity': {

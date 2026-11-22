@@ -56,12 +56,12 @@ export const theme = {
     /**
      * Large soft color washes that flow across tiles of the same terrain (no hex patchwork):
      * a smooth noise over the map decides where the land turns lighter (golden meadows,
-     * sunlit glades) or darker (lush grass, deep shade). Washes per land / water tile, radius range,
+     * sunlit glades) or darker (lush grass, deep shade). Washes per land tile, radius range,
      * noise scale (hex sizes per noise cell; larger = bigger regions), alpha of each of the 3
-     * stacked bands at full strength, and the [light, dark] color per terrain.
+     * stacked bands at full strength, and the [light, dark] color per terrain (land only: the sea
+     * gets its light and shade from its depth painting, `sea`).
      */
     washCount: 2,
-    waterWashCount: 1,
     washRadiusMin: 0.45,
     washRadiusMax: 0.85,
     washNoiseScale: 4.5,
@@ -522,6 +522,113 @@ export const theme = {
       /** Footprints taller than this (fraction of the hex size) are fields: no crest behind them */
       fieldRy: 0.75,
     },
+    /**
+     * The sea (docs/ART.md "Seafaring and ocean", src/render/sea.ts), painted once: a smooth depth
+     * gradient by the distance to land over the whole map (no hex patchwork), seamless wave
+     * textures (fine ripples on coastal water, longer swells on all water), sparse sun glints,
+     * layered foam along the shore, and a few reefs, shoals and seaweed patches.
+     */
+    sea: {
+      /** Depth texture: a pixel covers at most this many hex sizes, at most this many pixels per side */
+      depthCell: 0.18,
+      depthTextureMax: 512,
+      /**
+       * Color by distance to land (hex sizes): bright turquoise shallows, the coastal turquoise,
+       * then down into deep Aegean blue far out
+       */
+      depthStops: [
+        [0, 0x9be4d6],
+        [0.3, 0x70d3c9],
+        [0.75, 0x4fbfbd],
+        [1.2, 0x3cacb6],
+        [1.75, 0x2f90ab],
+        [2.35, 0x26769c],
+        [3.2, 0x1f638c],
+        [4.6, 0x19547f],
+        [7, 0x134266],
+      ],
+      /** Soft depth bands: width (hex sizes), how much the color lingers inside a band (0..1) */
+      bandWidth: 0.55,
+      bandSoftness: 0.75,
+      /** The bands wobble with a smooth noise: amount (hex sizes), size of its cells (hex sizes) */
+      warp: 0.4,
+      warpScale: 2.2,
+      /** Large slow light and shade over the sea: +- share, size of its cells (hex sizes) */
+      tone: 0.04,
+      toneScale: 6,
+      /**
+       * Wave textures (sizes in their pixels): rows of short arched crest strokes, each with a darker
+       * trough below. Ripples on coastal water (fine), swells on all water (longer): pixels per side,
+       * pixels per hex size; row spacing, crest length, thickness, arch, tilt (rad), share of
+       * places with a crest, trough offset, alpha of crests and troughs
+       */
+      rippleTexture: 256,
+      rippleTexels: 64,
+      ripple: {
+        spacing: 6,
+        length: [6, 12],
+        width: 1.2,
+        sag: 0.16,
+        tilt: 0.35,
+        fill: 0.55,
+        troughOffset: 1.6,
+        troughWidth: 1.8,
+        crestAlpha: 0.42,
+        troughAlpha: 0.14,
+      },
+      swellTexture: 512,
+      swellTexels: 40,
+      swell: {
+        spacing: 13,
+        length: [16, 30],
+        width: 1.8,
+        sag: 0.09,
+        tilt: 0.2,
+        fill: 0.45,
+        troughOffset: 2.6,
+        troughWidth: 2,
+        crestAlpha: 0.45,
+        troughAlpha: 0.13,
+      },
+      /** Crests: lifted this share toward white (the troughs darken just as much on average) */
+      crestLift: 0.5,
+      /** Sun glints: chance per ocean tile (coastal water about half), more toward the upper left */
+      glintChance: 0.42,
+      glintSunBias: 0.9,
+      glintSize: [0.05, 0.085],
+      glintColor: 0xffffff,
+      glintAlpha: 0.85,
+      /**
+       * Foam along the shore, from the land outward: a soft wide band, the bright line at the
+       * waterline (foamInset, foamWidth), a broken line (foamOuterInset) and a faint, more broken
+       * third line this far out (px); on the beach a light swash line this far inland (px)
+       */
+      foamSoftDepth: 0.13,
+      foamSoftAlpha: 0.28,
+      foamThirdInset: 9.5,
+      foamThirdAlpha: 0.22,
+      swashInset: 2.6,
+      swashAlpha: 0.45,
+      /** Below cliffs the surf is wider and brighter (share of the beach foam) */
+      cliffFoam: 1.5,
+      /** Reefs on coastal tiles: chance per tile, kinds (shoal, reef, seaweed, rocks), half width (hex sizes) */
+      reefChance: 0.3,
+      reefWeights: [0.35, 0.3, 0.2, 0.15],
+      reefSize: [0.38, 0.55],
+      /** Reefs keep this far from the tile center (a ship stands there) and from the shore (hex sizes) */
+      reefCenterClear: 0.3,
+      reefShore: 0.1,
+      /** Reef atlas: pixels per cell (4 x 2 cells) */
+      reefCell: 128,
+      /** Reef colors: sandy shoal and its light, submerged rock and its lit top, seaweed (two patches, strands) */
+      shoalColor: 0xb4ead8,
+      shoalLight: 0xe2f6e6,
+      submergedColor: 0x22606a,
+      submergedLight: 0x7fc9c2,
+      seaweedColors: [0x2c5a45, 0x3b6a45, 0x1f4535],
+      /** Rocks breaking the surface: lit top, body, shaded side */
+      rockColors: [0xcfc5b3, 0x938a7b, 0x5f574d],
+    },
     /** Beach on land tiles along the water: dry sand, wet sand at the waterline, pebbles below mountains */
     sandColor: 0xe8d29a,
     sandWetColor: 0xd3b878,
@@ -550,15 +657,7 @@ export const theme = {
     shoreRockFoamAlpha: 0.55,
     /** Boulders lying on sandy beaches (chance per beach edge) */
     beachRockChance: 0.25,
-    /** A few small boats on coastal water (chance per coastal tile): hull, sail, mast */
-    boatChance: 0.06,
-    boatHullColor: 0x6b4426,
-    boatHullLight: 0x9a6a3c,
-    boatSailColor: 0xf7f0de,
-    boatSailShade: 0xd6ccb4,
-    boatMastColor: 0x4a3020,
-    boatWakeAlpha: 0.5,
-    /** Coastal water: lighter shallow band along the shore, white foam lines */
+    /** Coastal water: lighter shallow band along the shore (the start-menu preview), white foam lines */
     shallowColor: 0x86dcd2,
     shallowAlpha: 0.32,
     shallowDepth: 0.4,
@@ -569,18 +668,15 @@ export const theme = {
     foamInset: 1.8,
     foamOuterInset: 5.5,
     foamOuterAlpha: 0.45,
-    /** Soft blend between turquoise coast and deep ocean */
+    /** Start-menu preview: soft blend between turquoise coast and deep ocean */
     seaBlendAlpha: 0.12,
     /** Depth of each of the 3 blend bands (they stack, so the color fades in steps) */
     seaBlendDepths: [0.12, 0.24, 0.36],
-    /** Waves on the open sea: lighter blue "~" strokes (chance per tile) */
+    /** Start-menu preview: waves on the open sea, lighter blue "~" strokes (chance per tile) */
     waveColor: 0x6aa3cc,
     waveAlpha: 0.55,
     waveWidth: 1.3,
     waveChance: 0.65,
-    /** Small glints on coastal water */
-    glintColor: 0xffffff,
-    glintAlpha: 0.4,
   },
   /** Selection: double outline (dark outer + white inner) so it stands out on any tile and on white highlights */
   selectionOuterColor: 0x1d2b36,
@@ -659,6 +755,16 @@ export const theme = {
   highlightColor: 0xffffff,
   highlightFillAlpha: 0.28,
   highlightWidth: 2,
+  /** Anchor marker on a boardable ship tile: ring size (share of the hex size), colors */
+  boardMark: {
+    radiusFactor: 0.26,
+    /** Marker center above the tile center (share of the hex size) */
+    offsetFactor: 0.58,
+    color: 0x1f4f7a,
+    width: 2.5,
+    backColor: 0xffffff,
+    backAlpha: 0.85,
+  },
   /** Fog of war: unexplored tiles opaque dark sea-blue; explored but not visible tiles dimmed */
   fogHiddenColor: 0x15384f,
   fogDimColor: 0x0f2638,
@@ -679,6 +785,11 @@ export const theme = {
   unitRimColor: 0xf4e9d8,
   unitRimWidth: 1.5,
   unitIconSizeFactor: 0.62,
+  /** Cargo badge on an own transport ship: bubble radius (share of the hex size) and colors */
+  cargoBadgeRadiusFactor: 0.2,
+  cargoBadgeColor: 0xfdf6e3,
+  cargoBadgeRimColor: 0x3a2a1a,
+  cargoBadgeTextColor: 0x3a2a1a,
   /** Ghost token while dragging a unit: opacity and size relative to the normal token */
   dragGhostAlpha: 0.7,
   dragGhostScale: 1.25,
@@ -1063,6 +1174,23 @@ export const theme = {
       /** The terrain keeps its grass and flowers off the yard grown by this much (the rest stays) */
       footprintGrow: 1.15,
       /** Around the yard: sparse beach grass, shells and pebbles (how many, colors) */
+      litterCount: 9,
+      beachGrass: 0xb3b46a,
+      shellColors: [0xf6eee0, 0xecd3c4],
+      pebbleColor: 0xb9ad95,
+    },
+    /**
+     * Harbor: the same kind of sandy yard as the fishery, but nearer the shore; the quay of the
+     * drawn scene (harbor.e0-e5.svg) starts on the beach and reaches into the water tile.
+     */
+    harbor: {
+      /** Elliptical yard, ~55 art units radius */
+      rx: 0.42,
+      ry: 0.3,
+      color: 0xdcc58f,
+      /** The yard's center sits this share of the apothem toward the quay edge (50 of 113 art units) */
+      yardShift: 0.44,
+      footprintGrow: 1.15,
       litterCount: 9,
       beachGrass: 0xb3b46a,
       shellColors: [0xf6eee0, 0xecd3c4],

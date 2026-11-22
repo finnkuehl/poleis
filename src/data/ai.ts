@@ -4,8 +4,10 @@
 // a higher number = the AI wants it more / earlier. Scores are compared with each other, so
 // only the relation matters (100 beats 60).
 
+import type { BuildingId } from './buildings';
 import type { CivId } from './game';
 import type { Goods } from './goods';
+import type { UnitId } from './units';
 
 export type Personality = 'merchant' | 'warrior' | 'builder';
 
@@ -31,6 +33,11 @@ export const aiConfig = {
   watchPersonality: 'builder' as Personality,
   // Watch mode (`&watch`): milliseconds between two automatic turns.
   watchIntervalMs: 1000,
+
+  // Seafaring AI comes later: until then the AI civilizations never build these buildings and
+  // never train these units (they stay on the mainland).
+  neverBuild: ['harbor'] as readonly BuildingId[],
+  neverTrain: ['transport', 'trireme'] as readonly UnitId[],
 
   // --- Turn driver ---
   // The most actions one AI civilization takes per turn (keeps a turn fast).

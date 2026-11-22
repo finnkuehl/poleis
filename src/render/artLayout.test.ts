@@ -256,13 +256,14 @@ describe('groundRingEllipse', () => {
 });
 
 describe('direction versions of building art', () => {
-  it('loads every building plus the six fishery versions', () => {
+  it('loads every building plus the six fishery and harbor versions', () => {
     const ids = buildingArtIds();
     for (const id of BUILDING_IDS) expect(ids).toContain(id);
     for (let e = 0; e < 6; e++) expect(ids).toContain(`fishery.e${e}`);
+    for (let e = 0; e < 6; e++) expect(ids).toContain(`harbor.e${e}`);
     expect(ids).toContain('mine.slope');
     expect(ids).toContain('quarry.slope');
-    expect(ids).toHaveLength(BUILDING_IDS.length + 8);
+    expect(ids).toHaveLength(BUILDING_IDS.length + 14);
   });
 
   it('uses the version toward the edge if it loaded, else the normal art', () => {
@@ -273,6 +274,8 @@ describe('direction versions of building art', () => {
     expect(buildingArtId('fishery', 2, none)).toBe('fishery');
     expect(buildingArtId('fishery', 2, (id) => id === 'fishery.e5')).toBe('fishery');
     expect(buildingArtId('fishery', null, all)).toBe('fishery');
+    expect(buildingArtId('harbor', 3, all)).toBe('harbor.e3');
+    expect(buildingArtId('harbor', 3, none)).toBe('harbor');
     // Buildings without direction versions keep their art
     expect(buildingArtId('house', 1, all)).toBe('house');
   });

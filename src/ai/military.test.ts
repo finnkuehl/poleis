@@ -37,6 +37,7 @@ function addUnit(
     attacked: false,
     capturing: null,
     order: null,
+    aboard: null,
   });
 }
 

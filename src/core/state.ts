@@ -114,6 +114,11 @@ export interface Unit {
   capturing: number | null;
   /** Active multi-turn move order, or null. */
   order: MoveOrder | null;
+  /**
+   * Passengers only: id of the transport ship the unit is aboard, else null. A passenger
+   * shares the ship's hex and moves with it.
+   */
+  aboard: number | null;
 }
 
 /** A unit ordered in a barracks; it appears at the start of the owner's next turn. */
@@ -378,6 +383,7 @@ function addPassiveEnemy(state: GameState, humanCenter: Hex): void {
       attacked: false,
       capturing: null,
       order: null,
+      aboard: null,
     });
   }
 }

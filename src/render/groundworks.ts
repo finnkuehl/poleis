@@ -8,6 +8,7 @@ import { visibleTiles } from '../core/rules/vision';
 import type { Building, GameState, MapState, PlayerId, Unit } from '../core/state';
 import type { BuildingId } from '../data/buildings';
 import type { TerrainId } from '../data/terrain';
+import { UNITS } from '../data/units';
 import { buildingsShownTo } from './fog';
 import { hillMounds, mineArtTransform, moundOutline, type HillMound } from './relief';
 import type { FootprintKind } from './terrainArt';
@@ -24,11 +25,21 @@ const G = theme.ground;
  * - 'clearing': forest floor with leaf litter and stumps
  * - 'quarry': stony apron with a stepped cut-stone pit; 'mine': rock apron with a spoil heap
  * - 'farm' / 'vineyard' / 'orchard': fields over the whole tile (furrows, vine rows, olive rows)
+ * - 'harbor': like the fishery, a sandy yard toward the water under the quay of its drawn scene
  * - 'fishery': sandy yard under the hut and a trail to the shore (the hut, jetty and boat are one
  *   drawn scene per water direction, see artLayout.ts `buildingArtId`)
  */
 export type GroundKind =
-  'yard' | 'plaza' | 'clearing' | 'quarry' | 'mine' | 'farm' | 'vineyard' | 'orchard' | 'fishery';
+  | 'yard'
+  | 'plaza'
+  | 'clearing'
+  | 'quarry'
+  | 'mine'
+  | 'farm'
+  | 'vineyard'
+  | 'orchard'
+  | 'fishery'
+  | 'harbor';
 
 /** Ground kind of every building. */
 export const GROUND_KIND: Readonly<Record<BuildingId, GroundKind>> = {
@@ -36,6 +47,7 @@ export const GROUND_KIND: Readonly<Record<BuildingId, GroundKind>> = {
   storehouse: 'yard',
   borderTower: 'yard',
   barracks: 'yard',
+  harbor: 'harbor',
   house: 'yard',
   woodcutter: 'clearing',
   quarry: 'quarry',
@@ -273,8 +285,8 @@ export function patchRadii(type: BuildingId, size: number): { rx: number; ry: nu
           ? G.quarry
           : kind === 'mine'
             ? G.mine
-            : kind === 'fishery'
-              ? G.fishery
+            : kind === 'fishery' || kind === 'harbor'
+              ? shoreConfig(kind)
               : isFieldKind(kind)
                 ? G.field.yard
                 : G.yard;
@@ -410,7 +422,8 @@ export function groundFootprints(
       continue;
     }
     const fp = footprintOf(b.type, size);
-    if (GROUND_KIND[b.type] !== 'fishery') {
+    const shore = GROUND_KIND[b.type];
+    if (shore !== 'fishery' && shore !== 'harbor') {
       const kind = footprintKindOf(b.type, state.map.tiles[tileIndex(state.map, b.hex)]);
       if (kind === 'mineCut') {
         // The mine stands at the mountain's outer foot, bigger (relief.ts mineArtTransform)
@@ -423,9 +436,9 @@ export function groundFootprints(
     }
     // Only the yard, around its shifted center: the terrain's grass and flowers stay on the rest
     const e = jettyEdge(state.map, b.hex);
-    const shift = fisheryYardOffset(e, size);
+    const shift = fisheryYardOffset(e, size, shore);
     const { rx, ry } = patchRadii(b.type, size);
-    const k = G.fishery.footprintGrow;
+    const k = shoreConfig(shore).footprintGrow;
     out.push({ hex: b.hex, rx: rx * k, ry: ry * k, cx: shift.x, cy: shift.y });
     if (e !== null) out.push({ hex: edgeNeighborHex(b.hex, e), rx: size, ry: size });
   }
@@ -443,10 +456,20 @@ export function unitsShownTo(
   revealAll: boolean,
   visible: readonly boolean[] | null = revealAll ? null : visibleTiles(state, viewer),
 ): Unit[] {
-  if (revealAll || visible === null) return [...state.units];
-  return state.units.filter(
-    (u) => u.owner === viewer || visible[tileIndex(state.map, u.hex)] === true,
-  );
+  // Passengers are never drawn as figures: they ride on their ship
+  const onMap = state.units.filter((u) => u.aboard === null);
+  if (revealAll || visible === null) return onMap;
+  return onMap.filter((u) => u.owner === viewer || visible[tileIndex(state.map, u.hex)] === true);
+}
+
+/**
+ * How many passengers the badge on a ship's token shows: only for the viewer's own ships that
+ * carry somebody (cargo is not visible to others); null = no badge.
+ */
+export function cargoBadgeCount(state: GameState, ship: Unit, viewer: PlayerId): number | null {
+  if (ship.owner !== viewer || UNITS[ship.type].capacity <= 0) return null;
+  const n = state.units.filter((u) => u.aboard === ship.id).length;
+  return n > 0 ? n : null;
 }
 
 /**
@@ -468,7 +491,8 @@ export function unitFootprints(
   const out: GroundFootprint[] = [];
   for (const u of unitsShownTo(state, viewer, revealAll, visible)) {
     const i = tileIndex(state.map, u.hex);
-    if (i < 0 || buildings.has(i) || done.has(i)) continue;
+    // Ships sail on water: nothing grows there, so they leave no footprint
+    if (i < 0 || buildings.has(i) || done.has(i) || UNITS[u.type].domain === 'sea') continue;
     done.add(i);
     out.push({
       hex: u.hex,
@@ -1260,14 +1284,23 @@ export function jettyEdge(map: MapState, h: Hex): number | null {
   return best;
 }
 
+/** Theme block of a shore building's yard (the harbor's own numbers, else the fishery's). */
+export function shoreConfig(kind: 'fishery' | 'harbor'): typeof G.fishery | typeof G.harbor {
+  return kind === 'harbor' ? G.harbor : G.fishery;
+}
+
 /**
- * Center of the fishery's sandy yard, relative to the tile center: `yardShift` x apothem along
+ * Center of the fishery's (or harbor's) sandy yard, relative to the tile center: `yardShift` x apothem along
  * the normal of its jetty edge, under the hut of the drawn scene. The tile center without water.
  */
-export function fisheryYardOffset(edge: number | null, size: number): Point {
+export function fisheryYardOffset(
+  edge: number | null,
+  size: number,
+  kind: 'fishery' | 'harbor' = 'fishery',
+): Point {
   if (edge === null) return { x: 0, y: 0 };
   const n = edgeNormal(edge);
-  const d = G.fishery.yardShift * apothem(size);
+  const d = shoreConfig(kind).yardShift * apothem(size);
   return { x: n.x * d, y: n.y * d };
 }
 

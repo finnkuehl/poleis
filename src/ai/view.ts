@@ -37,7 +37,15 @@ export function viewOf(ctx: AiContext): View {
   const idx = (h: Hex): number => tileIndex(state.map, h);
   const alive = new Set(state.players.filter((p) => p.alive).map((p) => p.id));
   const units = state.units.filter((u) => u.owner === player).sort((a, b) => a.id - b.id);
-  const enemies = state.units.filter((u) => u.owner !== player && visible[idx(u.hex)]);
+  // Enemy ships and their passengers are ignored: the AI only reasons about the land war
+  // (seafaring AI comes later). Archers may still shoot ships through `attackTargets`.
+  const enemies = state.units.filter(
+    (u) =>
+      u.owner !== player &&
+      u.aboard === null &&
+      UNITS[u.type].domain === 'land' &&
+      visible[idx(u.hex)],
+  );
   const occupied = new Set<number>();
   for (const u of [...units, ...enemies]) occupied.add(idx(u.hex));
   const view: View = {
