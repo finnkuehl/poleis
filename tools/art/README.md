@@ -8,7 +8,7 @@ library only) that print plain SVG. Style: isometric diorama miniatures, see `do
 ```
 tools/art/
   iso.py            the shared library (projection, ground modes, light, materials, props, statues)
-  units_lib.py      unit library on top of iso.py (token, people, horse, cart, ships)
+  units_lib.py      unit library on top of iso.py (bronze token, figure parts, animals, ships)
   buildings/<id>.py one script per building, named exactly like the id in src/data/
   units/<id>.py     one script per unit (see "Units" below)
   terrain/trees.py  the 13 tree and shrub sprites for forests and hills (see "Terrain trees" below)
@@ -448,63 +448,64 @@ sprites, sorted back to front.
 
 ## Units (`units_lib.py`, `units/<id>.py`)
 
-Units are board-game figures on a small round **token**. `units_lib.py` builds on `iso.py`
-(it never changes it) and has its own fixed canvas (docs/ART.md):
+Units are **richer single figures** (docs/ART.md, "Units: richer single figures"): one big,
+characterful painted miniature per unit in a 3/4 view facing screen-left, standing on an ornate
+bronze token. `units_lib.py` builds on `iso.py` (it never changes it).
 
-- `viewBox="0 0 128 128"`; the token's top ellipse is centred at **(64, 96)** and is **88 px
-  wide** (x 20 → 108). The game scales the image so this width is 0.62 × the hex width.
-- Here **1 world unit = 1 px** (`TOKEN_R` ≈ 31 units). The figure stands on the token centre and
-  may rise to the top of the canvas (spear tips, sails, crests); ships may overhang the token.
-- Legibility: **32 px** (the token 32 px wide, i.e. a 52 px hex). `preview.py` shows a 52 px strip.
-- Accents: the token's rim band (automatic) + 1–3 owner touches (shield, crest, cloak, cap,
-  saddle cloth, cart cover, sail, hull strake, pennant). Same accent rule as buildings.
+**Canvas (fixed – the game relies on it):** `viewBox="0 0 128 128"`, the token's top ellipse is
+centred at **(64, 96)** and **88 px wide** (x 20 → 108); the game scales it to 0.62 × the hex
+width. 1 world unit = 1 px. Figures may rise to the top of the canvas (crests, spear tips) and
+ships overhang the token; measured extents: hoplite and horseman reach y ≈ 1–2, the trireme
+spans x 4.5 → 121, the transport's sail tops out at y ≈ 19 and the trireme's at y ≈ 37 (the old
+ships stayed below 32 / 54). The token itself is unchanged in size, so the HP bar under it is not
+affected. Legibility check: **32 px** (the token 32 px wide).
 
-```python
-"""peltast - ... Accent (owner colour): token band + shield."""
-import sys
+**Token** (`token(c, top="bronze"|"water", seed)`, always first; defines the clip `c.url("top")`):
+a soft drop shadow, a polished bronze side with an **enamel band** (accent) between bevelled lips
+and small bronze studs, and a top with a bevelled lip, a broad **enamel ring** (accent) – at the
+front it joins the side band into one thick owner-colour edge, which still reads at 32 px – an
+embossed egg-and-dart ring and a polished inner field with lathe rings. Ships use
+`top="water"`: a water field inside a twisted bronze rope rim.
 
-sys.dont_write_bytecode = True
-import os  # noqa: E402
+| Unit | What it shows | Accent (owner colour) |
+|---|---|---|
+| scout | runner in full stride, felt petasos, staff, laced boots, linen tunic | flying chlamys, hat band |
+| settler | bearded colonist with a staff leading a pack donkey (sacks, amphorae, bedroll, hoe) | his tunic, the donkey's blanket |
+| spearman | advancing light infantryman, conical bronze pilos, long spear levelled up ahead | exomis tunic, small round shield field |
+| archer | full draw with a recurved bow, quiver on the back, soft leather cap, boots | tunic with sleeves |
+| hoplite | braced, big aspis with a sun blazon, spear overhand, crested Corinthian helmet, greaves | aspis field, crest, cloak |
+| horseman | rider on a chestnut horse at the trot, Chalcidian helmet, javelin cocked to throw | saddle cloth, cloak, crest |
+| transport | round-bellied merchant ship, braced square sail, amphorae and bales, helmsman | sail |
+| trireme | sleek dark warship, three banks of oars, bronze ram, bow eye, aplustre, helmsman | sail, outrigger stripe, pennant |
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import units_lib as U  # noqa: E402
+**Unit API** (`units_lib.py`; the module docstring lists the sections)
+- `UnitCanvas(id)` – an `iso.Canvas` on the unit canvas. The broadside frame `c.Pu(u, v, z)`,
+  `c.m_front(v)`, `c.m_flat(z)`, `from_uv(u, v)` is still there for profiles.
+- **Sculpting toolkit:** `Fig(c, x, y, k)` – a figure in screen space around its feet point;
+  `F.tube(pts, ws, ramp)` (tapered limb / shaft with a cylinder gradient lit from the upper left;
+  split automatically at sharp bends, one outline would fold over itself and leave a hole),
+  `F.mass(d, fill)`, `F.paint_in(target_d, markup)` / `F.shade_on(...)` (cast shadows clipped to a
+  part), `spline(points, closed)`, `fold(d)` (painted crease + lit ridge), `stroke`, `glint`.
+  Ramps: 6-stop cylinder ramps (rim light → lit → base → shade → core → reflected), e.g.
+  `SKIN_F` (figure skin; `SKIN` stays for `person()`), `LINEN`, `WOOL`, `LEATHER`, `BRONZE_R`,
+  `WOOD_R`, `HAIR_R`, and `ACC_R` (accent greys, kept bright so the owner colour reads).
+- **Figure parts** (local units, feet at y = 0, up is −y): `leg`, `foot`, `arm`, `limb` (one
+  smooth tube shoulder → elbow → wrist), `fist`, `neck`, `face` (3/4 head, `beard=None|"short"|"full"`),
+  `garment` (tunic / exomis with folds, an embroidered hem border and the hem's shadow on the
+  legs – **draw the legs first**, the hem hangs over the thighs), `chiton_skirt`, `belt`, `cuff`,
+  `cloak_back`, `cloak_border`, `pteruges`, `cuirass`, `shoulder_guard`, helmets and hats
+  (`corinthian`, `chalcidian`, `pilos`, `petasos`, `scythian_cap`), weapons (`spear`, `staff`,
+  `bow`, `arrow`, `quiver`), shields (`aspis(..., blazon="sun")`, `round_shield`).
+- **Animals** (profile, facing left): `horse(c, x, y, k)` → anchor points (`seat`, `mouth`),
+  `donkey(c, x, y, k)` + `pack_load(F)`.
+- **Ships:** `Ship(c, L, W, hd, sheer_bow, sheer_stern, phi)` – a hull in a 3/4 view (bow toward
+  the lower left, `phi` = the keel's turn in the ground plane); draw `water()`, `far_side()`,
+  `deck()`, cargo (`amphora_at`, `bale_at`, `ship_sailor`), `mast()`, `sail(...)` (a braced square
+  sail billowing toward the viewer, owner colour), `near_side(stops)`, `oar_bank(...)`, ornaments.
+- `person(c, x, y, h, ...)` is the older, smaller figure kept unchanged for the **building** canvases
+  (barracks drill, wonder visitors) – see "Shared helpers".
 
-
-def build():
-    c = U.UnitCanvas("peltast")          # id = file name = id in src/data/
-    U.token(c, seed=3)                   # first; top="water" for ships
-    x, y = c.P(0, 0, 0)                  # token centre = where the feet go
-    U.ground_shadow(c, x, y, 10)
-    U.person(c, x, y, h=76, helmet="pilos", hold="spear", shield="round", accents=("shield",))
-    return c
-```
-
-**Unit API** (`units_lib.py`)
-- `UnitCanvas(id)` – an `iso.Canvas` on the unit canvas; all iso helpers work on it. Extra:
-  the **broadside frame** for profiles (ships, horses, carts): `c.Pu(u, v, z)` with `u` along the
-  screen horizontal and `v` toward the viewer; `c.m_front(v)` (vertical plane facing the viewer,
-  local x = u, y = z) and `c.m_flat(z)` (ground). `from_uv(u, v)` converts to `c.at(a, b)`.
-- `token(c, top="grass"|"water", seed)` – always first; defines the clip `c.url("top")`.
-- `ground_shadow(c, x, y, w, length)` – contact + cast shadow under a figure.
-- `person(c, x, y, h=80, tunic=LINEN|WOOL|"accent", hem, armor=None|"cuirass",
-  legs="bare"|"greaves", stride, beard, helmet=None|"corinthian"|"pilos"|"petasos"|"phrygian",
-  cloak=None|material|"accent", cloak_flow, hold=None|"spear"|"staff"|"bow", shield=None|"aspis"|
-  "round", quiver, accents=("shield", "crest", "cloak", "cap", "tunic"), wide=1.15)` – a chunky
-  painted miniature (head ~1/4 of the height, broad shoulders, thick limbs), front view, feet at
-  (x, y). `h` is feet → top of the head; 70–80 fills the token. Crests, hats and spears rise
-  above it – keep everything inside the canvas (y ≥ 2). On a building canvas use
-  `h=14 * iso.ZS` (the shared human scale, see "Scale").
-- `horse(c, x, y, h, coat=HORSE_BAY|DONKEY, saddle, accents=("saddle",))` → seat point;
-  `rider(c, seat_x, seat_y, h, accents=("cloak",))` (h ≈ 58 / 40 fill the token).
-- `cart(c, u0, u1, z0, z1, wheel_u, wheel_r, cover_h)` – two-wheeled cart with an owner cover.
-- Ships: `ship_hull(c, L, W, hd, sheer_bow, sheer_stern, colours, deck)` → near gunwale points;
-  `sail(c, u0, u1, z_foot, z_yard)` (owner colour), `oars(c, near, u_from, u_to, n)`,
-  `ship_amphora(...)`, and the complete `transport_details` / `trireme_details`.
-- Materials: `SKIN`, `LINEN`, `WOOL`, `LEATHER`, `FELT`, `METAL`, `CLOTH_ACCENT`, `HORSE_BAY`, `DONKEY`.
-
-Figures are **chunky board-game miniatures**: at a 32 px token they need ~60 % of the token
-width, limbs of several px and the same light as the buildings (warm lit side with a rim light,
-cool shade, a reflected edge – built into the material ramps `SKIN`, `LINEN`, `METAL` ...).
-Silhouettes must differ at 32 px: hoplite = huge round aspis + tall crest; spearman = small shield +
-conical cap + upright spear; scout = wide hat + flying cloak; archer = drawn bow; settler = covered cart;
-horseman = horse; transport = square sail; trireme = long low hull with oars.
+Rules for unit art: one bold owner-colour area per unit that reads at 32 px in all four player
+colours; neutral details in bronze, wood, leather, linen and skin; legs before garments, cast
+shadows only inside the part they fall on; no blur inside accent markup. Check with `preview.py`
+(and look at the figures on meadow, hill and forest-floor tiles next to the house and temple).
