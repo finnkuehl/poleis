@@ -144,8 +144,10 @@ change what stands on them). Same light direction; soft, painted look: one flat 
 terrain with large, soft light/dark washes from a smooth noise over the whole map (no per-tile
 shade, so no hex patchwork), wavy organic edges between different terrains that are identical
 from both tiles, with tongues of color bleeding across, and small details
-(grass tufts, umbrella pines and cypresses, golden hill country that fills its tiles and rolls
-into neighboring hills, faceted mountain massifs joined into ranges with snow, terraces under
+(a painted seamless grass texture on meadows with drifts of poppies, chamomile and buttercups,
+clover, lush and dry patches, stones and the odd shrub or lone tree; umbrella pines and
+cypresses; golden hill country that fills its tiles and rolls into neighboring hills, with its
+mounds placed between the road corridors so roads always run through valleys, faceted mountain massifs joined into ranges with snow, terraces under
 buildings on slopes, sandy beaches where land meets water, foam and wave lines on the coast,
 darker deep ocean). Hill shading uses three tiny shared textures (soft spot, mound shading,
 rock-face gradient) stretched and tinted per shape; standing terrain (trees, massifs) is drawn in
@@ -181,14 +183,24 @@ are faint. Everything must stay smooth (60 fps) on a 40 × 40 map on a mid-range
   boulders, never a flat grey floor.
 - **Coast mountains drop into the sea:** cliff faces plunge straight into the water with surf at
   their foot, no beach in front.
+- **Towns share one ground** (the user compared both versions in the game and chose it):
+  neighboring buildings of one owner form a town area with one continuous packed-earth ground
+  (organic outer edge, soft rim, low dry-stone walls on some outer edges), lanes from the city
+  center to the buildings, stone paving around the city center, and small gardens, wells or trees
+  in some gaps. No separate round yards inside a town; single buildings keep their own yard.
+  Fields next to a town fade into the town ground.
 - **Fields on hills lie on top of the slopes:** a vineyard or olive grove on a hill does not flatten
   it; the hill keeps its rolling shape (no terrace bank), its light and shade show through the
   fields, and rows and trees follow the slopes.
 - **Fields join only their own kind** (farm with farm, vineyard with vineyard); between different
   kinds a grass strip or hedge. The olive grove stands on green orchard grass, not on a sandy patch.
-- **Roads: worn dirt tracks** that bend smoothly through the tiles: earth with two wheel ruts, a
-  grassy middle strip, soft grass edges and a few stones; junctions merge softly; next to a city
-  center they become light stone paving.
+- **Roads: worn gravel tracks** that bend smoothly through the tiles (textured meshes, materials
+  from small shared textures): a light gravel track on a darker compacted shoulder, two subtle wheel
+  ruts lit from the upper left, one width; junctions merge into one worn place without ruts; dead
+  ends and yard roads fade out; on hills the road is cut into the slope (lit and shaded banks with
+  a sunlit lip); on and next to a city center limestone slab paving with edge stones, ending cleanly
+  in the plaza, small hexagonal paved squares where paved roads meet, and a row of edge stones where
+  paving turns into gravel.
 - **Units: richer single figures:** one bigger, more detailed figure per unit with a strong pose,
   owner color on tunic, cloak and shield emblem, bronze helmet with crest, visible weapons, standing
   on an ornate bronze token with an owner-colored enamel ring.
