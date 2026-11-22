@@ -160,8 +160,9 @@
 }
 
 /* ---------- Drawn art icons (src/ui/art.ts) ---------- */
-/* The art box fills its container (size the container); the image is zoomed and shifted by
-   --art-zoom / --art-left / --art-top so the miniature fills the square. */
+/* The art box fills its container (size the container); the layers are zoomed and shifted by
+   --art-zoom / --art-left / --art-top so the miniature fills the square. Layer order (bottom to
+   top): accent image, player color (multiply, masked by the accent), art image. */
 .art {
   position: relative;
   display: block;
@@ -179,17 +180,15 @@
   height: var(--art-zoom, 100%);
   max-width: none;
 }
-.art__img {
+.art__img,
+.art__accent {
   display: block;
   -webkit-user-drag: none;
   user-select: none;
 }
-/* Owner-color layer: the grey accent drawing multiplied with the player color. */
+/* Owner color: multiplies the grey accent below it, cut to the accent's shape. */
 .art__tint {
-  background-position: center;
-  background-size: 100% 100%;
-  background-repeat: no-repeat;
-  background-blend-mode: multiply;
+  mix-blend-mode: multiply;
   -webkit-mask-position: center;
   mask-position: center;
   -webkit-mask-size: 100% 100%;

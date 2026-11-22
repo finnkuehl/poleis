@@ -68,8 +68,7 @@
         border: 1px solid #163545;
       }
       .strip img,
-      .token img,
-      .based img {
+      .map-row img {
         display: block;
       }
       /* Shown instead of an image whose file does not exist yet. */
@@ -84,36 +83,23 @@
           rgba(169, 176, 166, 0.36) 4px 8px
         );
       }
-      /* Units: a round token in the player color, like a board-game piece. */
-      .token {
-        display: grid;
-        place-items: center;
-        width: 56px;
-        height: 56px;
-        border-radius: 50%;
-        border: 2.5px solid #1d2b36;
-        box-shadow: 2px 3px 0 rgba(29, 43, 54, 0.25);
-      }
-      /* Buildings: a miniature standing on a small round base in the player color. */
-      .based {
+      /* Buildings and units as in the game, bottom to top: accent image, player color in
+         multiply (masked by the accent), art image (which has holes where the accents are). */
+      .layered {
         position: relative;
-        width: 72px;
-        height: 72px;
+        flex: none;
+        isolation: isolate;
       }
-      .based::before {
-        content: '';
+      .layered > * {
         position: absolute;
-        left: 6px;
-        right: 6px;
-        bottom: 2px;
-        height: 24px;
-        border-radius: 50%;
-        background: var(--player);
-        border: 2px solid #1d2b36;
+        inset: 0;
       }
-      .based img,
-      .based .missing {
-        position: relative;
+      .layered .tint {
+        mix-blend-mode: multiply;
+        -webkit-mask-size: 100% 100%;
+        mask-size: 100% 100%;
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
       }
       .map-row {
         display: flex;

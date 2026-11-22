@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { BUILDING_IDS } from '../data';
 import {
   ART_FRAMES,
+  BUILDING_FRAMES,
   accentUrl,
+  artFrame,
   artColorsOf,
   artUrl,
   frameLayout,
@@ -56,7 +59,7 @@ describe('frameLayout', () => {
   });
 
   it('keeps every frame inside its canvas', () => {
-    for (const f of Object.values(ART_FRAMES)) {
+    for (const f of [...Object.values(ART_FRAMES), ...Object.values(BUILDING_FRAMES)]) {
       expect(f.x).toBeGreaterThanOrEqual(0);
       expect(f.y).toBeGreaterThanOrEqual(0);
       expect(f.x + f.size).toBeLessThanOrEqual(f.canvas);
@@ -64,10 +67,29 @@ describe('frameLayout', () => {
     }
   });
 
-  it('keeps the building base and the unit token fully visible', () => {
-    const b = ART_FRAMES.buildings;
-    expect(b.x).toBeLessThanOrEqual(24);
-    expect(b.x + b.size).toBeGreaterThanOrEqual(232);
+  it('keeps the whole base of every building visible (x 23–237, rim down to y 251)', () => {
+    for (const id of BUILDING_IDS) {
+      const f = artFrame('buildings', id);
+      expect(f.canvas).toBe(256);
+      expect(f.x).toBeLessThanOrEqual(23);
+      expect(f.x + f.size).toBeGreaterThanOrEqual(237);
+      expect(f.y + f.size).toBeGreaterThanOrEqual(251);
+    }
+  });
+
+  it('does not cut tall buildings: the default reaches the torch of the wonder, low ones the temple roof', () => {
+    expect(BUILDING_FRAMES.wonder).toBeUndefined();
+    expect(artFrame('buildings', 'wonder').y).toBeLessThanOrEqual(6);
+    expect(artFrame('buildings', 'temple').y).toBeLessThanOrEqual(56);
+    expect(artFrame('buildings', 'house').size).toBeLessThan(ART_FRAMES.buildings.size);
+  });
+
+  it('uses the kind default for goods and units', () => {
+    expect(artFrame('goods', 'wood')).toBe(ART_FRAMES.goods);
+    expect(artFrame('units', 'hoplite')).toBe(ART_FRAMES.units);
+  });
+
+  it('keeps the unit token fully visible', () => {
     const u = ART_FRAMES.units;
     expect(u.x).toBeLessThanOrEqual(64 - 44);
     expect(u.x + u.size).toBeGreaterThanOrEqual(64 + 44);

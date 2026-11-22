@@ -1,6 +1,10 @@
 // Drawn art for the HTML UI: goods icons, building miniatures and unit figures from
 // public/assets (see docs/ART.md). Each icon is a small square box with the image; buildings and
-// units also get their owner-colored accent layer (`<id>.accent.svg`, tinted with a CSS mask).
+// units also get their owner-colored accent layer (`<id>.accent.svg`). Draw order (docs/ART.md):
+// the accent goes UNDER the art – the art has transparent holes where the accents are:
+//   1. accent image (neutral greys with light and shade)
+//   2. player color, `mix-blend-mode: multiply`, masked by the accent → tinted, shading kept
+//   3. art image on top
 // Missing files fall back to the emoji from src/data, so a missing drawing never shows a broken
 // image. The box fills its container: size it with the container's CSS class.
 import { BUILDINGS, GOODS, UNITS, type BuildingId, type GoodId, type UnitId } from '../data';
@@ -20,16 +24,37 @@ export interface ArtFrame {
 }
 
 /**
- * What each icon box shows of the canvas. Buildings (256 canvas, base 208 wide from x 24 to 232,
- * base center at y 176) and units (128 canvas, token 88 wide, center at y 96) leave empty space
- * at the top and the sides, so the icon zooms in a little to let the miniature fill the box.
- * Adjust these if a drawing gets cut off.
+ * Default cut-out per kind: what the icon box shows of the canvas. The default must never cut a
+ * drawing, so it shows nearly the whole canvas. Buildings (256 canvas, base 208 wide from x 24 to
+ * 232, center at y 176) always span about x 23–237 (base and earth side) and reach down to
+ * y ≈ 251 (rim band); tall ones reach almost to the top (the wonder's torch at y ≈ 8).
+ * Units: 128 canvas, token 88 wide with its center at (64, 96).
  */
 export const ART_FRAMES: Readonly<Record<ArtKind, ArtFrame>> = {
   goods: { canvas: 64, x: 0, y: 0, size: 64 },
-  buildings: { canvas: 256, x: 16, y: 28, size: 224 },
-  units: { canvas: 128, x: 8, y: 12, size: 112 },
+  buildings: { canvas: 256, x: 5, y: 4, size: 250 },
+  units: { canvas: 128, x: 4, y: 4, size: 120 },
 };
+
+/** Cut-out for low buildings (highest point at or below y ≈ 57): they fill the box more. */
+const LOW_BUILDING_FRAME: ArtFrame = { canvas: 256, x: 22, y: 40, size: 216 };
+
+/**
+ * Buildings that get a tighter cut-out than the default, measured from their drawings
+ * (highest point: house y 64, city center y 66, temple roof y 58). Not listed = default.
+ * Add a new building here once its drawing exists and is low enough.
+ */
+export const BUILDING_FRAMES: Readonly<Partial<Record<BuildingId, ArtFrame>>> = {
+  house: LOW_BUILDING_FRAME,
+  cityCenter: LOW_BUILDING_FRAME,
+  temple: LOW_BUILDING_FRAME,
+};
+
+/** The cut-out of one asset: a building's own frame if it has one, else the kind's default. */
+export function artFrame(kind: ArtKind, id: string): ArtFrame {
+  const own = kind === 'buildings' ? BUILDING_FRAMES[id as BuildingId] : undefined;
+  return own ?? ART_FRAMES[kind];
+}
 
 /** Load state of one art file: unknown until the browser tried it once. */
 export type ArtStatus = 'loaded' | 'missing';
@@ -116,34 +141,38 @@ function showEmoji(box: HTMLElement, emoji: string): void {
   box.textContent = emoji;
 }
 
-/** Adds the tinted owner-color layer once its file is known to exist. */
-function addTint(box: HTMLElement, kind: ArtKind, id: string, color: string): void {
+function layerImage(className: string, url: string): HTMLImageElement {
+  const img = document.createElement('img');
+  img.className = `art__layer ${className}`;
+  img.alt = '';
+  img.draggable = false;
+  img.src = url;
+  return img;
+}
+
+/**
+ * Appends the owner-color layers (accent image + player color in multiply, masked by the
+ * accent). Must run before the art image is appended: the accent lies under the art.
+ * A missing accent file removes both layers again (and is not requested again).
+ */
+function appendAccent(box: HTMLElement, kind: ArtKind, id: string, color: string): void {
   const url = accentUrl(kind, id);
   if (!shouldTryArt(statuses[url])) return;
-  const attach = (): void => {
-    if (box.classList.contains('art--emoji')) return;
-    const tint = document.createElement('span');
-    tint.className = 'art__layer art__tint';
-    // The grey accent drawing multiplied with the player color, cut to the drawing's shape.
-    tint.style.backgroundImage = `url("${url}")`;
-    tint.style.backgroundColor = color;
-    tint.style.setProperty('-webkit-mask-image', `url("${url}")`);
-    tint.style.setProperty('mask-image', `url("${url}")`);
-    box.appendChild(tint);
-  };
-  if (statuses[url] === 'loaded') {
-    attach();
-    return;
-  }
-  const probe = new Image();
-  probe.addEventListener('load', () => {
+  const accent = layerImage('art__accent', url);
+  const tint = document.createElement('span');
+  tint.className = 'art__layer art__tint';
+  tint.style.backgroundColor = color;
+  tint.style.setProperty('-webkit-mask-image', `url("${url}")`);
+  tint.style.setProperty('mask-image', `url("${url}")`);
+  accent.addEventListener('load', () => {
     statuses[url] = 'loaded';
-    attach();
   });
-  probe.addEventListener('error', () => {
+  accent.addEventListener('error', () => {
     statuses[url] = 'missing';
+    accent.remove();
+    tint.remove();
   });
-  probe.src = url;
+  box.append(accent, tint);
 }
 
 function artIcon(kind: ArtKind, id: string, emoji: string, color?: string): HTMLSpanElement {
@@ -155,14 +184,12 @@ function artIcon(kind: ArtKind, id: string, emoji: string, color?: string): HTML
     return box;
   }
   box.className = `art art--${kind}`;
-  const layout = frameLayout(ART_FRAMES[kind]);
+  const layout = frameLayout(artFrame(kind, id));
   box.style.setProperty('--art-zoom', layout.zoom);
   box.style.setProperty('--art-left', layout.left);
   box.style.setProperty('--art-top', layout.top);
-  const img = document.createElement('img');
-  img.className = 'art__layer art__img';
-  img.alt = '';
-  img.draggable = false;
+  if (color !== undefined && hasAccentLayer(kind)) appendAccent(box, kind, id, color);
+  const img = layerImage('art__img', url);
   img.addEventListener('load', () => {
     statuses[url] = 'loaded';
   });
@@ -170,9 +197,7 @@ function artIcon(kind: ArtKind, id: string, emoji: string, color?: string): HTML
     statuses[url] = 'missing';
     showEmoji(box, emoji);
   });
-  img.src = url;
   box.appendChild(img);
-  if (color !== undefined && hasAccentLayer(kind)) addTint(box, kind, id, color);
   return box;
 }
 
