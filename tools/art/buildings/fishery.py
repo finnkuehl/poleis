@@ -387,9 +387,11 @@ def jetty(sc, o, d, L, seed=9, head=False):
 # ---------------------------------------------------------------------------
 # Moored fishing boat (any direction)
 # ---------------------------------------------------------------------------
-def boat(sc, ca, cb, d, L=BOAT_L, HWB=BOAT_HW):
+def boat(sc, ca, cb, d, L=BOAT_L, HWB=BOAT_HW, mast=True):
     """Fishing boat afloat, centred at (ca, cb), bow toward the unit direction d: painted eye,
-    owner-colour stripe under the gunwale and a lateen sail in the boat's own vertical plane."""
+    owner-colour stripe under the gunwale and a lateen sail in the boat's own vertical plane
+    (mast=False: an open rowing boat without mast and sail, used by the harbor). Returns (W, gz): the boat's point
+    function W(u, v, z) (u = -1 stern ... 1 bow) and its gunwale height gz(u)."""
     c = sc.c
     p = toward_viewer(d)
 
@@ -408,7 +410,7 @@ def boat(sc, ca, cb, d, L=BOAT_L, HWB=BOAT_HW):
     far = [W(u, -hw(u), gz(u)) for u in us]
     wl = [W(u * 0.86, hw(u) * 0.86, 0) for u in us]
     wlf = [W(u * 0.86, -hw(u) * 0.86, 0) for u in us]
-    for u, z in ((-1.05, 0), (1.05, 0), (-0.55, 44), (0, 44), (0.95, 10)):
+    for u, z in ((-1.05, 0), (1.05, 0), (-0.55, 44 if mast else 8), (0, 44 if mast else 8), (0.95, 10)):
         for v in (-HWB, HWB):
             sc.extent((ca + u * L * d[0] + v * p[0], cb + u * L * d[1] + v * p[1], z))
 
@@ -450,6 +452,8 @@ def boat(sc, ca, cb, d, L=BOAT_L, HWB=BOAT_HW):
         c.add(f'<path d="M{" L".join(f"{f(x)},{f(y)}" for x, y in far)}" fill="none" stroke="{WOOD["base"]}" stroke-width="0.9"/>'
               f'<path d="M{" L".join(f"{f(x)},{f(y)}" for x, y in near)}" fill="none" stroke="#c99a6a" stroke-width="1"/>'
               f'<path d="M{" L".join(f"{f(x)},{f(y + 0.4)}" for x, y in wl[3:-2])}" fill="none" stroke="#e9fbf6" stroke-width="0.9" opacity="0.8"/>')
+        if not mast:
+            return
         # mast + lateen sail in the boat's vertical plane (local x along the boat from its centre)
         ma = -1.5
         tack, peak, clew = (14.5, 9.6), (-16, 42), (-10, 8.2)
