@@ -218,7 +218,13 @@ export async function createGame(
   const bottomBar = createBottomBar(uiContainer, {
     onBuild: () => {
       economySheet.close();
-      if (menuOpen || mode.kind === 'placing') {
+      // A second tap on Build cancels whatever it started: the menu, placing or a road.
+      if (
+        menuOpen ||
+        mode.kind === 'placing' ||
+        mode.kind === 'roadStart' ||
+        mode.kind === 'roadEnd'
+      ) {
         resetToIdle();
         return;
       }
