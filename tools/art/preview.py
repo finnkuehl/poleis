@@ -49,14 +49,25 @@ def tint_filter(fid, colour):
             f'values="{r:.3f} 0 0 0 0 0 {g:.3f} 0 0 0 0 0 {b:.3f} 0 0 0 0 0 1 0"/></filter>')
 
 
+def viewbox(path, canvas):
+    """The file's viewBox (direction variants such as fishery.e0 have their own, in the same user
+    units as the normal canvas)."""
+    head = open(path, encoding="utf-8").read(400)
+    m = re.search(r'viewBox="([^"]+)"', head)
+    return tuple(float(v) for v in m.group(1).split()) if m else (0, 0, canvas, canvas)
+
+
 def composed(asset, x, y, size, colour, layers="both"):
+    """Draw an asset whose normal canvas (0 0 canvas canvas) would be `size` px wide at (x, y)."""
     _n[0] += 1
     p = f"p{_n[0]}_"
     kind = kind_of(asset)
     canvas = ANCHOR[kind][0]
     art = os.path.join(FOLDERS[kind], f"{asset}.svg")
     acc = os.path.join(FOLDERS[kind], f"{asset}.accent.svg")
-    parts = [f'<svg x="{x:.1f}" y="{y:.1f}" width="{size}" height="{size}" viewBox="0 0 {canvas} {canvas}">']
+    vx, vy, vw, vh = viewbox(art, canvas)
+    k = size / canvas
+    parts = [f'<svg x="{x + vx * k:.1f}" y="{y + vy * k:.1f}" width="{vw * k:.1f}" height="{vh * k:.1f}" viewBox="{vx:g} {vy:g} {vw:g} {vh:g}">']
     if layers in ("both", "accent") and os.path.exists(acc):
         parts.append(f'<defs>{tint_filter(p + "tint", colour)}</defs>' if colour else "")
         parts.append(f'<g filter="url(#{p}tint)">' if colour else "<g>")
@@ -113,7 +124,7 @@ def all_assets():
     names = []
     for folder in FOLDERS.values():
         if os.path.isdir(folder):
-            names += sorted(n[:-11] for n in os.listdir(folder) if n.endswith(".accent.svg"))
+            names += sorted(n[:-11] for n in os.listdir(folder) if n.endswith(".accent.svg") and not re.search(r"\.e\d$", n[:-11]))
     return names
 
 

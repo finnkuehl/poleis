@@ -367,9 +367,11 @@ def round_terrace(c, ca, cb, rho, h, seed=1, rows=2, tufts=36, avoid=None):
 # ---------------------------------------------------------------------------
 # A gnarled grove olive (bigger and older than iso.olive_tree, with fruit)
 # ---------------------------------------------------------------------------
-def grove_olive(c, a, b, k=1.0, seed=1, olives=True, before_crown=None):
+def grove_olive(c, a, b, k=1.0, seed=1, olives=True, before_crown=None, crown="flat"):
     """Old olive tree with a twisted, split trunk and a broad silver crown hung with olives.
-    before_crown(c): optional callback drawn after the trunk and before the crown (ladders)."""
+    before_crown(c): optional callback drawn after the trunk and before the crown (ladders).
+    crown: "flat" (a broad, low crown) or "dome" (a taller, rounder, more irregular crown on
+    longer limbs - the grounded olive grove, where the trees stand on the open field)."""
     x, y = c.P(a, b, 0)
     rnd = random.Random(seed)
     iso.blob_shadow(c, a + 14 * k, b - 3, 13 * k, 0.34)
@@ -392,6 +394,9 @@ def grove_olive(c, a, b, k=1.0, seed=1, olives=True, before_crown=None):
     # limbs into the crown
     limbs = [((-4.4 * s, -15), (-10 * s, -18), (-13.5 * s, -22), 3.2), ((-1.8 * s, -16), (-1.4 * s, -21), (-4 * s, -26), 2.8),
              ((5.2 * s, -16), (9 * s, -18.5), (13 * s, -21.5), 3.0), ((4.4 * s, -16), (4 * s, -21), (5.5 * s, -27), 2.4)]
+    if crown == "dome":
+        limbs = [((-4.4 * s, -15), (-10 * s, -19), (-12.5 * s, -26), 3.2), ((-1.8 * s, -16), (-2.4 * s, -23), (-4.5 * s, -31), 2.8),
+                 ((5.2 * s, -16), (9.5 * s, -20), (12 * s, -25.5), 3.0), ((4.4 * s, -16), (3.6 * s, -23), (5 * s, -32), 2.4)]
     lm = []
     for (x0, y0), (x1, y1), (x2, y2), w in limbs:
         d = f"M{f(x + x0 * k)},{f(y + y0 * k)} Q{f(x + x1 * k)},{f(y + y1 * k)} {f(x + x2 * k)},{f(y + y2 * k)}"
@@ -403,6 +408,10 @@ def grove_olive(c, a, b, k=1.0, seed=1, olives=True, before_crown=None):
     # crown: overlapping silver-green clumps
     base_p = [(0, -29, 12.5, 6.8), (-11.5, -24, 9, 5.2), (11.5, -23.5, 9, 5.2), (-7, -33.5, 7.5, 4.4), (7, -33, 7.5, 4.4),
               (0, -22.5, 9.5, 4.6), (-17, -27.5, 5.8, 3.8), (17, -28, 5.8, 3.8)]
+    if crown == "dome":
+        # the first five carry the highlights: a high centre, two shoulders, two tufts on top
+        base_p = [(0, -36, 11.5, 8.4), (-10.5 * s, -30, 9, 7), (10.5 * s, -29, 9, 7), (-6 * s, -43, 7.5, 5.6), (6.5 * s, -42, 7, 5.4),
+                  (0, -26.5, 10, 6), (-15.5 * s, -25.5, 6.2, 5), (15 * s, -24.5, 6.4, 5), (1.5 * s, -48, 5.4, 3.8)]
     puffs = [(px + rnd.uniform(-1.2, 1.2), py + rnd.uniform(-1, 1), rx * rnd.uniform(0.92, 1.1), ry * rnd.uniform(0.92, 1.1), seed * 20 + i)
              for i, (px, py, rx, ry) in enumerate(base_p)]
     leaf = c.rad("gleaf", 0.36, 0.28, 0.85, [(0, "#c6d29c"), (0.5, "#8c9c5e"), (1, "#56663a")], bbox=True)
@@ -530,3 +539,71 @@ def vine_row(c, pos, x0, x1, z, seed=1, ribbon=True, foliage=(3.4, 10.2), stake_
         x, y = P(stake_xs[-1], s, z + stake_h - 0.8)
         c.accent(f'<path d="M{f(x - 0.7)},{f(y - 1.1)} L{f(x + 0.7)},{f(y - 1.1)} Q{f(x + 3.5)},{f(y - 0.6)} {f(x + 6.8)},{f(y + 1.6)} L{f(x + 4.8)},{f(y + 2.1)} L{f(x + 6)},{f(y + 4)} Q{f(x + 2.8)},{f(y + 2.2)} {f(x + 0.7)},{f(y + 1.1)} L{f(x - 0.7)},{f(y + 1.1)}Z" fill="{ACCENT["light"]}"/>'
                  f'<path d="M{f(x + 0.7)},{f(y + 0.3)} Q{f(x + 3)},{f(y + 0.9)} {f(x + 4.8)},{f(y + 2.1)} L{f(x + 6)},{f(y + 4)} Q{f(x + 2.8)},{f(y + 2.2)} {f(x + 0.7)},{f(y + 1.1)}Z" fill="{ACCENT["shade"]}"/>')
+
+
+# ---------------------------------------------------------------------------
+# Pergola (grounded vineyard): a leafy vine roof on timber posts
+# ---------------------------------------------------------------------------
+def pergola(c, a0, a1, b0, b1, z, seed=1, pal=DRIFT, under=None, back_posts=True, bunches=5):
+    """Vine pergola over the ground rectangle a0..a1 x b0..b1: timber posts, two beams along a
+    and a leafy roof of vines at height z, with grape bunches hanging under its front (+b) edge
+    and a dappled shadow on the ground. under(c): optional callback drawn after the back posts
+    and before the front posts (benches, baskets standing under the pergola).
+    back_posts=False: the back side rests on a wall (no posts there)."""
+    rnd = random.Random(seed)
+    # soft shadow of the leaf roof, falling to +a
+    sh = [(a0, b0), (a1, b0), (a1, b1), (a0, b1)]
+    iso.cast_shadow(c, sh, [(a, b, z) for a, b in sh], opacity=0.32, sd=1.6)
+    if back_posts:
+        for a in (a0 + 0.8, a1 - 0.8):
+            pole(c, a, b0 + 0.8, 0, z - 0.6, w=1.7, pal=pal)
+    if under:
+        under(c)
+    for a in (a0 + 0.8, a1 - 0.8):
+        x, y = c.P(a, b1 - 0.8, 0)
+        c.add(f'<ellipse cx="{f(x + 0.6)}" cy="{f(y + 0.3)}" rx="1.8" ry="0.7" fill="{iso.INK}" opacity="0.4" filter="{c.blur(0.45)}"/>')
+        pole(c, a, b1 - 0.8, 0, z - 0.6, w=1.8, pal=pal)
+    # beams along a (front and back), then cross poles along b
+    for b in (b0 + 0.8, b1 - 0.8):
+        p, q = c.P(a0 - 1.5, b, z - 0.4), c.P(a1 + 1.5, b, z - 0.4)
+        c.add(f'<path d="M{f(p[0])},{f(p[1])} L{f(q[0])},{f(q[1])}" stroke="{pal["shade"]}" stroke-width="1.7" stroke-linecap="round"/>'
+              f'<path d="M{f(p[0])},{f(p[1] - 0.5)} L{f(q[0])},{f(q[1] - 0.5)}" stroke="{pal["hi"]}" stroke-width="0.5" stroke-linecap="round" opacity="0.8"/>')
+    n = max(3, int((a1 - a0) / 4.5))
+    cross = []
+    for i in range(n + 1):
+        a = a0 + (a1 - a0) * i / n
+        p, q = c.P(a, b0 - 1, z), c.P(a, b1 + 1, z)
+        cross.append(f"M{f(p[0])},{f(p[1])} L{f(q[0])},{f(q[1])}")
+    c.add(f'<path d="{"".join(cross)}" stroke="{pal["mid"]}" stroke-width="1" stroke-linecap="round"/>')
+    # leaf roof: small vine-leaf clumps over the rectangle (gaps let the poles show), back to front
+    clumps = []
+    na, nb = max(3, int((a1 - a0) / 4.2)), max(2, int((b1 - b0) / 4.2))
+    for i in range(na + 1):
+        for j in range(nb + 1):
+            if rnd.random() < 0.16 and 0 < i < na and 0 < j < nb:
+                continue
+            a = a0 + (a1 - a0) * (i + rnd.uniform(-0.3, 0.3)) / na
+            b = b0 + (b1 - b0) * (j + rnd.uniform(-0.3, 0.3)) / nb
+            clumps.append((a + b, a, b, rnd.uniform(2.7, 3.6), rnd.randrange(9999)))
+    clumps.sort()
+    leaf = c.rad("pergLeaf", 0.35, 0.3, 0.8, [(0, VINE["lit"]), (0.55, VINE["base"]), (1, VINE["shade"])], bbox=True)
+    dark, lit, hi = [], [], []
+    for _, a, b, r, sd in clumps:
+        x, y = c.P(a, b, z + 1.2)
+        dark.append(f'<path d="{puff(x + 0.5, y + 1.3, r * 1.12, r * 0.68, n=9, seed=sd, bulge=1.22)}"/>')
+        lit.append(f'<path d="{puff(x, y, r, r * 0.6, n=9, seed=sd, bulge=1.22)}" fill="{leaf}"/>')
+        hi.append(f'<path d="{puff(x - r * 0.3, y - r * 0.22, r * 0.42, r * 0.24, n=6, seed=sd + 3, bulge=1.3)}"/>')
+    c.add(f'<g fill="{VINE["dark"]}">{"".join(dark)}</g>' + "".join(lit) + f'<g fill="{VINE["hi"]}" opacity="0.5">{"".join(hi)}</g>')
+    # leaves trailing down the front edge, bunches hanging under it
+    gr = c.rad("grape", 0.35, 0.25, 0.8, [(0, GRAPE["lit"]), (0.55, GRAPE["base"]), (1, GRAPE["dark"])], bbox=True)
+    trail, bun, glints = [], [], []
+    for i in range(int((a1 - a0) / 3) + 1):
+        a = a0 + i * 3 + rnd.uniform(-0.6, 0.6)
+        x, y = c.P(a, b1 + 0.8, z - rnd.uniform(0.5, 2.6))
+        trail.append(f'<path d="{puff(x, y, rnd.uniform(1.6, 2.4), rnd.uniform(1.2, 1.7), n=6, seed=rnd.randrange(999))}"/>')
+    for i in range(bunches):
+        a = a0 + 2 + (a1 - a0 - 4) * (i + rnd.uniform(0.2, 0.8)) / bunches
+        x, y = c.P(a, b1 + 0.4, z - 2.2)
+        bun.append(grape_small(x, y, rnd.uniform(1.1, 1.3), gr, glints=glints))
+    c.add(f'<g fill="{VINE["base"]}">{"".join(trail)}</g>' + "".join(bun)
+          + f'<path d="{"".join(glints)}" stroke="{GRAPE["bloom"]}" stroke-width="0.7" stroke-linecap="round" opacity="0.75"/>')

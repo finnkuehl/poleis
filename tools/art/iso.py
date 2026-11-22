@@ -17,6 +17,15 @@ Projection: true 2:1 dimetric ("isometric"). World axes:
     z -> screen (0, -ZS)     up
 Visible vertical faces: +b ("left", warm mid tone) and +a ("right", cool shade).
 Light comes from the upper left of the screen; shadows fall to the lower right (+a).
+
+Two ground modes (the first call of every building script picks one):
+    ground(c)  GROUNDED (docs/ART.md "Grounded buildings"): the building stands directly on the
+               map. Nothing is drawn under it - the ground is transparent, the game paints the
+               terrain and a yard / plaza patch. Only soft contact, ambient-occlusion and cast
+               shadows in ink, plus a few tufts and pebbles at the foot. All shadows of the older
+               helpers are drawn in ink too (see Canvas.grounded).
+    base(c)    the older round diorama base (grass disc, earth side, owner-colour rim band);
+               kept in the library, but no building uses it any more.
 """
 import math
 import os
@@ -28,9 +37,11 @@ from contextlib import contextmanager
 # ---------------------------------------------------------------------------
 ZS = 1.225                     # vertical scale so cubes look like cubes in 2:1 dimetric
 BUILDING_CANVAS = 256          # viewBox 0 0 256 256
-BASE_CX, BASE_CY = 128, 176    # centre of the base's top ellipse (on the tile centre)
-BASE_W = 208                   # width of the base's top ellipse (x 24 -> 232)
-BASE_R = 68.0                  # base radius in world units (all geometry is in world units)
+BASE_CX, BASE_CY = 128, 176    # ground point under the building's centre (on the tile centre);
+                               # in base mode the centre of the base's top ellipse
+BASE_W = 208                   # scale reference: 208 canvas units = 0.92 x the hex width
+                               # (the width of the old base's top ellipse, x 24 -> 232)
+BASE_R = 68.0                  # old base radius in world units (all geometry is in world units)
 S = (BASE_W / 2) / (BASE_R * math.sqrt(2))   # world unit -> canvas px (about 1.08)
 BASE_H = 21.0                  # side height of the base (world units)
 BAND_H = 13.5                  # owner-colour rim band at the bottom of the side (world units)
@@ -62,6 +73,10 @@ BRONZE = {"hi": "#f6d39a", "lit": "#d9a35a", "base": "#b0793a", "shade": "#7a522
           "dark": "#4e3216", "patina": "#3e7d6b"}
 WOOD = {"lit": "#a8744a", "base": "#8a5a34", "dark": "#5e3b22", "deep": "#3e2514"}
 GRASS_SHADOW = "#2c4a1c"
+INK = "#1d2b36"                # palette "Ink": shadows on the map in grounded mode
+# grass-tinted shadow colours of the base-mode helpers; a grounded canvas paints them in INK,
+# because there the shadows fall on whatever ground the game draws (earth, paving, sand, grass)
+GREEN_SHADOWS = (GRASS_SHADOW, "#1f2e15", "#24381a", "#203018")
 
 
 # ---------------------------------------------------------------------------
@@ -134,16 +149,28 @@ def stops(st):
 class Canvas:
     """One asset. Draw with `add()` (art) and `accent()` (owner colour) in painter's order.
 
-    All coordinates handed to the helpers are WORLD units around the base centre (a=b=z=0);
-    the canvas scales them by `S` around the fixed anchor (128, 176).
+    All coordinates handed to the helpers are WORLD units around the ground point under the
+    building's centre (a=b=z=0); the canvas scales them by `S` around the fixed anchor (128, 176).
+
+    `grounded` is set by `ground()`: the building has no base, and every grass-tinted shadow
+    colour (GREEN_SHADOWS) in the art is written in INK instead.
+
+    Direction variants (e.g. the fishery's fishery.e0 ... e5) use the same user units and anchor
+    but their own tight viewBox: set `viewbox = (x, y, w, h)` (user units, may start negative)
+    and `anchor_marker = True` (writes data-anchor="128 176" on the root <svg>); `stem` is the
+    file name without ".svg" (default: the asset id).
     """
 
-    def __init__(self, asset_id, pid=None):
+    def __init__(self, asset_id, pid=None, stem=None):
         self.asset_id = asset_id
+        self.stem = stem or asset_id
         self.pid = (pid or asset_id) + "-"
         self.ox, self.oy = BASE_CX, BASE_CY
         self.size = BUILDING_CANVAS
         self.scale = S
+        self.grounded = False
+        self.viewbox = None           # None: "0 0 size size"
+        self.anchor_marker = False
         self._defs = {}
         self._items = []          # ("art" | "accent", markup)
 
@@ -177,6 +204,12 @@ class Canvas:
     def m_aface(self, a):
         """Vertical plane a=const, facing +a (the shaded 'right' face). Local (x=-b, y=z), y up."""
         return f"matrix(1 -0.5 0 {-ZS} {f(self.ox + a)} {f(self.oy + a / 2)})"
+
+    def m_vplane(self, a, b, da, db):
+        """Vertical plane through the ground point (a, b) that contains the horizontal unit
+        direction (da, db) - for rotated parts (a sail on a boat lying at any angle).
+        Local (x along (da, db), y = z up). m_bface(b) is the case (da, db) = (1, 0) at (0, b)."""
+        return f"matrix({f(da - db)} {f((da + db) / 2)} 0 {-ZS} {f(self.ox + a - b)} {f(self.oy + (a + b) / 2)})"
 
     def m_slope_b(self, zr, tanp, sign=1):
         """Roof plane through a ridge along a (at b=0, height zr) falling toward sign*b.
@@ -223,9 +256,12 @@ class Canvas:
         return self.define(name, f'<radialGradient id="{self.id(name)}"{units} cx="{f(cx)}" cy="{f(cy)}" r="{f(r)}"{fxy}>{stops(st)}</radialGradient>')
 
     def blur(self, sd):
-        """url() of a Gaussian blur filter (stdDeviation in world units). Art layer only."""
+        """url() of a Gaussian blur filter (stdDeviation in world units). Art layer only.
+        Grounded canvases use a wider filter region, so the soft shadows of small props (pole
+        feet, pebbles) are not cut into hard-edged boxes on the bare ground."""
         name = "blur" + f(sd).replace(".", "_")
-        return self.define(name, f'<filter id="{self.id(name)}" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="{f(sd)}"/></filter>')
+        reg = 'x="-150%" y="-150%" width="400%" height="400%"' if self.grounded else 'x="-40%" y="-40%" width="180%" height="180%"'
+        return self.define(name, f'<filter id="{self.id(name)}" {reg}><feGaussianBlur stdDeviation="{f(sd)}"/></filter>')
 
     # --- output -----------------------------------------------------------
     def _wrap(self, body):
@@ -245,8 +281,10 @@ class Canvas:
 
     def _head(self, layer):
         what = "art" if layer == "art" else "owner-colour accent (tint with the player colour, draw BELOW the art)"
-        return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {self.size} {self.size}">'
-                f"<!-- Poleis {self.asset_id}: {what}. Original work for Poleis, CC0 1.0. "
+        vb = " ".join(f(v) for v in self.viewbox) if self.viewbox else f"0 0 {self.size} {self.size}"
+        anchor = f' data-anchor="{BASE_CX} {BASE_CY}"' if self.anchor_marker else ""
+        return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{vb}"{anchor}>'
+                f"<!-- Poleis {self.stem}: {what}. Original work for Poleis, CC0 1.0. "
                 f"Generated by tools/art - edit the script, not this file. -->")
 
     def art_svg(self):
@@ -273,7 +311,11 @@ class Canvas:
                 run.append(markup)
         if run:
             flush_accent("".join(run))
-        return self._head("art") + self._with_defs(self._wrap(g)) + "</svg>\n"
+        body = self._with_defs(self._wrap(g))
+        if self.grounded:
+            for col in GREEN_SHADOWS:
+                body = body.replace(f'"{col}"', f'"{INK}"')
+        return self._head("art") + body + "</svg>\n"
 
     def accent_svg(self):
         body = "".join(m for kind, m in self._items if kind == "accent")
@@ -285,7 +327,7 @@ class Canvas:
     def write(self, out_dir):
         os.makedirs(out_dir, exist_ok=True)
         paths = []
-        for name, text in ((f"{self.asset_id}.svg", self.art_svg()), (f"{self.asset_id}.accent.svg", self.accent_svg())):
+        for name, text in ((f"{self.stem}.svg", self.art_svg()), (f"{self.stem}.accent.svg", self.accent_svg())):
             path = os.path.join(out_dir, name)
             with open(path, "w", encoding="utf-8") as fh:
                 fh.write(text)
@@ -299,11 +341,19 @@ class Canvas:
 SHX, SHY = 0.46, 0.04   # cast-shadow offset on the ground per unit of height (world units)
 
 
+GROUND_SHADOW_K = 0.72   # grounded mode: ink is darker than the old green, so cast shadows are lighter
+
+
 def cast_shadow(c, footprint, tops, opacity=0.48, sd=2.0):
-    """Soft cast shadow of a volume on the grass, clipped to the base top.
-    footprint: ground (a, b) points; tops: (a, b, z) points of the roof/top outline."""
+    """Soft cast shadow of a volume on the ground, falling to the lower right (+a).
+    footprint: ground (a, b) points; tops: (a, b, z) points of the roof/top outline.
+    Base mode: green, clipped to the base top. Grounded mode: semi-transparent INK, not clipped
+    (it may reach a little onto the neighbouring tile, like a real shadow)."""
     proj = [(a + SHX * z, b + SHY * z) for a, b, z in tops]
     sp = [c.P(a, b, 0) for a, b in hull(list(footprint) + proj)]
+    if c.grounded:
+        c.add(f'<path d="{poly(sp)}" fill="{INK}" opacity="{f(opacity * GROUND_SHADOW_K)}" filter="{c.blur(sd)}"/>')
+        return
     c.add(f'<g clip-path="{c.url("top")}"><path d="{poly(sp)}" fill="{GRASS_SHADOW}" opacity="{f(opacity)}" filter="{c.blur(sd)}"/></g>')
 
 
@@ -330,7 +380,8 @@ def grass_tuft(x, y, hgt, col, sw=0.85, op=None):
 
 
 def base_tufts(c, edges, n=14, seed=3, hmax=4.4):
-    """Grass tufts standing in front of base edges, so a model 'grows' out of the ground.
+    """Grass tufts standing in front of base edges, so a model 'grows' out of the ground
+    (base mode; grounded buildings use foot_tufts, which also scatters a few pebbles).
     edges: list of ((a0, b0), (a1, b1)) ground segments (usually the +b and +a footprint edges)."""
     rnd = random.Random(seed)
     out = []
@@ -343,10 +394,12 @@ def base_tufts(c, edges, n=14, seed=3, hmax=4.4):
 
 
 # ---------------------------------------------------------------------------
-# The round diorama base (grass top, earth side, owner-colour rim band)
+# The round diorama base (grass top, earth side, owner-colour rim band) - base mode; kept in the
+# library, but every building is grounded now (see ground() below)
 # ---------------------------------------------------------------------------
 def base(c, seed=7, avoid=None, tufts=90, flowers=16, top="grass"):
-    """Draw the base. Must be the first thing drawn. Defines the clip id 'top' (grass top).
+    """Draw the old round base. Must be the first thing drawn. Defines the clip id 'top' (grass
+    top). Grounded buildings call ground() instead (docs/ART.md "Grounded buildings").
 
     avoid(a, b) -> True for ground points covered by the building (no tufts there).
     top: "grass" (default) or "paved" (agora flagstones; draw extra paving yourself on top).
@@ -429,6 +482,88 @@ def base(c, seed=7, avoid=None, tufts=90, flowers=16, top="grass"):
         g.append(f'<circle cx="{f(x)}" cy="{f(y)}" r="1.15" fill="{rnd.choice(["#fffaf0", "#fffaf0", "#f6d65a", "#f3b8c8"])}"/>')
     g.append("</g>")
     c.add("".join(g))
+
+
+# ---------------------------------------------------------------------------
+# Grounded mode: no base, the building stands directly on the map
+# ---------------------------------------------------------------------------
+GROUND_R = 58.0         # keep a grounded building and its props inside this radius (world units):
+                        # a bit tighter than the old base, so everything sits on the game's ground patch
+
+# tuft colours at the foot of a grounded building, per kind of ground
+TUFTS = {
+    "meadow": ["#5f8f30", "#6c9a38", "#86b447", "#a9d066"],
+    "dry": ["#7d8a3a", "#8f9a42", "#a8a84e", "#c2b060"],        # yards, farmsteads, threshing floors
+    "beach": ["#7f9148", "#9aa957", "#b9b56a", "#cfc47e"],      # dune grass on sand
+    "weeds": ["#6f8a3c", "#7f9a44", "#98b052"],                 # a few weeds on paving
+}
+PEBBLES = ["#bdb3a2", "#a99f8f", "#cfc6b6", "#948b7d"]
+
+
+def ground(c):
+    """Grounded mode (docs/ART.md "Grounded buildings"). Must be the first call, instead of base().
+
+    Draws NOTHING: the ground stays transparent, the game paints the terrain and the building's
+    ground patch (yard, plaza, clearing) under the art. Afterwards every shadow helper draws
+    in INK (cast_shadow unclipped, the grass-green shadows of older helpers repainted at output),
+    so contact and cast shadows read on any ground. The canvas contract is unchanged: the ground
+    point under the building's centre is at (128, 176), same world scale S. Keep the building and
+    its props inside GROUND_R. Also defines the clip 'top' as a generous rectangle, so older
+    helpers that clip to the base top (ground_patch, ...) still work - but do not paint ground.
+    """
+    c.grounded = True
+    c.define("top", f'<clipPath id="{c.id("top")}"><rect x="-200" y="-200" width="656" height="656"/></clipPath>')
+
+
+def ground_ao(c, footprint, grow=7.0, opacity=0.2, sd=3.0, shift=2.5):
+    """Wide, very soft ambient occlusion on the ground around a footprint (grounded mode): the
+    darkening that makes a building sit IN the ground instead of on top of it. Draw it first,
+    under the cast shadow. footprint: ground (a, b) points; grow: how far it reaches out (world
+    units); shift: drift toward +a / -b (away from the light)."""
+    hp = hull(footprint)
+    ca = sum(p[0] for p in hp) / len(hp)
+    cb = sum(p[1] for p in hp) / len(hp)
+    out = []
+    for a, b in hp:
+        da, db = a - ca, b - cb
+        d = math.hypot(da, db) or 1.0
+        out.append(c.P(a + da / d * grow + shift, b + db / d * grow - shift * 0.3, 0))
+    c.add(f'<path d="{poly(out)}" fill="{INK}" opacity="{f(opacity)}" filter="{c.blur(sd)}"/>')
+
+
+def pebbles(c, items):
+    """Small pebbles lying on the ground: list of (a, b, r, seed). Each has its own contact shadow."""
+    out = []
+    for a, b, r_, seed in items:
+        x, y = c.P(a, b, 0)
+        rnd = random.Random(seed)
+        col = rnd.choice(PEBBLES)
+        out.append(f'<ellipse cx="{f(x + r_ * 0.6)}" cy="{f(y + 0.25)}" rx="{f(r_ * 1.35)}" ry="{f(r_ * 0.5)}" fill="{INK}" opacity="0.3"/>'
+                   f'<ellipse cx="{f(x)}" cy="{f(y - r_ * 0.3)}" rx="{f(r_ * 1.1)}" ry="{f(r_ * 0.62)}" fill="{col}"/>'
+                   f'<ellipse cx="{f(x - r_ * 0.35)}" cy="{f(y - r_ * 0.55)}" rx="{f(r_ * 0.5)}" ry="{f(r_ * 0.25)}" fill="#fffaf0" opacity="0.45"/>')
+    c.add("".join(out))
+
+
+def foot_tufts(c, edges, n=10, seed=3, hmax=4.2, kind="meadow", stones=3):
+    """Sparse grass tufts (and a few pebbles) right at the foot of a grounded building, so it grows
+    out of the ground. edges: ((a0, b0), (a1, b1)) ground segments, usually the visible +b and +a
+    footprint edges; kind: a TUFTS key ("meadow", "dry", "beach", "weeds"). Keep n small (~6-14):
+    this is the foot of a wall, not a lawn - the game draws the ground."""
+    rnd = random.Random(seed)
+    cols = TUFTS[kind]
+    out = []
+    for _ in range(n):
+        (a0, b0), (a1, b1) = rnd.choice(edges)
+        t = rnd.random()
+        x, y = c.P(a0 + (a1 - a0) * t + 0.8, b0 + (b1 - b0) * t + 0.8, 0)
+        out.append(grass_tuft(x, y, rnd.uniform(2.2, hmax), rnd.choice(cols)))
+    c.add("".join(out))
+    items = []
+    for i in range(stones):
+        (a0, b0), (a1, b1) = rnd.choice(edges)
+        t = rnd.random()
+        items.append((a0 + (a1 - a0) * t + rnd.uniform(1.5, 3.5), b0 + (b1 - b0) * t + rnd.uniform(1.5, 3.5), rnd.uniform(0.8, 1.5), seed * 7 + i))
+    pebbles(c, items)
 
 
 # ---------------------------------------------------------------------------
@@ -539,22 +674,38 @@ def eave_shadow_b(c, b, a0, a1, z_eave, depth=10):
                f'<rect x="{f(a0)}" y="{f(z_eave - 5)}" width="{f(a1 - a0)}" height="6" fill="{ao}"/>'))
 
 
-def door_b(c, b, x0, x1, z0, z1, reveal=2.4, frame="#e7dfcd"):
-    """Recessed plank door with a stone frame and lintel on a left (+b) wall."""
+def door_b(c, b, x0, x1, z0, z1, reveal=2.4, frame="#e7dfcd", accent=False):
+    """Recessed plank door with a stone frame and lintel on a left (+b) wall.
+    accent=True: the door leaf is painted in the owner colour (ACCENT); planks, battens, nails,
+    the ring and the reveal shadow are art on top of it."""
     out = [f'<rect x="{f(x0 - 2)}" y="{f(z0)}" width="{f(x1 - x0 + 4)}" height="{f(z1 - z0 + 3.4)}" fill="{frame}"/>',
            f'<rect x="{f(x0 - 3)}" y="{f(z1 + 1)}" width="{f(x1 - x0 + 6)}" height="2.6" fill="#efe9db"/>',
            f'<rect x="{f(x0 - 3)}" y="{f(z1 + 1)}" width="{f(x1 - x0 + 6)}" height="0.6" fill="#b9ae98"/>']
-    g = c.lin("door", x0, 0, x1, 0, [(0, "#9b673d"), (1, "#7e5030")])
-    out.append(f'<rect x="{f(x0)}" y="{f(z0)}" width="{f(x1 - x0)}" height="{f(z1 - z0)}" fill="{g}"/>')
     pw = (x1 - x0) / 3
-    for i in range(1, 3):
-        out.append(f'<rect x="{f(x0 + i * pw - 0.25)}" y="{f(z0)}" width="0.5" height="{f(z1 - z0)}" fill="#4f301b"/>'
-                   f'<rect x="{f(x0 + i * pw + 0.25)}" y="{f(z0)}" width="0.45" height="{f(z1 - z0)}" fill="#b98756" opacity="0.6"/>')
-    for by in (z0 + 5, z1 - 7):
-        out.append(f'<rect x="{f(x0)}" y="{f(by)}" width="{f(x1 - x0)}" height="1.7" fill="#6a4226"/>'
-                   f'<rect x="{f(x0)}" y="{f(by + 1.7)}" width="{f(x1 - x0)}" height="0.45" fill="#c08e5c" opacity="0.6"/>')
-        for i in range(3):
-            out.append(f'<circle cx="{f(x0 + pw * (i + 0.5))}" cy="{f(by + 0.85)}" r="0.45" fill="#2d2a26"/>')
+    if accent:
+        c.add(c.on(c.m_bface(b), "".join(out)))
+        out = []
+        dg = c.lin("doorAcc", 0, 0, 1, 0, [(0, ACCENT["lit"]), (0.55, ACCENT["light"]), (1, ACCENT["mid"])], bbox=True)
+        c.accent(c.on(c.m_bface(b), f'<rect x="{f(x0)}" y="{f(z0)}" width="{f(x1 - x0)}" height="{f(z1 - z0)}" fill="{dg}"/>'))
+        for i in range(1, 3):
+            out.append(f'<rect x="{f(x0 + i * pw - 0.25)}" y="{f(z0)}" width="0.5" height="{f(z1 - z0)}" fill="#1d2b36" opacity="0.45"/>'
+                       f'<rect x="{f(x0 + i * pw + 0.25)}" y="{f(z0)}" width="0.45" height="{f(z1 - z0)}" fill="#fff" opacity="0.3"/>')
+        for by in (z0 + 5, z1 - 7):
+            out.append(f'<rect x="{f(x0)}" y="{f(by)}" width="{f(x1 - x0)}" height="1.7" fill="#1d2b36" opacity="0.28"/>'
+                       f'<rect x="{f(x0)}" y="{f(by + 1.7)}" width="{f(x1 - x0)}" height="0.45" fill="#fff" opacity="0.35"/>')
+            for i in range(3):
+                out.append(f'<circle cx="{f(x0 + pw * (i + 0.5))}" cy="{f(by + 0.85)}" r="0.45" fill="#2d2a26"/>')
+    else:
+        g = c.lin("door", x0, 0, x1, 0, [(0, "#9b673d"), (1, "#7e5030")])
+        out.append(f'<rect x="{f(x0)}" y="{f(z0)}" width="{f(x1 - x0)}" height="{f(z1 - z0)}" fill="{g}"/>')
+        for i in range(1, 3):
+            out.append(f'<rect x="{f(x0 + i * pw - 0.25)}" y="{f(z0)}" width="0.5" height="{f(z1 - z0)}" fill="#4f301b"/>'
+                       f'<rect x="{f(x0 + i * pw + 0.25)}" y="{f(z0)}" width="0.45" height="{f(z1 - z0)}" fill="#b98756" opacity="0.6"/>')
+        for by in (z0 + 5, z1 - 7):
+            out.append(f'<rect x="{f(x0)}" y="{f(by)}" width="{f(x1 - x0)}" height="1.7" fill="#6a4226"/>'
+                       f'<rect x="{f(x0)}" y="{f(by + 1.7)}" width="{f(x1 - x0)}" height="0.45" fill="#c08e5c" opacity="0.6"/>')
+            for i in range(3):
+                out.append(f'<circle cx="{f(x0 + pw * (i + 0.5))}" cy="{f(by + 0.85)}" r="0.45" fill="#2d2a26"/>')
     out.append(f'<circle cx="{f(x1 - 3)}" cy="{f(z0 + 12)}" r="1.25" fill="none" stroke="{BRONZE["lit"]}" stroke-width="0.55"/>')
     d = reveal
     out.append(f'<path d="{poly([(x0, z0), (x0, z1), (x0 + d, z1), (x0 + d, z0 + d / ZS)])}" fill="#b4a993"/>')
@@ -864,9 +1015,11 @@ def column_shadow(c, ca, cb, z, rb=3.0, length=10):
 
 
 def entablature(c, ea, eb, z0, ka=None, kb=None, front_n=7, side_n=11, triglyph="#2d4f78", red="#a8432f",
-                arch_h=5.2, frieze_h=5.4, cornice_h=2.6):
+                arch_h=5.2, frieze_h=5.4, cornice_h=2.6, metope_accent=False):
     """Architrave + triglyph frieze + projecting cornice on the +b (front) and +a (side) faces.
     (ea, eb): half extents of the architrave faces; (ka, kb): of the cornice (default +1.5).
+    metope_accent=True: the painted metopes between the triglyphs are in the owner colour
+    (ACCENT) - a coloured band right under the cornice that reads at map size.
     Returns the cornice top z."""
     ka = ka if ka is not None else ea + 1.5
     kb = kb if kb is not None else eb + 1.5
@@ -882,6 +1035,11 @@ def entablature(c, ea, eb, z0, ka=None, kb=None, front_n=7, side_n=11, triglyph=
              f'<rect x="{f(x0)}" y="{f(z0 + arch_h / 2)}" width="{f(x1 - x0)}" height="0.4" fill="#8c877b" opacity="0.45"/>',
              f'<rect x="{f(x0)}" y="{f(zar - 0.9)}" width="{f(x1 - x0)}" height="0.9" fill="#fff" opacity="0.55"/>',
              f'<rect x="{f(x0)}" y="{f(zar - 1.3)}" width="{f(x1 - x0)}" height="0.4" fill="#6f6a60" opacity="0.4"/>']
+        if metope_accent:
+            c.add(c.on(c.m_bface(eb) if front else c.m_aface(ea), "".join(g)))
+            c.accent(c.on(c.m_bface(eb) if front else c.m_aface(ea),
+                          f'<rect x="{f(x0)}" y="{f(zar)}" width="{f(x1 - x0)}" height="{f(frieze_h)}" fill="{ACCENT["light"] if front else ACCENT["shade"]}"/>'))
+            g = []
         tw = 2.7
         for i in range(n):
             xc = x0 + tw / 2 + i * (x1 - x0 - tw) / (n - 1)
@@ -1061,12 +1219,13 @@ def amphora(c, a, b, k=1.0, shaded=True):
           '<rect x="-3.8" y="-10.5" width="7.6" height="0.6" fill="#2d140c" opacity="0.4"/></g>')
 
 
-def pot(c, a, b, plant="basil"):
-    """Terracotta pot with a basil bush."""
+def pot(c, a, b, plant="basil", k=1.0):
+    """Terracotta pot with a basil bush (k = size; 1 is about 15 units tall with the plant,
+    about 0.6 matches the human scale of the grounded buildings, see README "Scale")."""
     x, y = c.P(a, b, 0)
-    blob_shadow(c, a + 3, b + 0.5, 3.2, 0.3)
+    blob_shadow(c, a + 3 * k, b + 0.5 * k, 3.2 * k, 0.3)
     g = c.lin("pot", -5, 0, 5, 0, [(0, "#d77a52"), (0.45, "#b5523b"), (1, "#7d3626")])
-    out = [f'<g transform="translate({f(x)} {f(y)})">',
+    out = [f'<g transform="translate({f(x)} {f(y)})' + (f' scale({f(k)})' if k != 1.0 else "") + '">',
            f'<path d="M-4.6,-8 L4.6,-8 L3.4,0 Q0,1.6 -3.4,0Z" fill="{g}"/>',
            '<ellipse cx="0" cy="-8" rx="5" ry="2" fill="#c86a45"/><ellipse cx="0" cy="-7.8" rx="3.9" ry="1.4" fill="#4a2e1a"/>',
            '<rect x="-4.4" y="-6.2" width="8.8" height="0.6" fill="#7d3626" opacity="0.6"/>']
@@ -1140,18 +1299,23 @@ def banner_b(c, a, b, z0, height=34, width=7, drop=14, seed=1):
                f'<rect x="{f(x1 - 1.4)}" y="{f(zt - drop)}" width="1.4" height="{f(drop)}" fill="#1d2b36" opacity="0.18"/>'))
 
 
-def awning_b(c, a0, a1, b, z, depth=6, drop=3.5, stripes=6):
+def awning_b(c, a0, a1, b, z, depth=6, drop=3.5, stripes=6, two_tone=False):
     """Striped market awning sloping out from a wall plane b toward +b. Cloth is ACCENT;
-    every second stripe is cream (art), so it reads as a striped canvas in any player colour."""
+    every second stripe is cream (art), so it reads as a striped canvas in any player colour.
+    two_tone=True: every second stripe is a darker shade of the owner colour instead of cream
+    (twice the coloured area - for buildings whose owner colour must read at 40 px)."""
     tanp = drop / depth
     # sloped canvas through (a, b, z) falling toward +b: local (x=a, y=b')
     m = f"matrix(1 0.5 -1 {f(0.5 + ZS * tanp)} {f(c.ox)} {f(c.oy - ZS * (z + b * tanp))})"
     w = (a1 - a0) / stripes
-    acc = [f'<rect x="{f(a0)}" y="{f(b)}" width="{f(a1 - a0)}" height="{f(depth)}" fill="{ACCENT["light"]}"/>']
+    acc = [f'<rect x="{f(a0)}" y="{f(b)}" width="{f(a1 - a0)}" height="{f(depth)}" fill="{ACCENT["lit" if two_tone else "light"]}"/>']
     art = []
     for i in range(stripes):
         if i % 2:
-            art.append(f'<rect x="{f(a0 + i * w)}" y="{f(b)}" width="{f(w)}" height="{f(depth)}" fill="#f4ead2"/>')
+            if two_tone:
+                acc.append(f'<rect x="{f(a0 + i * w)}" y="{f(b)}" width="{f(w)}" height="{f(depth)}" fill="{ACCENT["shade"]}"/>')
+            else:
+                art.append(f'<rect x="{f(a0 + i * w)}" y="{f(b)}" width="{f(w)}" height="{f(depth)}" fill="#f4ead2"/>')
     art.append(f'<rect x="{f(a0)}" y="{f(b)}" width="{f(a1 - a0)}" height="{f(depth)}" fill="url(#{c.id("awsh")})"/>')
     c.lin("awsh", 0, b, 0, b + depth, [(0, "#1d2b36", 0.18), (0.4, "#1d2b36", 0), (1, "#fff", 0.12)])
     c.accent(c.on(m, "".join(acc)))
@@ -1161,7 +1325,12 @@ def awning_b(c, a0, a1, b, z, depth=6, drop=3.5, stripes=6):
     sc = []
     for i in range(stripes):
         x = a0 + i * w
-        sc.append(f'<path d="M{f(x)},{f(zf)} L{f(x + w)},{f(zf)} L{f(x + w)},{f(zf - 1.2)} Q{f(x + w / 2)},{f(zf - 2.8)} {f(x)},{f(zf - 1.2)}Z" fill="{ACCENT["mid"] if i % 2 == 0 else "#000"}"/>')
+        odd = ACCENT["dark"] if two_tone else "#000"
+        sc.append(f'<path d="M{f(x)},{f(zf)} L{f(x + w)},{f(zf)} L{f(x + w)},{f(zf - 1.2)} Q{f(x + w / 2)},{f(zf - 2.8)} {f(x)},{f(zf - 1.2)}Z" fill="{ACCENT["mid"] if i % 2 == 0 else odd}"/>')
+    if two_tone:
+        c.accent(c.on(c.m_bface(b + depth), "".join(sc)))
+        c.add(c.on(c.m_bface(b + depth), f'<path d="M{f(a0)},{f(zf - 0.2)} L{f(a1)},{f(zf - 0.2)}" stroke="#f4ead2" stroke-width="0.6" opacity="0.85"/>'))
+        return
     c.accent(c.on(c.m_bface(b + depth), "".join(s for i, s in enumerate(sc) if i % 2 == 0)))
     c.add(c.on(c.m_bface(b + depth), "".join(s.replace('fill="#000"', 'fill="#e9dcc0"') for i, s in enumerate(sc) if i % 2 == 1)))
 

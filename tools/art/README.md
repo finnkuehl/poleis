@@ -2,16 +2,17 @@
 
 All building and unit art of Poleis is **generated** by small Python 3 scripts (standard
 library only) that print plain SVG. Style: isometric diorama miniatures, see `docs/ART.md`
-("Chosen direction: V1"). Never edit the SVGs in `public/assets/buildings/` or
-`public/assets/units/` by hand – edit the script and rebuild.
+("Chosen direction: V1" and "Grounded buildings"). Never edit the SVGs in
+`public/assets/buildings/` or `public/assets/units/` by hand – edit the script and rebuild.
 
 ```
 tools/art/
-  iso.py            the shared library (projection, base, light, materials, props, statues)
+  iso.py            the shared library (projection, ground modes, light, materials, props, statues)
   units_lib.py      unit library on top of iso.py (token, people, horse, cart, ships)
   buildings/<id>.py one script per building, named exactly like the id in src/data/
   units/<id>.py     one script per unit (see "Units" below)
   build_all.py      builds every script into public/assets/buildings/ and public/assets/units/
+                    (a script's build() returns one Canvas or a list, e.g. the fishery variants)
   preview.py        review sheet: art + accent tinted in the four player colours, map sizes
 ```
 
@@ -29,6 +30,132 @@ qlmanage -t -s 1600 -o /tmp /tmp/preview.svg   # macOS: -> /tmp/preview.svg.png,
 
 `build_all.py` prints each file with its size and warns above 150 KB. The scripts set
 `sys.dont_write_bytecode`, so no `__pycache__` folders end up in the repo.
+
+## Grounded buildings (and the old base)
+
+Buildings **stand directly on the map** (docs/ART.md, "Grounded buildings"): the first call of a
+building script is `iso.ground(c)`. It draws nothing – the ground stays **transparent**, and the
+game paints the terrain and the building's ground patch (yard, paved plaza, forest clearing,
+beach, fields) under it. The art contains only the building and its props, with their shadows:
+
+- `iso.ground_ao(c, footprint)` first: a wide, very soft darkening around the whole group, so it
+  sits *in* the ground instead of on top of it.
+- `iso.cast_shadow(...)` and `iso.contact_ao(...)` for every volume, `iso.blob_shadow(...)` (or the
+  props' own contact shadows) for every prop. In grounded mode all shadows are semi-transparent
+  **ink** (`iso.INK` = `#1d2b36`), unclipped, so they read on earth, paving, sand and grass alike;
+  the grass-green shadow colours of older helpers are repainted in ink automatically.
+- `iso.foot_tufts(c, edges, kind=...)` and `iso.pebbles(c, items)`: a few tufts and pebbles right
+  at the foot of the walls (`kind` = `"meadow"`, `"dry"`, `"beach"`, `"weeds"` for paving). Sparse –
+  the foot of a wall, not a lawn.
+- No grass disc, no earth side, no rim band, no painted ground (no paving, no water, no fields):
+  the plaza around the agora and the temple, yards and aprons are the game's job. Keep the
+  building and its props inside `iso.GROUND_R` (58 world units), a bit tighter than the old base,
+  so everything sits on the game's ground patch.
+
+**All 20 buildings are grounded:** `bakery`, `barracks`, `borderTower`, `cityCenter`, `farm`,
+`fishery` (as direction variants, see below), `house`, `marketplace`, `mine`, `oilPress`,
+`oliveGrove`, `quarry`, `sawmill`, `smelter`, `storehouse`, `temple`, `vineyard`, `winery`,
+`wonder`, `woodcutter`. `iso.base()` (the old round diorama base with the owner-colour rim band)
+is still in the library, but **no building uses it any more**. Units keep their round token
+(`units_lib.token`).
+
+What the art contains and what the game draws around it:
+
+| Building | In the art | Drawn by the game |
+|---|---|---|
+| quarry, mine | the works themselves: cut terraces / rock outcrop, tunnel, crane, carts | only the apron (worked ground) under them |
+| oliveGrove | the olive trees and the shed | the dry-grass parcels between them |
+| vineyard | only the press hut, the pergola and the harvest | the vine rows across the tile |
+| farm | farmhouse, haystacks, cart, well – **no fields** | the wheat fields across the tile |
+| fishery | hut, short jetty, moored boat (one file per water direction) | beach, yard and the water – see "Direction variants" |
+| cityCenter, temple | the building incl. its steps | the paved plaza |
+| all others | the building and its props | a yard / clearing patch |
+
+## Scale (one human scale for all buildings)
+
+Doors, windows, people and props have the **same size on every building** (docs/ART.md,
+"One human scale for all buildings"); buildings differ in footprint, by importance. World units:
+
+| Size | Main body (longest side) | Buildings |
+|---|---|---|
+| Human scale | door **16 high × 9 wide**, window ~8 × 7, person ~14, one storey ~20 | all |
+| Small | 32–44 | farmhouse, fisher's hut, woodcutter's cabin, vineyard/olive-grove shed, border tower (narrow but tall) |
+| Modest | 44–54 | house (plus a courtyard wall, shed or pergola so the tile still feels lived in) |
+| Medium | 50–64 | sawmill, bakery, oil press, winery, smelter, quarry/mine works |
+| Large | 64–80 | storehouse, barracks, marketplace |
+| Major | 70–90 | temple, city center (the city's heart, never smaller than the temple) |
+| Monumental | up to the canvas | wonder |
+
+Props at the same scale: amphora `k=0.6` (≈ 10 high; 0.5 for a small one), `pot(..., k=0.6)`,
+baskets `k≈0.8–1`, sacks `k≈0.9`, crates `s≈4.5–5` (≈ 8 high), carts with wheels of radius 5–6.5,
+haystacks ≈ 16–23 high, statues on pedestals at about twice life size (`figure(h=30)`).
+
+Measured reference (the grounded buildings; world units, door = w × h):
+
+| Building | Main body | Height (eave / top) | Door | Ground radius |
+|---|---|---|---|---|
+| house | 48 × 32, plus a 62 × 23 walled courtyard in front | 30 / 43 | 9 × 16 | 52 |
+| farm (farmhouse) | 34 × 22, two haystacks, cart, well | 27 / 41 | 9 × 16 | 48 |
+| woodcutter (cabin) | 32 × 40, log stack 29 × 22 | 24 / 39 | 9 × 16 | 54 |
+| fishery (hut) | 34 × 22 on stilts (floor at 8), deck +5 | 28 / 43 | 9 × 16 | see "Direction variants" |
+| storehouse | 76 × 34 | 29 / 41 | 9 × 16 | 53 |
+| temple | 59 × 77 (bottom step) | 62 / 73 | 9 × 16 | 54 |
+| cityCenter (tholos) | Ø 77 (bottom step) | 54 / 84 (+ finial) | 9 × 16 | 55 |
+| sawmill (open shed) | 56 × 24 | 24 / 35 | open front | 55 |
+| bakery | 50 × 30, roof room 20 × 11, oven Ø 24 | 27 / 41 | 9 × 16 | 50 |
+| oilPress (press-house) | 36 × 28, lever beam 47 long | 26 / 38 | 9 × 16 | 54 |
+| winery (hall) | 36 × 52, cellar arch 14 × 15 | 26 / 38 | 9 × 16 | 54 |
+| smelter (furnace block) | 34 × 26, 50 with awning | 20 / 50 (chimney) | mouth 9 × 10 | 50 |
+| quarry (cut) | 44 × 34, terraces 9 / 18 / 27, shed 22 × 14 | 18 / 31 (crane) | 9 × 16 | 56 |
+| mine (outcrop) | about 64 wide, cut face 43 × 22 | 22 / 54 (peak) | tunnel 10 × 16 | 56 |
+| barracks (fort corner) | hall 62 × 22, tower 18 × 18 × 46, 85 along a in total | ridge 38 | 9 × 16 | 52 |
+| marketplace (stoa + stalls) | stoa 69 × 22, 7 Doric columns 22 high | ridge ~51 | 9 × 16 | 56 |
+| wonder (gilded colossus) | podium 72 wide, figure ~70 high, torch ~128 | reaches canvas top | – | 56 |
+| borderTower | plinth 42, shaft 33 → 26, 74 high, parapet 85 | flag ~117 | 9 × 16 | 40 |
+| vineyard (press hut) | 32 × 20, pergola 13 × 14 | 21 / 32 | 9 × 16 | fields (keep r ~34 clear) |
+| oliveGrove | 5 olive trees 40–48 high, shed 32 × 18 | ridge 29 | 9 × 16 | fields |
+
+**Height order:** the wonder is the only building that reaches the top of the canvas; the border
+tower (flag ~117) stops a little below it; then the city centre (84) above the temple (73); all
+other buildings stay at one or two storeys (≤ 54, the mine's rock peak).
+
+## Direction variants (the fishery; later the harbour)
+
+A building that reaches into a neighbouring tile is drawn as **one scene per hex edge**, and the
+game picks the version that points at the real water. `buildings/fishery.py` builds 7 files:
+
+| File | What |
+|---|---|
+| `fishery.svg` (+ accent) | compact icon on the normal `0 0 256 256` canvas: hut, short jetty, boat, toward the south-east |
+| `fishery.e0.svg` … `fishery.e5.svg` (+ accent) | the map versions; the jetty points along the screen angle **60° · e** (y down): 0 east, 1 south-east, 2 south-west, 3 west, 4 north-west, 5 north-east |
+
+Canvas contract of a variant (the game relies on it):
+
+- **Same user units and anchor as the normal building canvas:** the ground point under the tile
+  centre is at (128, 176), 208 units = 0.92 × hex width (hex corner radius 130.5, apothem 113.0
+  units). World → user: `(128 + 1.0815·(a − b), 176 + 0.5408·(a + b) − 1.3248·z)`.
+- **Own tight viewBox** (both layers identical), rounded out to multiples of 8, may start at
+  negative x / y. The root `<svg>` carries **`data-anchor="128 176"`**.
+- Layout (the first fishery's compact scene, standing at the real shore; distances in user units
+  from the tile centre toward the water edge, the shared edge is at 113): the hut is placed so its
+  water-side corner is at 114 – its stilts reach just past the shore (wavy, ~95–125); a short
+  jetty runs from the hut's deck to 150; the boat is moored right beside hut and jetty (hull
+  119–175, inside the water tile); nets, traps, baskets and an amphora group on the land side
+  close around the hut (all within 100). Stilts and posts beyond 110 get foam rings and
+  reflections. The game's sandy yard belongs about 72 out (under the land part). Per direction
+  `LAYOUT` in `fishery.py` sets where the jetty leaves the hut, which side the boat lies on, and
+  the props. East / west jetties turn 14° toward the viewer, so the planks show instead of a
+  fence-like edge.
+- No painted water surface: only foam rings, the boat's waterline foam and soft shadows.
+
+How it is built (reuse it for the harbour): `Canvas(asset_id, pid=..., stem="fishery.e0")`,
+then set `c.viewbox = (x, y, w, h)` and `c.anchor_marker = True` before `write()`. Everything in
+the scene is placed in world units from the screen direction (`screen_world(deg)` in
+`fishery.py`); rotated parts are drawn from projected points (`c.P`), vertical planes at any
+angle with `c.m_vplane(a, b, da, db)`. A small painter's sort (`Scene` in `fishery.py`) draws
+ground-level things first, then every object by its depth `a + b`, so the jetty correctly passes
+in front of or behind the hut. `Scene.viewbox()` fits the viewBox to the points the parts
+register. `preview.py` reads each file's viewBox, so `preview.py fishery.e1` works.
 
 ## Two layers per asset (the accent rule)
 
@@ -52,19 +179,28 @@ Every script writes **two files with the same canvas**:
   darken the tinted colour. The accent file is grown by ~0.7 px underneath, so no seam shows.
 - The art file on its own shows the holes. Always look at both layers together
   (`preview.py`).
-- What is an accent: the **base rim band** (always, done by `iso.base`) plus 2–4 per-building
-  touches: shutters, banners, drapes, awnings, a painted pediment, a statue's crest/shield/cloak,
-  sails. Keep the main material (walls, roof, marble) neutral, so every building still reads as
-  itself in all four colours (Tyrian purple, cinnabar, Aegean blue, gold).
+- What is an accent: on **grounded** buildings only **coloured details** – 2–4 per-building
+  touches that read clearly at **40 px**: shutters, a painted door, awnings, banners, drapes, a
+  painted tympanum / frieze / gable, a pennant, the cloth over a cart, a painted boat hull, a
+  statue's crest/shield/cloak, sails. Prefer a few larger areas over many tiny ones (an awning in
+  two shades of the owner colour, `awning_b(..., two_tone=True)`, reads better than thin
+  shutters). (With the old `iso.base()`, unused now, the base rim band was an accent too.) Keep
+  the main material (walls, roof, marble) neutral, so every building still
+  reads as itself in all four colours (Tyrian purple, cinnabar, Aegean blue, gold).
 
 ## Canvas and anchor (fixed – the game relies on it)
 
-- `viewBox="0 0 256 256"`. The centre of the base's top ellipse is at **(128, 176)**, the top
-  ellipse is **208 px wide** (x 24 → 232). `iso.Canvas` handles this; never move or resize the base.
-- You draw in **world units** around the base centre (`a = b = z = 0`). The canvas scales them by
-  `iso.S` ≈ 1.08 px per unit around the anchor. The base radius is `iso.BASE_R` = 68 units.
-- Keep the footprint inside a radius of about 60 units. The top of the canvas is about 130 units
-  above the base centre, so tall things (towers, statues) fit, but stay inside the canvas.
+- `viewBox="0 0 256 256"`. The **ground point under the building's centre** is at **(128, 176)**
+  (the game puts it on the tile centre), and **208 canvas units** equal 0.92 × the hex width (the
+  old base's width, x 24 → 232, kept as the scale reference). `iso.Canvas` handles this; never
+  move the anchor or change the scale. (With the old `iso.base()` that point was the centre of
+  the base's top ellipse.)
+- You draw in **world units** around that point (`a = b = z = 0`). The canvas scales them by
+  `iso.S` ≈ 1.08 px per unit around the anchor. The old base radius is `iso.BASE_R` = 68 units.
+- Grounded: keep the building and its props inside `iso.GROUND_R` = 58 units (base mode: about
+  60). The top of the canvas is about 130 units above the ground point, so tall things (towers,
+  statues) fit, but stay inside the canvas. Cast shadows may reach a little beyond (onto the
+  neighbouring tile), like real shadows.
 - Legibility: the building must read at **40 px** (the whole image 40 px wide). Check it with
   `preview.py` (map strip at 40 px hexes). One clear silhouette, different from every other
   building, plus one bold colour.
@@ -80,9 +216,9 @@ z -> ( 0, -1.225) up                tops are the brightest
 ```
 
 Light comes from the **upper left**; shadows fall to the lower right (+a). Draw back to front:
-the base first, then cast shadows and ambient occlusion on the ground, then the building from
-its back parts to its front parts, props in front last. Things further back have a smaller
-`a + b`.
+`ground()` (or the old `base()`) first, then `ground_ao`, cast shadows and contact AO on the
+ground, then the building from its back parts to its front parts, props in front last. Things
+further back have a smaller `a + b`.
 
 **Faces are drawn flat in their own coordinates** and placed with one SVG matrix:
 
@@ -109,7 +245,7 @@ with c.at(-6, -14):          # the tholos stands behind the middle of the agora
 ## A minimal building script
 
 ```python
-"""storehouse - ... Accent (owner colour): base rim band + door drape."""
+"""storehouse - ... Accent (owner colour): door drape + gable shutters."""
 import sys
 
 sys.dont_write_bytecode = True
@@ -122,7 +258,8 @@ import iso  # noqa: E402
 def build():
     c = iso.Canvas("storehouse")                     # id = file name = id in src/data/
     A, B, H = 30, 20, 30
-    iso.base(c, seed=5, avoid=lambda a, b: abs(a) < A + 3 and abs(b) < B + 3)
+    iso.ground(c)                                    # grounded: transparent ground, ink shadows
+    iso.ground_ao(c, [(sa * A, sb * B) for sa in (-1, 1) for sb in (-1, 1)])
     iso.cast_shadow(c, [(sa * A, sb * B) for sa in (-1, 1) for sb in (-1, 1)],
                     [(sa * A, sb * B, H) for sa in (-1, 1) for sb in (-1, 1)])
     iso.contact_ao(c, -A, A, -B, B)
@@ -131,6 +268,8 @@ def build():
     iso.lime_wall_a(c, A, -B, B, 4, H, gable=10)
     iso.door_b(c, B, -6, 6, 4, 24)
     iso.drape_b(c, B, -16, -9, H - 7, 12)            # owner-coloured cloth (accent)
+    iso.window_a(c, A, -5, 5, 14, 24)                # closed shutters (accent)
+    iso.foot_tufts(c, [((-A, B), (A, B)), ((A, B), (A, -B))], n=8, kind="dry")
     iso.tile_roof_a(c, A + 3, B + 4, H + 10 + 3.8, 10 / B)
     return c
 
@@ -143,8 +282,11 @@ if __name__ == "__main__":
 ## Library API (`iso.py`)
 
 **Canvas**
-- `Canvas(asset_id)` – one asset; `c.add(svg)` art, `c.accent(svg)` owner colour,
-  `c.write(dir)` writes `<id>.svg` + `<id>.accent.svg`.
+- `Canvas(asset_id, pid=None, stem=None)` – one asset; `c.add(svg)` art, `c.accent(svg)` owner
+  colour, `c.write(dir)` writes `<stem>.svg` + `<stem>.accent.svg` (stem = asset id by default).
+  Direction variants: `c.viewbox = (x, y, w, h)`, `c.anchor_marker = True` (see above).
+- `c.m_vplane(a, b, da, db)` – vertical plane through the ground point (a, b) containing the
+  horizontal unit direction (da, db); local x along it, y up (a sail on a rotated boat).
 - `c.P(a, b, z)`, `c.m_ground/m_bface/m_aface/m_slope_b/m_slope_a`, `c.on(transform, svg)`,
   `c.at(a, b, z)` – see above.
 - `c.lin(name, x1, y1, x2, y2, stops, bbox=False)`, `c.rad(name, cx, cy, r, stops, bbox=False)` –
@@ -154,14 +296,25 @@ if __name__ == "__main__":
 - `c.blur(sd)` – url of a Gaussian blur filter (art only, keep it ≤ 3). `c.define(name, svg)` for
   any other `<defs>` entry. Only defs that are used end up in a file.
 
-**Base, light, ground**
-- `base(c, seed, avoid=None, tufts=90, flowers=16, top="grass")` – the round base with the owner
-  band. **Always first.** Also defines the clip `c.url("top")` (grass top).
-- `cast_shadow(c, footprint, tops, opacity=0.48, sd=2)` – projected soft shadow on the base top.
+**Ground modes, light, ground**
+- `ground(c)` – **grounded mode, always first** in every building script: draws nothing (transparent
+  ground), sets `c.grounded`, so all shadows are ink and blur filters get a wider region (small
+  props' soft shadows are not cut into boxes). Defines `c.url("top")` as a generous rectangle so
+  helpers that clip to it still work. `GROUND_R` = 58: keep everything inside it.
+- `ground_ao(c, footprint, grow=7, opacity=0.2, sd=3)` – wide, very soft AO around a group of
+  ground points (draw it first). `INK` = `#1d2b36`, the shadow colour on the map.
+- `foot_tufts(c, edges, n=10, seed, hmax, kind="meadow"|"dry"|"beach"|"weeds", stones=3)` – a few
+  tufts and pebbles at the foot of walls; `pebbles(c, [(a, b, r, seed)])` – loose pebbles with their
+  own contact shadow.
+- `base(c, seed, avoid=None, tufts=90, flowers=16, top="grass")` – the **old** round base with the
+  owner band; kept in the library, **no building uses it any more**. Defines the clip `c.url("top")`.
+- `cast_shadow(c, footprint, tops, opacity=0.48, sd=2)` – projected soft shadow (base mode: green,
+  clipped to the base top; grounded: ink at 0.72 × the opacity, unclipped).
 - `contact_ao(c, a0, a1, b0, b1, z=0, width=4)` – dark soft band where a footprint meets the ground.
 - `blob_shadow(c, a, b, r)`, `base_tufts(c, edges, n, seed, hmax)` – grass growing at the foot
-  of a model.
-- `flagstones(c, [(a, b, w, d, rot)])`, `paving(c, r, seed, avoid)`, `rocks(c, [(a, b, r, seed)])`.
+  of a model (base mode; grounded buildings use `foot_tufts`).
+- `flagstones(c, [(a, b, w, d, rot)])`, `paving(c, r, seed, avoid)`, `rocks(c, [(a, b, r, seed)])` –
+  base mode ground details (grounded buildings leave the ground to the game).
 
 **Solids and walls**
 - `box(c, a0, a1, b0, b1, z0, z1, top, left, right, edge=None)` – any coloured block.
@@ -169,8 +322,9 @@ if __name__ == "__main__":
 - `pedestal(c, a, b, ha, hb, h, top_z=0)` → top height.
 - `lime_wall_b(c, b, a0, a1, z0, z1)`, `lime_wall_a(c, a, b0, b1, z0, z1, gable=0)`,
   `eave_shadow_b(c, b, a0, a1, z_eave)`.
-- `door_b(c, b, x0, x1, z0, z1)`, `window_b(c, b, x0, x1, z0, z1, shutters=True)` (open shutters
-  = accent), `window_a(c, a, x0, x1, z0, z1)` (closed shutters = accent), `flowerbox_b(...)`.
+- `door_b(c, b, x0, x1, z0, z1, accent=False)` (`accent=True`: painted door leaf in the owner
+  colour), `window_b(c, b, x0, x1, z0, z1, shutters=True)` (open shutters = accent),
+  `window_a(c, a, x0, x1, z0, z1)` (closed shutters = accent), `flowerbox_b(...)`.
 - `cylinder(c, r, z0, z1, side_stops, top=None, name)`, `ring_front_arc(c, r, z)` – round parts.
 
 **Roofs and classical parts**
@@ -181,19 +335,40 @@ if __name__ == "__main__":
 - `cone_roof(c, r, z_eave, rise, pal=TERRACOTTA)` – conical tile roof with a gilded finial.
 - `pal=GOLD_TILES` gives a gilded roof.
 - `doric_column(c, a, b, z0, z1, rb, rt, dark=False, cap=4.1)` → abacus top; `column_shadow(...)`.
-- `entablature(c, ea, eb, z0, ka, kb, front_n, side_n, ...)` → cornice top.
+- `entablature(c, ea, eb, z0, ka, kb, front_n, side_n, ..., metope_accent=False)` → cornice top
+  (`metope_accent=True`: painted metopes in the owner colour, a band under the cornice).
 - `pediment_b(c, ka, kb, zco, rise, tympanum_accent=True)`, `acroterion(c, a, b, z, k)`.
 
 **Props** (`a, b` = ground position)
 - `olive_tree(c, a, b, size)`, `cypress(c, a, b, h)`, `amphora(c, a, b, k, shaded)`,
   `pot(c, a, b)`, `altar(c, a, b)`, `brazier(c, a, b, z, k)`, `fire(c, x, y, k)`.
 - Owner-coloured: `banner_b(c, a, b, z0, height, width, drop)`, `drape_b(c, b, a0, a1, z_top, drop)`,
-  `drape_a(c, a, x0, x1, z_top, drop)`, `awning_b(c, a0, a1, b, z, depth, drop)`.
+  `drape_a(c, a, x0, x1, z_top, drop)`, `awning_b(c, a0, a1, b, z, depth, drop, stripes,
+  two_tone=False)` (cream stripes; `two_tone=True`: all stripes in two shades of the owner colour).
 - `figure(c, x, y, h, metal=BRONZE|GOLD, pose="spear"|"torch", accent_parts=("crest", "shield",
   "cloak"))` – a hoplite statue in screen space (feet at `c.P(...)` of its pedestal top).
 
 **Palettes**: `MARBLE`, `LIME`, `TERRACOTTA`, `GOLD`, `GOLD_TILES`, `BRONZE`, `WOOD`, `ACCENT`
 (close to the palette in `docs/ART.md`; add new colours there first).
+
+## Shared helpers in the other libraries
+
+The building libraries `lib_raw.py` (raw materials), `lib_processing.py` (workshops),
+`lib_civic.py` (civic buildings) and `lib_agri.py` (farmland, coast) build on `iso.py`; their
+module docstrings list everything. Reusable pieces worth knowing:
+
+- `lib_raw.treadwheel_b(c, a, b, z, r, width=5, spokes=8, treads=22)` – the treadwheel of a crane
+  (quarry; reusable for the harbour).
+- `lib_processing.awning_a(c, b0, b1, a, z, depth, drop, stripes=7)` – a two-tone owner-colour
+  awning sloping out of a +a (shaded) wall; `iso.awning_b` is the +b counterpart.
+- `lib_civic.stall(..., two_tone=True)` – market stall whose awning is in two shades of the owner
+  colour.
+- `lib_agri.pergola(c, a0, a1, b0, b1, z, seed, pal, under=None, back_posts=True, bunches=5)` – a
+  vine pergola on posts (`under(c)` draws what stands beneath it, between back and front posts).
+- `lib_agri.grove_olive(..., crown="dome")` – an olive tree with a rounder, taller crown (default
+  `"flat"`).
+- `units_lib.person(c, x, y, h=14 * iso.ZS, ...)` also works on **building** canvases at the
+  shared human scale (person ~14 world units): the barracks drill, the wonder's visitors.
 
 ## Rules for consistency
 
@@ -206,7 +381,9 @@ if __name__ == "__main__":
 - New reusable pieces go into `iso.py` (with a docstring); building-specific parts stay in the
   building's script.
 - Before handing in: run `build_all.py`, look at `preview.py` (all four colours, 64 px and 40 px),
-  and check the asset id matches `src/data/`.
+  and check the asset id matches `src/data/`. For grounded buildings also look at them on a plain
+  meadow-green (`#9cc25a`) hexagon of the real size (pointy-top, hex width = 208 / 0.92 canvas
+  units, centred on (128, 176)) – there is no plateau to hide a floating prop or a hard shadow edge.
 
 ## Units (`units_lib.py`, `units/<id>.py`)
 
@@ -254,7 +431,8 @@ def build():
   "round", quiver, accents=("shield", "crest", "cloak", "cap", "tunic"), wide=1.15)` – a chunky
   painted miniature (head ~1/4 of the height, broad shoulders, thick limbs), front view, feet at
   (x, y). `h` is feet → top of the head; 70–80 fills the token. Crests, hats and spears rise
-  above it – keep everything inside the canvas (y ≥ 2).
+  above it – keep everything inside the canvas (y ≥ 2). On a building canvas use
+  `h=14 * iso.ZS` (the shared human scale, see "Scale").
 - `horse(c, x, y, h, coat=HORSE_BAY|DONKEY, saddle, accents=("saddle",))` → seat point;
   `rider(c, seat_x, seat_y, h, accents=("cloak",))` (h ≈ 58 / 40 fill the token).
 - `cart(c, u0, u1, z0, z1, wheel_u, wheel_r, cover_h)` – two-wheeled cart with an owner cover.

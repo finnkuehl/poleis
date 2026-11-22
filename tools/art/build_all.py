@@ -6,7 +6,9 @@
     python3 tools/art/build_all.py              # everything
     python3 tools/art/build_all.py house scout  # only these ids
 
-Each script is named after the asset id (e.g. cityCenter.py) and defines build().
+Each script is named after the asset id (e.g. cityCenter.py) and defines build(), which returns
+one Canvas or a list of Canvases (the fishery: its icon plus the direction variants
+fishery.e0 ... fishery.e5, all with the asset id "fishery").
 """
 import sys
 
@@ -41,13 +43,16 @@ def main(only):
             if only and name not in only:
                 continue
             name, mod = load(os.path.join(src, script))
-            canvas = mod.build()
-            if canvas.asset_id != name:
-                raise SystemExit(f"{kind}/{script}: Canvas id '{canvas.asset_id}' must match the file name '{name}'")
-            for path in canvas.write(out):
-                size = os.path.getsize(path)
-                warn = "  <-- over 150 KB, simplify" if size > SOFT_LIMIT else ""
-                print(f"{os.path.relpath(path, ROOT)}  {size / 1024:.0f} KB{warn}")
+            canvases = mod.build()
+            if not isinstance(canvases, (list, tuple)):
+                canvases = [canvases]          # a script may build several files (direction variants)
+            for canvas in canvases:
+                if canvas.asset_id != name:
+                    raise SystemExit(f"{kind}/{script}: Canvas id '{canvas.asset_id}' must match the file name '{name}'")
+                for path in canvas.write(out):
+                    size = os.path.getsize(path)
+                    warn = "  <-- over 150 KB, simplify" if size > SOFT_LIMIT else ""
+                    print(f"{os.path.relpath(path, ROOT)}  {size / 1024:.0f} KB{warn}")
 
 
 if __name__ == "__main__":

@@ -7,7 +7,8 @@ everything takes WORLD units like the iso helpers unless a docstring says "scree
     cabin       log_wall_b / log_wall_a (log-cabin walls), shingle_roof_b (front-gable roof)
     rock        boulder (faceted convex rock shaded by its facet normals, optional snow cap),
                 rubble, rock_prism (vertical rock face), heap (mound of stones)
-    quarry      terrace (cut limestone step), cut_face, stone_block, timber, rope, wheel_b, cart_a
+    quarry      terrace (cut limestone step), cut_face, stone_block, timber, rope, wheel_b, cart_a,
+                treadwheel_b (crane treadwheel)
     mine        rails_b, ore_tub, ore_heap, lantern, pickaxe
     farm        wheat_field, stubble, sheaf, haystack, scarecrow (tunic = ACCENT), sack
     misc        ground_patch (soft worn-earth patch), pennant (ACCENT flag), uid (gradient names)
@@ -968,3 +969,37 @@ def sack(c, a, b, k=1.0, lean=0.0):
           f'<path d="M-1.8,-10.4 L-2.6,-12.2 M0,-10.6 L0,-12.8 M1.8,-10.4 L2.6,-12" stroke="#cbb88e" stroke-width="0.8" stroke-linecap="round"/>'
           f'<path d="M-2.4,-9.2 Q0,-8.4 2.6,-9.2" fill="none" stroke="#8a7650" stroke-width="0.7"/>'
           f'<path d="M-3,-6 C-3.4,-4 -3.2,-2 -2.4,-0.6" fill="none" stroke="#fffaf0" stroke-width="0.6" opacity="0.7"/></g>')
+
+
+# ---------------------------------------------------------------------------
+# Treadwheel (added for the grounded quarry; reusable for a harbour crane)
+# ---------------------------------------------------------------------------
+def treadwheel_b(c, a, b, z, r, width=5.0, spokes=8, treads=22):
+    """Treadwheel of a crane standing in the plane b (facing +b, the lit side): two spoked rims at
+    b - width/2 (far, in shade) and b + width/2 (near), joined by tread slats a walker steps on,
+    and the axle drum through the hub. (a, b, z) = hub centre, r = rim radius (a walker of ~14
+    fits inside from r = 9)."""
+    W = WOOD
+    bf, bn = b - width / 2, b + width / 2
+
+    def rim(bb, col, hi, sw):
+        sp = "".join(f"M0,0L{f(r * math.cos(2 * math.pi * i / spokes + 0.2))},{f(r * math.sin(2 * math.pi * i / spokes + 0.2))}" for i in range(spokes))
+        return c.on(c.m_bface(bb), f'<g transform="translate({f(a)} {f(z)})">'
+                    f'<circle r="{f(r)}" fill="none" stroke="{W["deep"]}" stroke-width="{f(sw + 0.5)}"/>'
+                    f'<circle r="{f(r)}" fill="none" stroke="{col}" stroke-width="{f(sw)}"/>'
+                    f'<path d="M{f(-r * 0.72)},{f(r * 0.69)}A{f(r)},{f(r)} 0 0 1 {f(r * 0.72)},{f(r * 0.69)}" fill="none" stroke="{hi}" stroke-width="0.4" opacity="0.8"/>'
+                    f'<path d="{sp}" stroke="{col}" stroke-width="0.8"/>'
+                    f'<circle r="{f(r * 0.16)}" fill="{W["dark"]}"/></g>')
+    c.add(rim(bf, W["dark"], W["base"], 1.3))
+    # tread slats between the rims (drawn as short timbers in screen space)
+    d = ""
+    for i in range(treads):
+        t = 2 * math.pi * i / treads
+        p0 = c.P(a + r * math.cos(t), bf, z + r * math.sin(t))
+        p1 = c.P(a + r * math.cos(t), bn, z + r * math.sin(t))
+        d += f"M{f(p0[0])},{f(p0[1])}L{f(p1[0])},{f(p1[1])}"
+    c.add(f'<path d="{d}" stroke="{W["base"]}" stroke-width="1.1" stroke-linecap="round"/>'
+          f'<path d="{d}" stroke="{W["lit"]}" stroke-width="0.4" stroke-linecap="round" opacity="0.8" transform="translate(-0.3 -0.3)"/>')
+    # axle drum (the hoisting rope winds on it)
+    _log(c, "b", a, z, bf - 1.5, bn + 1.5, max(1.0, r * 0.12), BARK, 3, True)
+    c.add(rim(bn, W["base"], W["lit"], 1.4))

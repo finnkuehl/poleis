@@ -1,4 +1,4 @@
-"""Shared parts for the processing buildings (sawmill, bakery, oilPress, smelter).
+"""Shared parts for the processing buildings (sawmill, bakery, oilPress, smelter, winery).
 
 Builds on `iso.py` (same projection, light and painter's order). Everything here follows the
 rules in tools/art/README.md: world units around the base centre, light from the upper left,
@@ -373,3 +373,28 @@ def sheaf(c, a, b, z=0.0, k=1.0, seed=1):
         out.append(f'<ellipse cx="{f(px)}" cy="{f(y - (13.6 + rnd.uniform(0, 1.6)) * k)}" rx="{f(0.9 * k)}" ry="{f(2.1 * k)}" fill="{"#f6dc8a" if i < 4 else "#e0b44c"}" transform="rotate({f((i - 3) * 9)} {f(px)} {f(y - 13.6 * k)})"/>')
     out.append(f'<rect x="{f(x - 1.9 * k)}" y="{f(y - 7.8 * k)}" width="{f(3.8 * k)}" height="{f(1.5 * k)}" fill="#8a6a34"/>')
     c.add("".join(out))
+
+
+# ---------------------------------------------------------------------------
+# Awning on a side wall (added for the grounded smelter and winery)
+# ---------------------------------------------------------------------------
+def awning_a(c, b0, b1, a, z, depth, drop, stripes=7):
+    """Striped canvas awning sloping out from a side wall plane a (facing +a, the shaded side)
+    toward +a, in two shades of the owner colour (ACCENT), with a scalloped valance. b0 < b1 is
+    its extent along the wall, z its height at the wall, depth how far it reaches out, drop how
+    much it falls over that depth. Poles are the caller's job (at a + depth)."""
+    tanp = drop / depth
+    m = f"matrix(1 -0.5 1 {f(0.5 + ZS * tanp)} {f(c.ox + a)} {f(c.oy + a / 2 - ZS * z)})"
+    x0, x1 = -b1, -b0
+    w = (x1 - x0) / stripes
+    c.accent(c.on(m, f'<rect x="{f(x0)}" y="0" width="{f(x1 - x0)}" height="{f(depth)}" fill="{ACCENT["mid"]}"/>'
+                  + "".join(f'<rect x="{f(x0 + i * w)}" y="0" width="{f(w)}" height="{f(depth)}" fill="{ACCENT["dark"]}"/>' for i in range(stripes) if i % 2)))
+    sh = c.lin("awAsh", 0, 0, 0, 1, [(0, "#1d2b36", 0.22), (0.4, "#1d2b36", 0.05), (1, "#fff", 0.1)], bbox=True)
+    c.add(c.on(m, f'<rect x="{f(x0)}" y="0" width="{f(x1 - x0)}" height="{f(depth)}" fill="{sh}"/>'))
+    zf = z - drop
+    sc = []
+    for i in range(stripes):
+        x = x0 + i * w
+        sc.append(f'<path d="M{f(x)},{f(zf)} L{f(x + w)},{f(zf)} L{f(x + w)},{f(zf - 1)} Q{f(x + w / 2)},{f(zf - 2.4)} {f(x)},{f(zf - 1)}Z" fill="{ACCENT["shade"] if i % 2 == 0 else ACCENT["deep"]}"/>')
+    c.accent(c.on(c.m_aface(a + depth), "".join(sc)))
+    c.add(c.on(c.m_aface(a + depth), f'<path d="M{f(x0)},{f(zf - 0.2)} L{f(x1)},{f(zf - 0.2)}" stroke="#f4ead2" stroke-width="0.5" opacity="0.8"/>'))

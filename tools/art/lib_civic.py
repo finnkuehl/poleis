@@ -358,9 +358,11 @@ def fountain(c, r=9.0):
           f'<circle cx="{f(xb)}" cy="{f(yb - 5.4)}" r="1.1" fill="#f4feff"/>')
 
 
-def stall(c, w=11.0, d=4.0, z_aw=19.0, depth=13.0, drop=5.0, stripes=6, goods=0):
+def stall(c, w=11.0, d=4.0, z_aw=19.0, depth=13.0, drop=5.0, stripes=6, goods=0, two_tone=False):
     """Market stall around the origin: wooden counter (half width w, half depth d) heaped with
-    goods, four posts and a big striped awning (ACCENT) sloping toward the viewer."""
+    goods, four posts and a big striped awning (ACCENT) sloping toward the viewer.
+    two_tone=True: the awning stripes are two shades of the owner colour (iso.awning_b), so the
+    stall reads in the owner colour at map size (grounded marketplace)."""
     W = WOOD
     iso.blob_shadow(c, 8, 1, w * 0.9, 0.34)
     back = -d - 2.5
@@ -387,4 +389,4 @@ def stall(c, w=11.0, d=4.0, z_aw=19.0, depth=13.0, drop=5.0, stripes=6, goods=0)
         c.add(rect(x - 0.65, yt, 1.3, y - yt, W["base"]) + rect(x - 0.65, yt, 0.5, y - yt, W["lit"]))
     # shade under the awning on the counter top
     c.add(c.on(c.m_ground(6.3), rect(-w + 1, -d, 2 * w - 2, 2 * d, "#2a1c10", 0.22)))
-    iso.awning_b(c, -w - 1.5, w + 1.5, back, z_aw, depth=depth, drop=drop, stripes=stripes)
+    iso.awning_b(c, -w - 1.5, w + 1.5, back, z_aw, depth=depth, drop=drop, stripes=stripes, two_tone=two_tone)

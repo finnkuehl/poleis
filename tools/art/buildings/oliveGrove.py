@@ -1,7 +1,9 @@
-"""oliveGrove - three old, gnarled olive trees on a dry-stone terrace: two on the raised terrace,
-one in front where the harvest is going on (a ladder in the crown, a cloth spread under the tree,
-baskets full of olives), with stone steps and a little roadside shrine.
-Accent (owner colour): base rim band, the harvest cloth and the ribbon tied round the shrine."""
+"""oliveGrove - an olive grove standing directly on the map (grounded, docs/ART.md; the game draws
+rows of dry grass over the whole tile, but no trees): five old, gnarled olive trees in loose rows
+over the tile, the harvest under way at the front tree (a ladder in its crown, nets spread under
+it and under its neighbour, baskets full of olives, a beating pole) and a small whitewashed tool
+shed with jars at the back.
+Accent (owner colour): the harvest nets and the painted shed door."""
 import sys
 
 sys.dont_write_bytecode = True
@@ -13,73 +15,58 @@ import random  # noqa: E402
 
 import iso  # noqa: E402
 import lib_agri as ag  # noqa: E402
-from iso import ACCENT, MARBLE, f, poly  # noqa: E402
+from iso import WOOD, f  # noqa: E402
 
-TERR = (-14, -14)      # terrace centre (a, b)
-RHO, TH = 42, 11       # terrace radius and wall height
-T1 = (-38, -3)         # back-left tree (on the terrace)
-T2 = (-4, -40)         # back-right tree (on the terrace)
-T3 = (38, 16)          # front tree (lower level, being harvested)
-SHRINE = (-2, 45)
-K = 1.3                # tree size
+# world units; trees spread over the tile in loose rows (screen rows), the shed at the back right.
+# Human scale: door 16 x 9, person ~14; an old olive tree ~30 high.
+def _w(x, y):
+    """Screen offset (x right, y down, before the canvas scale) -> ground point (a, b)."""
+    return (y + x / 2, y - x / 2)
 
 
-def on_terrace(a, b, margin=0.0):
-    return math.hypot(a - TERR[0], b - TERR[1]) < RHO + margin
+# Trees in three loose screen rows; nothing stands in front of the shed's door.
+TREES = [            # (a, b, size, seed)
+    (*_w(-40, -26), 0.95, 5),     # back row, left and right of the shed
+    (*_w(64, -24), 0.95, 2),
+    (*_w(-64, 4), 1.05, 7),       # middle row, staggered
+    (*_w(40, 4), 1.05, 1),
+    (*_w(-12, 32), 1.12, 3),      # front: being harvested
+]
+HARVEST = 4                    # index of the tree with the ladder
+SHED = _w(12, -28)             # tool shed centre (back middle)
+A, B = 16, 9                   # shed half extents (32 x 18)
+F, H, R, T = 3, 19, 7, 3.4
+AV, BV = A + 2.6, B + 3.2
+TANP = R / B
+ZR = H + R + T
 
 
-def steps(c):
-    """Three rough stone steps up the terrace wall (lit side)."""
-    F = ag.FIELD
-    a0, a1 = -8, 0
-    for i in range(3):
-        z0, z1 = i * TH / 3, (i + 1) * TH / 3
-        b1 = 27.5 + (3 - i) * 2.6
-        iso.box(c, a0, a1, 26.5, b1, z0, z1, "#cdbf9f", "#b3a383", "#8a7d66", edge="#e6dcc4")
-        c.add(c.on(c.m_bface(b1), f'<rect x="{a0 + 2.6 + i}" y="{f(z0)}" width="0.5" height="{f(z1 - z0)}" fill="{F["joint"]}" opacity="0.6"/>'))
+def shed(c):
+    ze = ZR - BV * TANP
+    iso.cast_shadow(c, [(sa * (A + 1), sb * (B + 1)) for sa in (-1, 1) for sb in (-1, 1)],
+                    [(sa * AV, sb * BV, ze) for sa in (-1, 1) for sb in (-1, 1)] + [(sa * AV, 0, ZR + 2) for sa in (-1, 1)])
+    iso.contact_ao(c, -A - 1, A + 1, -B - 1, B + 1)
+    iso.box(c, -A - 1, A + 1, -B - 1, B + 1, 0, F, ag.FIELD["top"], ag.FIELD["mid"], ag.FIELD["shade"])
+    iso.lime_wall_b(c, B, -A, A, F, H, seed=3, mottle=6)
+    iso.lime_wall_a(c, A, -B, B, F, H, gable=R)
+    iso.door_b(c, B, -4.5, 4.5, F, F + 16, accent=True)
+    c.add(c.on(c.m_aface(A), f'<circle cx="0" cy="{f(H + 2.6)}" r="2" fill="#9c9a94"/><circle cx="0.15" cy="{f(H + 2.45)}" r="1.4" fill="#2e2a26"/>'))
+    iso.eave_shadow_b(c, B, -A, A, H, depth=5)
+    iso.tile_roof_a(c, AV, BV, ZR, TANP, T=T, n=8, courses=3)
+    iso.foot_tufts(c, [((-A - 1, B + 1), (-6, B + 1)), ((6, B + 1), (A + 1, B + 1)), ((A + 1, B + 1), (A + 1, -B - 1))], n=7, seed=11, kind="dry", stones=2)
 
 
-def shrine(c, a, b):
-    """Small stone pillar shrine with a gabled niche; an owner-colour ribbon tied round it."""
-    F = ag.FIELD
-    iso.cast_shadow(c, [(a - 3.5, b - 3.5), (a + 3.5, b - 3.5), (a + 3.5, b + 3.5), (a - 3.5, b + 3.5)],
-                    [(a + sa * 3.2, b + sb * 3.2, 19) for sa in (-1, 1) for sb in (-1, 1)], opacity=0.36, sd=1.2)
-    iso.contact_ao(c, a - 3.5, a + 3.5, b - 3.5, b + 3.5, width=2.2, opacity=0.35)
-    iso.box(c, a - 3.5, a + 3.5, b - 3.5, b + 3.5, 0, 1.6, F["top"], F["lit"], F["shade"], edge="#fff")
-    iso.box(c, a - 2.6, a + 2.6, b - 2.6, b + 2.6, 1.6, 11, MARBLE["top"], MARBLE["left"], MARBLE["right"])
-    # niche block with a tiny gable
-    iso.box(c, a - 3.2, a + 3.2, b - 3.2, b + 3.2, 11, 17, MARBLE["top"], MARBLE["left"], MARBLE["right"], edge="#fff")
-    c.add(c.on(c.m_bface(b + 3.2), f'<rect x="{f(a - 1.8)}" y="12.2" width="3.6" height="4" fill="#5a5148"/>'
-               f'<rect x="{f(a - 1.8)}" y="15.4" width="3.6" height="0.8" fill="#2d2721" opacity="0.6"/>'
-               f'<path d="M{f(a - 0.5)},12.2 L{f(a + 0.5)},12.2 L{f(a + 0.4)},14.6 Q{f(a)},15.4 {f(a - 0.4)},14.6Z" fill="{iso.GOLD["base"]}"/>'))
-    c.add(c.on(c.m_bface(b + 3.2), f'<path d="{poly([(a - 3.8, 17), (a + 3.8, 17), (a, 19.6)])}" fill="{iso.TERRACOTTA["lit"]}"/>'
-               f'<path d="M{f(a - 3.8)},17 L{f(a)},19.6 L{f(a + 3.8)},17" fill="none" stroke="{iso.TERRACOTTA["hi"]}" stroke-width="0.5"/>'))
-    c.add(c.on(c.m_aface(a + 3.2), f'<rect x="{f(-b - 3.2)}" y="17" width="6.4" height="0.6" fill="{iso.TERRACOTTA["shade"]}"/>'))
-    x, y = c.P(a, b, 19.6)
-    c.add(f'<path d="M{f(x)},{f(y)} L{f(x + 6.4)},{f(y + 3.2)} L{f(x + 6.4)},{f(y + 4.2)} L{f(x)},{f(y + 1)}Z" fill="{iso.TERRACOTTA["shade"]}"/>')
-    # ribbon round the pillar (both visible faces) with two tails on the front
-    zr = 7.5
-    c.accent(c.on(c.m_bface(b + 2.6), f'<rect x="{f(a - 2.6)}" y="{f(zr)}" width="5.2" height="1.6" fill="{ACCENT["light"]}"/>'
-                  f'<path d="M{f(a - 0.6)},{f(zr + 0.2)} L{f(a - 1.8)},{f(zr - 5.2)} L{f(a - 0.6)},{f(zr - 4.4)} L{f(a + 0.2)},{f(zr - 5.6)} L{f(a + 0.6)},{f(zr + 0.2)}Z" fill="{ACCENT["lit"]}"/>')
-             + c.on(c.m_aface(a + 2.6), f'<rect x="{f(-b - 2.6)}" y="{f(zr)}" width="5.2" height="1.6" fill="{ACCENT["shade"]}"/>'))
-    c.add(c.on(c.m_bface(b + 2.6), f'<rect x="{f(a - 2.6)}" y="{f(zr)}" width="5.2" height="0.4" fill="#1d2b36" opacity="0.25"/>'
-               f'<circle cx="{f(a)}" cy="{f(zr + 0.8)}" r="0.7" fill="{iso.GOLD["lit"]}"/>'))
-    # offering: a small bowl of olives and a lamp at the foot
-    x, y = c.P(a + 1, b + 5.5, 0)
-    c.add(f'<ellipse cx="{f(x + 0.8)}" cy="{f(y + 0.4)}" rx="3" ry="1.2" fill="#1f2e15" opacity="0.35"/>'
-          f'<path d="M{f(x - 2.6)},{f(y - 1.6)} Q{f(x)},{f(y + 1.2)} {f(x + 2.6)},{f(y - 1.6)}Z" fill="{iso.TERRACOTTA["base"]}"/>'
-          f'<ellipse cx="{f(x)}" cy="{f(y - 1.6)}" rx="2.6" ry="0.9" fill="#3a2a1c"/>'
-          + "".join(f'<circle cx="{f(x + dx)}" cy="{f(y - 1.9 + dy)}" r="0.65" fill="{col}"/>' for dx, dy, col in [(-1, 0, "#3b3a24"), (0.2, -0.3, "#4a3a4c"), (1.2, 0.1, "#6f7d34"), (-0.3, 0.3, "#2f2a33")]))
-
-
-def harvest(c):
-    """Cloth spread under the front tree, with fallen olives on it."""
-    ta, tb = T3
-    corners = [(ta - 12, tb - 9), (ta + 11, tb - 12), (ta + 12, tb + 10), (ta - 10, tb + 12)]
-    ag.ground_cloth(c, corners, seed=3)
-    rnd = random.Random(8)
+def nets(c, ta, tb, r, seed, rot=0.0):
+    """A harvest net (owner colour) spread under a tree, with fallen olives on it."""
+    rnd = random.Random(seed)
+    corners = []
+    for k in range(4):
+        th = math.radians(rot + 45 + 90 * k)
+        rr = r * rnd.uniform(0.9, 1.08)
+        corners.append((ta + rr * math.cos(th), tb + rr * math.sin(th)))
+    ag.ground_cloth(c, corners, seed=seed)
     ol = []
-    for _ in range(26):
+    for _ in range(16):
         u, v = rnd.random(), rnd.random()
         p0 = [corners[0][i] + (corners[1][i] - corners[0][i]) * u for i in (0, 1)]
         p1 = [corners[3][i] + (corners[2][i] - corners[3][i]) * u for i in (0, 1)]
@@ -92,37 +79,44 @@ def harvest(c):
     c.add("".join(ol))
 
 
+def beating_pole(c, a, b):
+    """A long cane for beating the olives off the branches, lying on the net."""
+    p, q = c.P(a - 9, b + 5, 0.5), c.P(a + 9, b - 4, 0.5)
+    c.add(f'<path d="M{f(p[0] + 0.8)},{f(p[1] + 0.6)} L{f(q[0] + 0.8)},{f(q[1] + 0.6)}" stroke="{iso.INK}" stroke-width="1.2" opacity="0.25"/>'
+          f'<path d="M{f(p[0])},{f(p[1])} L{f(q[0])},{f(q[1])}" stroke="{WOOD["lit"]}" stroke-width="0.9" stroke-linecap="round"/>')
+
+
 def build():
     c = iso.Canvas("oliveGrove")
-    sa, sb = SHRINE
-
-    def avoid(a, b):
-        return (on_terrace(a, b, 3) or math.hypot(a - T3[0], b - T3[1]) < 15 or math.hypot(a - sa, b - sb) < 6
-                or (-9 < a < 1 and 26 < b < 37))
-
-    iso.base(c, seed=27, avoid=avoid, tufts=80, flowers=14)
-    # terrace shadow on the lower ground (falls to +a)
-    ring = [(TERR[0] + RHO * math.cos(t), TERR[1] + RHO * math.sin(t)) for t in [i * math.pi / 12 for i in range(24)]]
-    iso.cast_shadow(c, ring, [(a, b, TH) for a, b in ring], opacity=0.4)
-    ag.round_terrace(c, TERR[0], TERR[1], RHO, TH, seed=5,
-                     avoid=lambda a, b: math.hypot(a - T1[0], b - T1[1]) < 8 or math.hypot(a - T2[0], b - T2[1]) < 8)
-    steps(c)
-    with c.at(0, 0, TH):
-        # baskets and a jar on the terrace, between the old trees
-        ag.grove_olive(c, *T2, k=K, seed=2)
-        ag.basket(c, -24, -24, k=0.9, contents="olives", seed=11)
-        ag.grove_olive(c, *T1, k=K * 1.04, seed=1)
-        iso.amphora(c, -16, 10, k=0.8, shaded=False)
-    harvest(c)
-    shrine(c, sa, sb)
+    iso.ground(c)
+    # nets on the ground first (under the harvested tree and its neighbour)
+    ha, hb, _, _ = TREES[HARVEST]
+    nets(c, ha + 1, hb + 1, 18, seed=3)
+    na, nb, _, _ = TREES[2]
+    nets(c, na + 2, nb + 2, 15, seed=8, rot=12)
+    beating_pole(c, na + 4, nb + 9)
 
     def ladder(cc):
-        ag.ladder(cc, cc.P(T3[0] - 8, T3[1] + 15, 0), cc.P(T3[0] - 5, T3[1] + 4.5, 26), width=5, rungs=6, pal=ag.WICKER | {"mid": "#a8744a", "dark": "#5e3b22"}, rail=1.6)
+        ag.ladder(cc, cc.P(ha - 9, hb + 13, 0), cc.P(ha - 5, hb + 3.5, 25), width=4.6, rungs=6,
+                  pal=ag.WICKER | {"mid": "#a8744a", "dark": "#5e3b22"}, rail=1.5)
 
-    ag.grove_olive(c, *T3, k=K, seed=3, before_crown=ladder)
-    ag.basket(c, 16, 36, k=1.05, contents="olives", seed=12)
-    ag.basket(c, 25, 41, k=0.9, contents="olives", seed=13)
-    iso.rocks(c, [(52, -8, 2.6, 61), (56, -2, 1.7, 62), (-52, 30, 2.0, 63)])
+    # everything standing, back to front (by a + b)
+    items = [(a + b, "tree", i) for i, (a, b, _, _) in enumerate(TREES)] + [(SHED[0] + SHED[1] + B, "shed", None)]
+    for _, kind, i in sorted(items):
+        if kind == "shed":
+            with c.at(*SHED):
+                shed(c)
+            iso.amphora(c, SHED[0] + A + 4.5, SHED[1] - 3, k=0.9)
+            iso.amphora(c, SHED[0] + A + 4, SHED[1] + 3, k=0.75)
+            continue
+        a, b, k, seed = TREES[i]
+        if i == HARVEST:
+            ag.basket(c, a - 14, b + 6, k=1.0, contents="olives", seed=12)
+        ag.grove_olive(c, a, b, k=k, seed=seed, before_crown=ladder if i == HARVEST else None, crown="dome")
+        if i == 2:
+            ag.basket(c, a + 9, b + 12, k=0.95, contents="olives", seed=14)
+    ag.basket(c, ha + 4, hb + 15, k=1.05, contents="olives", seed=13)
+    iso.pebbles(c, [(14, 4, 1.0, 1), (-24, -8, 1.1, 2)])
     return c
 
 

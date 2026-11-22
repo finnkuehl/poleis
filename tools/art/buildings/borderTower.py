@@ -1,27 +1,30 @@
-"""borderTower - a tall, slim round watchtower of limestone ashlar on a rocky plinth: arched
-door, arrow slits, a corbelled crenellated top with a signal fire, and a big flag.
+"""borderTower - a tall, slim round watchtower of limestone ashlar on a rocky plinth, standing
+directly on the map (grounded, docs/ART.md; the game paints a trodden-earth yard around it): an
+arched door up two steps, arrow slits, a corbelled crenellated top with a signal fire and a big
+flag; at its foot a stack of firewood for the beacon, spears leaning on the plinth, a water jar,
+a sack and a crate, and a marble boundary stone (horos).
 The tallest and slimmest silhouette of all buildings.
-Accent (owner colour): base rim band, the flag, the long banner on the wall, the shield over
-the door."""
+Accent (owner colour): the flag, the long banner on the wall, the shield over the door."""
 import sys
 
 sys.dont_write_bytecode = True
+import math  # noqa: E402
 import os  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import iso  # noqa: E402
 import lib_civic as lc  # noqa: E402
-from iso import f  # noqa: E402
+from iso import WOOD, f  # noqa: E402
 from lib_civic import STONE, rect  # noqa: E402
-import math  # noqa: E402
 
-POS = (-3, -5)
-R_PL, Z_PL = 22, 6        # plinth radius and height
-R0, R1 = 16.5, 13.0       # shaft radius at the foot and under the parapet
-Z_SH = 80                 # top of the shaft
+# world units; keep everything inside iso.GROUND_R = 58. Human scale: door 16 x 9, person ~14.
+POS = (0, -6)
+R_PL, Z_PL = 21, 6        # plinth radius and height (footprint 42)
+R0, R1 = 16.5, 13.0       # shaft radius at the foot (33 across) and under the parapet
+Z_SH = 74                 # top of the shaft (three and a half storeys)
 R_PAR = 17.2              # parapet (corbelled out)
-Z_PAR = 91                # parapet walk level
-Z_MER = 97.5              # merlon tops
+Z_PAR = 85                # parapet walk level
+Z_MER = 91.5              # merlon tops (the wonder stays the tallest piece)
 
 
 def tower(c):
@@ -50,22 +53,24 @@ def tower(c):
     # door, shield, arrow slits and banner on the +b side (flat on the tangent plane)
     bq = R0 - 0.9
     zd = Z_PL
-    door = (f'<path d="M-5.2,{zd} L-5.2,{zd + 13} Q-5.2,{zd + 19.5} 0,{zd + 19.5} Q5.2,{zd + 19.5} 5.2,{zd + 13} L5.2,{zd}Z" fill="#efe8d8"/>'
-            f'<path d="M-5.2,{zd} L-5.2,{zd + 13} Q-5.2,{zd + 19.5} 0,{zd + 19.5}" fill="none" stroke="#fffaf0" stroke-width="0.6"/>'
-            f'<path d="M-3.6,{zd} L-3.6,{zd + 12.6} Q-3.6,{zd + 17.4} 0,{zd + 17.4} Q3.6,{zd + 17.4} 3.6,{zd + 12.6} L3.6,{zd}Z" fill="#7e5030"/>'
-            f'<path d="M-3.6,{zd} L-3.6,{zd + 12.6} Q-3.6,{zd + 17.4} 0,{zd + 17.4} L0,{zd}Z" fill="#9b673d"/>'
-            + rect(-0.25, zd, 0.5, 17.2, "#4f301b") + rect(-3.6, zd + 4, 7.2, 1, "#3b3a3a", 0.75) + rect(-3.6, zd + 11, 7.2, 1, "#3b3a3a", 0.75)
-            + f'<circle cx="1.5" cy="{zd + 8}" r="0.7" fill="{iso.BRONZE["lit"]}"/>'
-            f'<path d="M-3.6,{zd + 12.6} Q-3.6,{zd + 17.4} 0,{zd + 17.4} Q3.6,{zd + 17.4} 3.6,{zd + 12.6} L3.6,{zd + 10.6} Q3.6,{zd + 15.4} 0,{zd + 15.4} Q-3.6,{zd + 15.4} -3.6,{zd + 10.6}Z" fill="#2a1a0e" opacity="0.4"/>')
+    # arched plank door at human scale: opening 9 wide, 16 high (frame 12 x 18)
+    zs, zt, zo = zd + 11.5, zd + 16, zd + 18.2
+    door = (f'<path d="M-6,{zd} L-6,{zs} Q-6,{zo} 0,{zo} Q6,{zo} 6,{zs} L6,{zd}Z" fill="#efe8d8"/>'
+            f'<path d="M-6,{zd} L-6,{zs} Q-6,{zo} 0,{zo}" fill="none" stroke="#fffaf0" stroke-width="0.6"/>'
+            f'<path d="M-4.5,{zd} L-4.5,{zs} Q-4.5,{zt} 0,{zt} Q4.5,{zt} 4.5,{zs} L4.5,{zd}Z" fill="#7e5030"/>'
+            f'<path d="M-4.5,{zd} L-4.5,{zs} Q-4.5,{zt} 0,{zt} L0,{zd}Z" fill="#9b673d"/>'
+            + rect(-0.25, zd, 0.5, 15.8, "#4f301b") + rect(-4.5, zd + 3.6, 9, 1, "#3b3a3a", 0.75) + rect(-4.5, zd + 10, 9, 1, "#3b3a3a", 0.75)
+            + f'<circle cx="1.8" cy="{zd + 7.5}" r="0.7" fill="{iso.BRONZE["lit"]}"/>'
+            f'<path d="M-4.5,{zs} Q-4.5,{zt} 0,{zt} Q4.5,{zt} 4.5,{zs} L4.5,{zs - 2} Q4.5,{zt - 2} 0,{zt - 2} Q-4.5,{zt - 2} -4.5,{zs - 2}Z" fill="#2a1a0e" opacity="0.4"/>')
     c.add(c.on(c.m_bface(bq - 0.5), f'<g transform="translate(3.5 0)">{door}</g>'))
 
     def slit(m, x, z):
         return c.on(m, rect(x - 1.7, z - 1, 3.4, 9.5, "#efe8d8") + rect(x - 0.75, z, 1.5, 7.5, "#1c1611") + rect(x - 0.75, z + 6.5, 1.5, 1, "#000", 0.5))
 
-    c.add(slit(c.m_bface(R0 - 3), 3.5, 62))
+    c.add(slit(c.m_bface(R0 - 3), 3.5, 59))
     c.add(c.on(c.m_aface(R0 - 1.4), rect(-1.7, 30, 3.4, 9.5, "#b3ab9b") + rect(-0.75, 31, 1.5, 7.5, "#17120d"))
-          + c.on(c.m_aface(R0 - 2.6), rect(-1.7, 57, 3.4, 9.5, "#aaa293") + rect(-0.75, 58, 1.5, 7.5, "#17120d")))
-    lc.shield_b(c, R0 - 2, 3.6, zd + 27.5, r=5)
+          + c.on(c.m_aface(R0 - 2.6), rect(-1.7, 52, 3.4, 9.5, "#aaa293") + rect(-0.75, 53, 1.5, 7.5, "#17120d")))
+    lc.shield_b(c, R0 - 2, 3.6, zd + 25.5, r=4.6)
     # long banner hanging from an iron bar under the parapet
     bb = R1 + 0.1
     c.add(c.on(c.m_bface(bb), rect(-2.6, 56.4, 12.8, 0.9, "#3b3a3a")))
@@ -115,179 +120,59 @@ def horos(c, a, b, h=9.0):
     c.add(c.on(c.m_bface(b + 1.5), rect(a - 2, h - 3.2, 4, 1.1, "#a8432f")) + c.on(c.m_aface(a + 2), rect(-b - 1.5, h - 3.2, 3, 1.1, "#7d2f20")))
 
 
-def build():
-    c = iso.Canvas("borderTower")
-    pa, pb = POS
-    iso.base(c, seed=53, tufts=95, flowers=18, avoid=lambda a, b: (a - pa) ** 2 + (b - pb) ** 2 < (R_PL + 3) ** 2 or (-6 < a - pa < 12 and 0 < b - pb < 46))
-    iso.rocks(c, [(-44, -30, 4.2, 3), (-37, -38, 2.6, 4), (30, -44, 3.4, 9)])
-    iso.olive_tree(c, 38, -36, size=0.7, seed=12)
-    with c.at(pa, pb):
-        iso.flagstones(c, [(4, R_PL + 9, 8, 5.4, 6), (2, R_PL + 16.5, 7, 5.2, -8), (4.5, R_PL + 24, 7.5, 5.2, 10), (2.5, R_PL + 31.5, 6.5, 5, -4)])
-        tower(c)
-        tufts = [((R_PL * math.cos(t) * 1.02, R_PL * math.sin(t) * 1.02), (R_PL * math.cos(t + 0.3) * 1.02, R_PL * math.sin(t + 0.3) * 1.02))
-                 for t in (-0.6, -0.3, 0.0, 0.3, 0.6, 1.95, 2.2)]
-        iso.base_tufts(c, tufts, n=14, seed=6, hmax=4)
-    horos(c, -40, 34)
-    horos(c, 30, 40)
-    iso.rocks(c, [(50, 14, 3.4, 21), (56, 6, 2.2, 22), (-24, 50, 2.4, 23), (45, 21, 1.8, 24)])
-    lc.sack(c, 22, 14, k=0.9)
-    lc.crate(c, 28, 8, 3.6, 5.5)
-    return c.on(m, rect(x - 1.7, z - 1, 3.4, 9.5, "#efe8d8") + rect(x - 0.75, z, 1.5, 7.5, "#1c1611") + rect(x - 0.75, z + 6.5, 1.5, 1, "#000", 0.5))
-
-    c.add(slit(c.m_bface(R0 - 3), 3.5, 62))
-    c.add(c.on(c.m_aface(R0 - 1.4), rect(-1.7, 30, 3.4, 9.5, "#b3ab9b") + rect(-0.75, 31, 1.5, 7.5, "#17120d"))
-          + c.on(c.m_aface(R0 - 2.6), rect(-1.7, 57, 3.4, 9.5, "#aaa293") + rect(-0.75, 58, 1.5, 7.5, "#17120d")))
-    lc.shield_b(c, R0 - 2, 3.6, zd + 27.5, r=5)
-    # long banner hanging from an iron bar under the parapet
-    bb = R1 + 0.1
-    c.add(c.on(c.m_bface(bb), rect(-2.6, 56.4, 12.8, 0.9, "#3b3a3a")))
-    iso.drape_b(c, bb, -1.4, 9, 56.4, 21)
-    c.add(c.on(c.m_bface(bb), f'<circle cx="3.8" cy="46" r="2.2" fill="none" stroke="{iso.GOLD["lit"]}" stroke-width="0.8"/>'
-               + rect(-1.4, 40.2, 10.4, 0.6, iso.GOLD["lit"], 0.9)))
-
-    # corbelled parapet
-    for i in range(14):                                   # corbel stones under the ring
-        th = math.pi * (i + 0.5) / 14
-        px, py = c.P(0, 0, Z_SH - 3.2)
-        rr = (R1 + 1.6) * 1.414
-        cx_, cy_ = px + rr * math.cos(th), py + rr / 2 * math.sin(th)
-        lit = -math.cos(th)
-        c.add(rect(cx_ - 1.2, cy_ - 0.5, 2.4, 4.2, "#d8ceb9" if lit > 0.3 else ("#b9b09f" if lit > -0.3 else "#8a8478")))
-    iso.cylinder(c, R_PAR, Z_SH, Z_PAR, lc.TOWER_SIDE, name="par")
-    lc.ring_band(c, R_PAR, Z_SH, Z_SH + 1.2, "#3d352a", 0.3)
-    c.add(f'<path d="{iso.ring_front_arc(c, R_PAR, Z_SH + 5.4)}" fill="none" stroke="{STONE["joint"]}" stroke-width="0.5" opacity="0.5"/>')
-    px, py = c.P(0, 0, Z_SH)
-    joints = []
-    for k, (za, zb) in enumerate(((Z_SH, Z_SH + 5.4), (Z_SH + 5.4, Z_PAR))):
-        for i in range(8):
-            th = math.pi * (i + 0.5 * (k + 0.5)) / 8
-            if 0.1 < th < math.pi - 0.1:
-                jx, jy = px + R_PAR * 1.414 * math.cos(th), py + R_PAR * 0.707 * math.sin(th)
-                joints.append(f"M{f(jx)},{f(jy - (za - Z_SH) * iso.ZS)} L{f(jx)},{f(jy - (zb - Z_SH) * iso.ZS)}")
-    c.add(f'<path d="{" ".join(joints)}" fill="none" stroke="{STONE["joint"]}" stroke-width="0.5" opacity="0.5"/>')
-    px, py = c.P(0, 0, Z_PAR)
-    ro, ri = R_PAR * 1.414, (R_PAR - 3.6) * 1.414
-    c.add(f'<ellipse cx="{f(px)}" cy="{f(py)}" rx="{f(ro)}" ry="{f(ro / 2)}" fill="{STONE["top"]}"/>')
-    lc.round_merlons(c, R_PAR, R_PAR - 3.6, Z_PAR, Z_MER, 10, "back")
-    walk = c.lin("walk", px - ri, 0, px + ri, 0, [(0, "#7f786b"), (0.5, "#a39b8c"), (1, "#c2b9a8")])
-    c.add(f'<ellipse cx="{f(px)}" cy="{f(py + 1.6)}" rx="{f(ri)}" ry="{f(ri / 2)}" fill="{walk}"/>'
-          f'<path d="M{f(px - ri)},{f(py + 1.6)} A{f(ri)},{f(ri / 2)} 0 0 1 {f(px + ri)},{f(py + 1.6)} L{f(px + ri)},{f(py)} A{f(ri)},{f(ri / 2)} 0 0 0 {f(px - ri)},{f(py)}Z" fill="#6f695e"/>')
-    # signal fire and flag on the platform
-    iso.brazier(c, -4.5, 1.5, Z_PAR - 1.5, k=1.25)
-    lc.flag(c, 4.5, -3.5, Z_PAR - 1.5, 33, w=27, h=15.5, wave=2.8, pole=1.7)
-    lc.round_merlons(c, R_PAR, R_PAR - 3.6, Z_PAR, Z_MER, 10, "front")
-    c.add(f'<path d="{iso.ring_front_arc(c, R_PAR, Z_PAR, 0.3)}" fill="none" stroke="#fffaf0" stroke-width="0.6" opacity="0.7"/>')
+def log_pile(c, a0, a1, b0, b1, h=8.0, seed=3):
+    """Firewood for the beacon: a stack of logs lying along b, their round end grain on the lit
+    (+b) face, the side of the last log row on the shaded (+a) face."""
+    W = WOOD
+    rnd = __import__("random").Random(seed)
+    iso.cast_shadow(c, [(a0, b0), (a1, b0), (a1, b1), (a0, b1)], [(a0, b0, h), (a1, b0, h), (a1, b1, h), (a0, b1, h)], opacity=0.38, sd=1.2)
+    iso.contact_ao(c, a0, a1, b0, b1, width=2.2, opacity=0.35)
+    top = c.lin("logtop", 0, 0, 1, 0, [(0, W["lit"]), (1, W["base"])], bbox=True)
+    stripes = "".join(rect(a0 + i * (a1 - a0) / 4 - 0.25, b0, 0.5, b1 - b0, W["deep"], 0.5) for i in range(1, 4))
+    c.add(c.on(c.m_ground(h), rect(a0, b0, a1 - a0, b1 - b0, top) + stripes))
+    side = "".join(rect(-b1, z - 0.3, b1 - b0, 0.6, W["deep"], 0.6) for z in (h / 3, 2 * h / 3))
+    c.add(c.on(c.m_aface(a1), rect(-b1, 0, b1 - b0, h, W["base"]) + rect(-b1, 0, b1 - b0, h, W["deep"], 0.35) + side + rect(-b1, h - 0.6, b1 - b0, 0.6, W["lit"])))
+    ends = [rect(a0, 0, a1 - a0, h, W["deep"])]
+    rows = 3
+    rr = h / rows / 2
+    for k in range(rows):
+        n = int((a1 - a0) / (2 * rr))
+        off = (a1 - a0 - n * 2 * rr) / 2 + (rr * 0.5 if k % 2 else 0)
+        for i in range(n - (1 if k % 2 else 0)):
+            cx, cz = a0 + off + rr + i * 2 * rr, rr + k * 2 * rr
+            r_ = rr * rnd.uniform(0.86, 0.98)
+            ends.append(f'<circle cx="{f(cx)}" cy="{f(cz)}" r="{f(r_)}" fill="#d9b07a"/>'
+                        f'<circle cx="{f(cx)}" cy="{f(cz)}" r="{f(r_ * 0.55)}" fill="none" stroke="#a7784a" stroke-width="0.35"/>'
+                        f'<path d="M{f(cx - r_)},{f(cz)} A{f(r_)},{f(r_)} 0 0 0 {f(cx + r_)},{f(cz)}" fill="none" stroke="{W["dark"]}" stroke-width="0.45" opacity="0.7"/>')
+    c.add(c.on(c.m_bface(b1), "".join(ends)))
 
 
-def horos(c, a, b, h=9.0):
-    """A boundary stone: small marble stele with a red painted band."""
-    M = iso.MARBLE
-    iso.blob_shadow(c, a + 3.5, b, 3, 0.32)
-    iso.box(c, a - 2, a + 2, b - 1.5, b + 1.5, 0, h, M["top"], M["left"], M["right"], edge="#fff")
-    c.add(c.on(c.m_bface(b + 1.5), rect(a - 2, h - 3.2, 4, 1.1, "#a8432f")) + c.on(c.m_aface(a + 2), rect(-b - 1.5, h - 3.2, 3, 1.1, "#7d2f20")))
-
-
-def build():
-    c = iso.Canvas("borderTower")
-    pa, pb = POS
-    iso.base(c, seed=53, tufts=95, flowers=18, avoid=lambda a, b: (a - pa) ** 2 + (b - pb) ** 2 < (R_PL + 3) ** 2 or (-6 < a - pa < 12 and 0 < b - pb < 46))
-    iso.rocks(c, [(-44, -30, 4.2, 3), (-37, -38, 2.6, 4), (30, -44, 3.4, 9)])
-    iso.olive_tree(c, 38, -36, size=0.7, seed=12)
-    with c.at(pa, pb):
-        iso.flagstones(c, [(4, R_PL + 9, 8, 5.4, 6), (2, R_PL + 16.5, 7, 5.2, -8), (4.5, R_PL + 24, 7.5, 5.2, 10), (2.5, R_PL + 31.5, 6.5, 5, -4)])
-        tower(c)
-        tufts = [((R_PL * math.cos(t) * 1.02, R_PL * math.sin(t) * 1.02), (R_PL * math.cos(t + 0.3) * 1.02, R_PL * math.sin(t + 0.3) * 1.02))
-                 for t in (-0.6, -0.3, 0.0, 0.3, 0.6, 1.95, 2.2)]
-        iso.base_tufts(c, tufts, n=14, seed=6, hmax=4)
-    horos(c, -40, 34)
-    horos(c, 30, 40)
-    iso.rocks(c, [(50, 14, 3.4, 21), (56, 6, 2.2, 22), (-24, 50, 2.4, 23), (45, 21, 1.8, 24)])
-    lc.sack(c, 22, 14, k=0.9)
-    lc.crate(c, 28, 8, 3.6, 5.5)
-    # spears leaning against the tower wall
-    for i, col in enumerate(("#8a5a34", "#a8744a")):
-        w = math.radians(98 + i * 9)
-        ta, tb = pa + 15.4 * math.cos(w), pb + 15.4 * math.sin(w)
-        p, q = c.P(ta - 5 - i, tb + 11, 0), c.P(ta, tb, 31)
-        c.add(f'<path d="M{f(p[0])},{f(p[1])} L{f(q[0])},{f(q[1])}" stroke="{col}" stroke-width="0.9" stroke-linecap="round"/>'
+def spears(c, pa, pb):
+    """Two spears leaning on the plinth (about 1.5 x a man's height)."""
+    for i, (a, col) in enumerate(((-16, "#8a5a34"), (-19, "#a8744a"))):
+        p, q = c.P(pa + a - 3, pb + R_PL + 3.5 - i, 0), c.P(pa + a + 1.5, pb + R_PL - 4, 21)
+        c.add(f'<ellipse cx="{f(p[0] + 0.8)}" cy="{f(p[1] + 0.3)}" rx="1.6" ry="0.6" fill="{iso.INK}" opacity="0.35"/>'
+              f'<path d="M{f(p[0])},{f(p[1])} L{f(q[0])},{f(q[1])}" stroke="{col}" stroke-width="0.9" stroke-linecap="round"/>'
               f'<path d="M{f(q[0] - 0.9)},{f(q[1] + 0.4)} L{f(q[0] + 0.5)},{f(q[1] - 4.6)} L{f(q[0] + 1.1)},{f(q[1] + 0.3)}Z" fill="#c9cbc8"/>')
-    return c.on(m, rect(x - 1.7, z - 1, 3.4, 9.5, "#efe8d8") + rect(x - 0.75, z, 1.5, 7.5, "#1c1611") + rect(x - 0.75, z + 6.5, 1.5, 1, "#000", 0.5))
-
-    c.add(slit(c.m_bface(R0 - 3), 3.5, 62))
-    c.add(c.on(c.m_aface(R0 - 1.4), rect(-1.7, 30, 3.4, 9.5, "#b3ab9b") + rect(-0.75, 31, 1.5, 7.5, "#17120d"))
-          + c.on(c.m_aface(R0 - 2.6), rect(-1.7, 57, 3.4, 9.5, "#aaa293") + rect(-0.75, 58, 1.5, 7.5, "#17120d")))
-    lc.shield_b(c, R0 - 2, 3.6, zd + 27.5, r=5)
-    # long banner hanging from an iron bar under the parapet
-    bb = R1 + 0.1
-    c.add(c.on(c.m_bface(bb), rect(-2.6, 56.4, 12.8, 0.9, "#3b3a3a")))
-    iso.drape_b(c, bb, -1.4, 9, 56.4, 21)
-    c.add(c.on(c.m_bface(bb), f'<circle cx="3.8" cy="46" r="2.2" fill="none" stroke="{iso.GOLD["lit"]}" stroke-width="0.8"/>'
-               + rect(-1.4, 40.2, 10.4, 0.6, iso.GOLD["lit"], 0.9)))
-
-    # corbelled parapet
-    for i in range(14):                                   # corbel stones under the ring
-        th = math.pi * (i + 0.5) / 14
-        px, py = c.P(0, 0, Z_SH - 3.2)
-        rr = (R1 + 1.6) * 1.414
-        cx_, cy_ = px + rr * math.cos(th), py + rr / 2 * math.sin(th)
-        lit = -math.cos(th)
-        c.add(rect(cx_ - 1.2, cy_ - 0.5, 2.4, 4.2, "#d8ceb9" if lit > 0.3 else ("#b9b09f" if lit > -0.3 else "#8a8478")))
-    iso.cylinder(c, R_PAR, Z_SH, Z_PAR, lc.TOWER_SIDE, name="par")
-    lc.ring_band(c, R_PAR, Z_SH, Z_SH + 1.2, "#3d352a", 0.3)
-    c.add(f'<path d="{iso.ring_front_arc(c, R_PAR, Z_SH + 5.4)}" fill="none" stroke="{STONE["joint"]}" stroke-width="0.5" opacity="0.5"/>')
-    px, py = c.P(0, 0, Z_SH)
-    joints = []
-    for k, (za, zb) in enumerate(((Z_SH, Z_SH + 5.4), (Z_SH + 5.4, Z_PAR))):
-        for i in range(8):
-            th = math.pi * (i + 0.5 * (k + 0.5)) / 8
-            if 0.1 < th < math.pi - 0.1:
-                jx, jy = px + R_PAR * 1.414 * math.cos(th), py + R_PAR * 0.707 * math.sin(th)
-                joints.append(f"M{f(jx)},{f(jy - (za - Z_SH) * iso.ZS)} L{f(jx)},{f(jy - (zb - Z_SH) * iso.ZS)}")
-    c.add(f'<path d="{" ".join(joints)}" fill="none" stroke="{STONE["joint"]}" stroke-width="0.5" opacity="0.5"/>')
-    px, py = c.P(0, 0, Z_PAR)
-    ro, ri = R_PAR * 1.414, (R_PAR - 3.6) * 1.414
-    c.add(f'<ellipse cx="{f(px)}" cy="{f(py)}" rx="{f(ro)}" ry="{f(ro / 2)}" fill="{STONE["top"]}"/>')
-    lc.round_merlons(c, R_PAR, R_PAR - 3.6, Z_PAR, Z_MER, 10, "back")
-    walk = c.lin("walk", px - ri, 0, px + ri, 0, [(0, "#7f786b"), (0.5, "#a39b8c"), (1, "#c2b9a8")])
-    c.add(f'<ellipse cx="{f(px)}" cy="{f(py + 1.6)}" rx="{f(ri)}" ry="{f(ri / 2)}" fill="{walk}"/>'
-          f'<path d="M{f(px - ri)},{f(py + 1.6)} A{f(ri)},{f(ri / 2)} 0 0 1 {f(px + ri)},{f(py + 1.6)} L{f(px + ri)},{f(py)} A{f(ri)},{f(ri / 2)} 0 0 0 {f(px - ri)},{f(py)}Z" fill="#6f695e"/>')
-    # signal fire and flag on the platform
-    iso.brazier(c, -4.5, 1.5, Z_PAR - 1.5, k=1.25)
-    lc.flag(c, 4.5, -3.5, Z_PAR - 1.5, 33, w=27, h=15.5, wave=2.8, pole=1.7)
-    lc.round_merlons(c, R_PAR, R_PAR - 3.6, Z_PAR, Z_MER, 10, "front")
-    c.add(f'<path d="{iso.ring_front_arc(c, R_PAR, Z_PAR, 0.3)}" fill="none" stroke="#fffaf0" stroke-width="0.6" opacity="0.7"/>')
-
-
-def horos(c, a, b, h=9.0):
-    """A boundary stone: small marble stele with a red painted band."""
-    M = iso.MARBLE
-    iso.blob_shadow(c, a + 3.5, b, 3, 0.32)
-    iso.box(c, a - 2, a + 2, b - 1.5, b + 1.5, 0, h, M["top"], M["left"], M["right"], edge="#fff")
-    c.add(c.on(c.m_bface(b + 1.5), rect(a - 2, h - 3.2, 4, 1.1, "#a8432f")) + c.on(c.m_aface(a + 2), rect(-b - 1.5, h - 3.2, 3, 1.1, "#7d2f20")))
 
 
 def build():
     c = iso.Canvas("borderTower")
+    iso.ground(c)
     pa, pb = POS
-    iso.base(c, seed=53, tufts=95, flowers=18, avoid=lambda a, b: (a - pa) ** 2 + (b - pb) ** 2 < (R_PL + 3) ** 2 or (-6 < a - pa < 12 and 0 < b - pb < 46))
-    iso.rocks(c, [(-44, -30, 4.2, 3), (-37, -38, 2.6, 4), (30, -44, 3.4, 9)])
-    iso.olive_tree(c, 38, -36, size=0.7, seed=12)
+    iso.ground_ao(c, [(pa + R_PL * math.cos(t), pb + R_PL * math.sin(t)) for t in [i * math.pi / 6 for i in range(12)]], grow=7, opacity=0.16)
     with c.at(pa, pb):
-        iso.flagstones(c, [(4, R_PL + 9, 8, 5.4, 6), (2, R_PL + 16.5, 7, 5.2, -8), (4.5, R_PL + 24, 7.5, 5.2, 10), (2.5, R_PL + 31.5, 6.5, 5, -4)])
         tower(c)
         tufts = [((R_PL * math.cos(t) * 1.02, R_PL * math.sin(t) * 1.02), (R_PL * math.cos(t + 0.3) * 1.02, R_PL * math.sin(t + 0.3) * 1.02))
-                 for t in (-0.6, -0.3, 0.0, 0.3, 0.6, 1.95, 2.2)]
-        iso.base_tufts(c, tufts, n=14, seed=6, hmax=4)
-    horos(c, -40, 34)
-    horos(c, 30, 40)
-    iso.rocks(c, [(50, 14, 3.4, 21), (56, 6, 2.2, 22), (-24, 50, 2.4, 23), (45, 21, 1.8, 24)])
-    lc.sack(c, 22, 14, k=0.9)
-    lc.crate(c, 28, 8, 3.6, 5.5)
-    # spears leaning against the plinth
-    for i, (a, col) in enumerate(((-19, "#8a5a34"), (-22.5, "#a8744a"))):
-        p, q = c.P(a - 3, pb + R_PL + 3 - i, 0), c.P(a + 2, pb + R_PL - 6, 30)
-        c.add(f'<path d="M{f(p[0])},{f(p[1])} L{f(q[0])},{f(q[1])}" stroke="{col}" stroke-width="0.9" stroke-linecap="round"/>'
-              f'<path d="M{f(q[0] - 0.9)},{f(q[1] + 0.4)} L{f(q[0] + 0.5)},{f(q[1] - 4.6)} L{f(q[0] + 1.1)},{f(q[1] + 0.3)}Z" fill="#c9cbc8"/>')
+                 for t in (-0.6, -0.2, 0.3, 0.7, 2.0)]
+        iso.foot_tufts(c, tufts, n=9, seed=6, hmax=4, kind="dry", stones=3)
+    log_pile(c, -37, -28, 2, 13)
+    spears(c, pa, pb)
+    iso.amphora(c, pa + 22, pb + 16, k=0.85, shaded=False)
+    lc.sack(c, pa + 27, pb + 9, k=0.9)
+    lc.crate(c, pa + 30, pb + 1, 3.6, 5.5)
+    horos(c, -26, 30)
+    iso.pebbles(c, [(30, 30, 1.1, 1), (-22, 40, 1.0, 2)])
     return c
 
 
