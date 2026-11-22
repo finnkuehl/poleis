@@ -96,9 +96,10 @@ export function isCramped(ctx: AiContext, city: City): boolean {
 /** May a settler be sent out from this city now (all conditions except the site)? */
 export function mayExpandFrom(ctx: AiContext, city: City): boolean {
   if (ctx.cities.length + settlerCount(ctx) >= M.maxCities[ctx.personality]) return false;
+  // A cramped city cannot grow where it stands: it needs only the residents a settler takes
+  // (the rule minimum), whatever the food surplus is and whether it waits to advance.
+  if (isCramped(ctx, city)) return city.residents >= militaryConfig.settlerMinCityResidents;
   if (city.residents < M.expandMinResidents) return false;
-  // A cramped city expands whatever the food surplus is and whether it waits to advance.
-  if (isCramped(ctx, city)) return true;
   const waiting = ctx.cities.some((c) => {
     const check = advanceCheck(ctx.state, c.city.id, ctx.production);
     return check !== null && check.to !== null && check.residents.ok && !check.canAdvance;

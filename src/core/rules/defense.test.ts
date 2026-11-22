@@ -22,6 +22,8 @@ function world(): GameState {
     explored: s.map.tiles.map(() => false),
     lowPriorityGoods: [],
   });
+  // Past the peace time, so the cities fire.
+  s.turn = militaryConfig.defense.defenseFromTurn;
   return s;
 }
 
@@ -146,6 +148,7 @@ describe('city and tower fire', () => {
   it('passengers are not targets; the ship is, and sinking it takes them along', () => {
     const s = makeTestState(['pppcccc', 'pppcccc', 'pppcccc'], { ownAll: false });
     s.players.push({ ...structuredClone(s.players[0]), id: 1, isHuman: false, civ: 'sparta' });
+    s.turn = militaryConfig.defense.defenseFromTurn;
     addCity(s, at(1, 1));
     const ship = addUnit(s, 'transport', at(3, 1), { owner: 1, hp: 2 });
     const rider = addUnit(s, 'spearman', at(3, 1), { owner: 1, hp: 1 });
@@ -213,5 +216,40 @@ describe('city and tower fire', () => {
     const after = endTurn(s);
     expect(after.currentPlayer).toBe(0);
     expect(hpOf(after, mine)).toBeLessThan(UNITS.spearman.hp);
+  });
+
+  it('no fire in peace time, except the passive test-mode enemy', () => {
+    const s = world();
+    s.turn = militaryConfig.defense.defenseFromTurn - 1;
+    addCity(s, at(2, 2));
+    const u = addUnit(s, 'spearman', at(3, 2), { owner: 1 });
+    runDefense(s, 0);
+    expect(hpOf(s, u)).toBe(UNITS.spearman.hp);
+    // Player 1 becomes the passive enemy (no civilization, not human): it fires from turn 1.
+    s.players[1].civ = null;
+    const v = world();
+    v.turn = 1;
+    v.players[1].civ = null;
+    addCity(v, at(2, 2), { owner: 1 });
+    const mine = addUnit(v, 'spearman', at(3, 2), { owner: 0 });
+    runDefense(v, 1);
+    expect(hpOf(v, mine)).toBe(UNITS.spearman.hp - 3);
+  });
+
+  it('the passive enemy city shoots its capturer before the capture happens', () => {
+    const s = world();
+    s.turn = 1;
+    s.players[1].civ = null;
+    s.settings.victory = { ...s.settings.victory, conquest: false };
+    addCity(s, at(0, 0));
+    const city = addCity(s, at(6, 2), { owner: 1 });
+    const hero = addUnit(s, 'spearman', at(6, 2), { owner: 0 });
+    s.units.find((u) => u.id === hero)!.capturing = city;
+    s.currentPlayer = 1;
+    const t = endTurn(s);
+    expect(t.currentPlayer).toBe(0);
+    expect(t.cities.find((c) => c.id === city)?.owner).toBe(0);
+    // (The unit may heal a little afterwards, so the event is checked, not the HP.)
+    expect(shots(t)[0]).toMatchObject({ shooter: 1, victim: 0, damage: 3 });
   });
 });

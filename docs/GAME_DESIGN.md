@@ -183,6 +183,7 @@ counterattack = round(defensePower / total × Defense_D × 4.5)   // only if D s
 
 ### City and tower fire
 At the start of its owner's turn, **every city center and every watchtower shoots once** at an enemy unit within **2 tiles**. Fixed damage, no counterattack: city center 3 (Settlement), 4 (Polis), 5 (Metropolis); watchtower 2 (numbers in `src/data/military.ts`).
+- **Peace time:** no city or tower fire before turn 15 (`defenseFromTurn`, the same turn as the AI peace time in section 9). The passive test-mode enemy fires from turn 1, at the start of the human's turn and before the capture, so its fire can be tried in the sandbox.
 - Order: city centers first, then watchtowers, each by building id. Dead units are removed right after the shot, so the next shooter picks a new target.
 - Target: the unit capturing this city first, then the lowest HP, then the nearest, then the lowest unit id. Passengers are never targets (their ship is, and a sunk ship takes them along). Ships near the coast can be hit.
 - **Shots never cancel a capture** (only an attack by a unit does), otherwise no city could ever be taken. The army has to survive the fire for a turn.
@@ -236,6 +237,7 @@ An enemy land unit that stands on a city center undisturbed for one turn takes o
 | Sparta | Warrior | Barracks early, hoplites, attacks neighbors |
 | Corinth | Builder | Fast growth, wonder race |
 
+- **Peace time:** no AI attacks anyone before turn 15, and no city or watchtower fires before then either (section 7).
 - The player chooses their own civilization (name/color free), the AI takes the rest.
 - AI approach: **utility-based** – every possible action gets a score based on current needs (e.g. food scarce → farm scores high), weighted by the personality. The AI only uses regular player actions and only sees what its vision allows.
 - Difficulty levels later (e.g. production bonus for the AI).

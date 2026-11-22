@@ -1,7 +1,14 @@
 // Economy overview: where every good comes from and where it goes in the next turn.
 // Estimated on a copy of the state the same way endTurn runs it (production, residents, units).
 
-import { GOOD_IDS, type BuildingId, type GoodId, type Stock } from '../../data';
+import {
+  GOOD_IDS,
+  militaryConfig,
+  populationConfig,
+  type BuildingId,
+  type GoodId,
+  type Stock,
+} from '../../data';
 import type { GameState, PlayerId } from '../state';
 import { connectedBuildingIds } from './connection';
 import { runPopulation } from './population';
@@ -133,15 +140,27 @@ export function economyOverview(state: GameState, player: PlayerId): EconomyOver
     addProduced('drachmas', 'taxes', cr.taxes);
   }
 
-  // 3. Unit upkeep.
+  // 3. Unit upkeep, booked at the full amount due: the units on the map plus the queued ones
+  // (they spawn before the upkeep at the next turn start). A shortfall is not hidden by the
+  // stock: it shows as a negative net, so "runs out" works.
   const upkeep = runUpkeep(sim, player, stock);
-  for (const id of GOOD_IDS)
-    addConsumed(
-      id,
-      'units',
-      undefined,
-      (upkeep.upkeepEaten[id] ?? 0) + (id === 'drachmas' ? upkeep.upkeepPaid : 0),
-    );
+  const unitsDue =
+    state.units.filter((u) => u.owner === player).length +
+    state.training.filter((t) => t.owner === player).length;
+  let foodBooked = 0;
+  for (const id of GOOD_IDS) {
+    const eaten = upkeep.upkeepEaten[id] ?? 0;
+    foodBooked += eaten;
+    addConsumed(id, 'units', undefined, eaten);
+  }
+  // Food the stock could not cover (and the queued units' food) goes to the first food good.
+  addConsumed(
+    populationConfig.foodOrder[0],
+    'units',
+    undefined,
+    unitsDue * militaryConfig.upkeepFood - foodBooked,
+  );
+  addConsumed('drachmas', 'units', undefined, unitsDue * militaryConfig.upkeepDrachmas);
 
   const goods: GoodFlow[] = [];
   for (const id of GOOD_IDS) {

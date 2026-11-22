@@ -137,7 +137,8 @@ export function buildContext(state: GameState, player: PlayerId): AiContext {
   const net = {} as Record<GoodId, number>;
   for (const id of GOOD_IDS) net[id] = 0;
   for (const flow of overview.goods) net[flow.good] = flow.net;
-  // The overview books only the pay the stock can cover: add it back to see the real income.
+  // The overview books the full pay due (units plus queued units): add it back to get the
+  // income before pay.
   let drachmaIncome = net.drachmas;
   for (const flow of overview.goods) {
     if (flow.good !== 'drachmas') continue;

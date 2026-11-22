@@ -3,7 +3,14 @@
 import { militaryConfig } from '../../data';
 import { distance } from '../hex';
 import { tileIndex } from '../map';
-import type { Building, City, GameState, PlayerId, Unit } from '../state';
+import {
+  isPassive,
+  type Building,
+  type City,
+  type GameState,
+  type PlayerId,
+  type Unit,
+} from '../state';
 import { addEvent, playersSeeing } from './events';
 import { pruneUnits } from './movement';
 
@@ -48,9 +55,13 @@ export function pickTarget(
  * Start of the player's turn: every city center of the player shoots once, then every
  * watchtower (each group by building id ascending), each at the best enemy unit in range.
  * No counterattack. Dead units (and the passengers of sunk ships) are removed right after
- * each shot. Shots never cancel a capture (`capturing` is left alone). Mutates.
+ * each shot. No fire in peace time (before `defenseFromTurn`; the passive test-mode enemy
+ * always fires). Shots never cancel a capture (`capturing` is left alone). Mutates.
  */
 export function runDefense(state: GameState, player: PlayerId): void {
+  // Peace time: no fire before `defenseFromTurn`, except the passive test-mode enemy.
+  const me = state.players.find((p) => p.id === player);
+  if (state.turn < militaryConfig.defense.defenseFromTurn && !(me && isPassive(me))) return;
   const own = state.buildings.filter((b) => b.owner === player);
   const shooters = [
     ...own.filter((b) => b.type === 'cityCenter').sort((a, b) => a.id - b.id),

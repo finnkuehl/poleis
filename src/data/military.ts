@@ -43,6 +43,10 @@ export const militaryConfig = {
   // every city center and every watchtower shoots once at an enemy unit in range. The damage is
   // fixed and the target never shoots back. Shots never cancel a capture.
   defense: {
+    // No city or watchtower fires before this turn (peace time). Matches
+    // `aiConfig.peaceUntilTurn`: nobody is attacked before then. The passive test-mode enemy
+    // fires from turn 1 so the feature can be tried in the sandbox.
+    defenseFromTurn: 15,
     // Range in tiles (hex distance).
     range: 2,
     // Damage of a city center's shot, by city level.

@@ -98,4 +98,14 @@ describe('capturing', () => {
     s.cities[0].owner = 0;
     expect(move(s, unit, at(4, 2)).units[0].capturing).toBeNull();
   });
+
+  it('a scout standing on an enemy city (old save) never takes it and loses `capturing`', () => {
+    const { s, cityId, unit } = world('scout');
+    const scout = s.units.find((u) => u.id === unit)!;
+    scout.hex = at(4, 2);
+    scout.capturing = cityId;
+    const t = endTurn(s);
+    expect(t.cities.find((c) => c.id === cityId)?.owner).toBe(1);
+    expect(t.units.find((u) => u.id === unit)?.capturing).toBeNull();
+  });
 });
