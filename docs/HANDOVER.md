@@ -14,7 +14,7 @@ Read it together with `CLAUDE.md` (rules), `docs/GAME_DESIGN.md` (game design in
 - **M5 – First complete game** (`v0.5.0`, branch `m5-complete-game`): start menu, 1–3 AI civilizations (Athens, Sparta, Corinth), victory/defeat, scores, saving (autosave + 3 slots). Rules in GAME_DESIGN "Detailed rules (decided in M5)". Next: M6 – Seafaring (see §6).
 - **Low priority per good** is merged as `v0.5.1` (PR #9).
 - **M6 – Seafaring is paused** (user request); its gameplay decisions are on branch `m6-seafaring`.
-- **M7 graphics in progress** on branch `m7-graphics` (PR for review): see `docs/ART.md` (chosen V1 isometric diorama style, asset layers and anchors) and `tools/art/README.md` (how the art is generated).
+- **M7 graphics are merged as `v0.5.2`** (PR #10): see `docs/ART.md` (all art decisions with the user, incl. grounded buildings, hills/mountains, forests, towns, roads, units) and `tools/art/README.md` (how the building, unit and tree art is generated). Rest of M7 (sound, animations, tutorial, PWA, balancing) is not started.
 - **Quick-start URLs for testing** skip the start menu: `?seed=1&sandbox` (test mode, no autosave), `?seed=1&ai=3` (3 AIs), `&size=small|normal|large`.
 
 ## 2. How we work (important – the user relies on it)
