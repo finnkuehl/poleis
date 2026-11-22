@@ -59,7 +59,7 @@ export function createCity(
 ): number {
   const id = state.nextId++;
   state.buildings.push({ id, type: 'cityCenter', owner, hex, paused: false });
-  state.cities.push({ id, owner, center: hex, level: 'settlement', residents, supplyStreak: 0 });
+  state.cities.push({ id, owner, center: hex, level: 'settlement', residents });
   // The center tile is always the city's, even if somebody's territory reached it.
   const i = tileIndex(state.map, hex);
   state.territory[i] = owner;

@@ -82,7 +82,6 @@ export const en = {
     residentsUse: 'residents',
     unitsUse: 'units',
     needsUse: 'city needs',
-    supplyUse: 'level-up supply',
   },
   // Singular and plural forms (see formatResidents, formatDrachmas, formatTurns).
   plural: {
@@ -107,7 +106,7 @@ export const en = {
     advanceConfirm: 'Advance',
     topLevel: 'Highest level reached',
     residentsReq: 'Residents {have} / {need}',
-    supplyReq: '{good} supplied {streak} of {turns} in a row',
+    supplyReq: '{good}: makes {made} / needs {needed} per turn',
     costReq: '{cost}: {goods}',
     done: 'Done',
     open: 'Not yet',
@@ -127,7 +126,6 @@ export const en = {
     line: 'Turn {turn}: {parts}',
     hunger: 'Hunger: lost {residents}',
     hungerNoLoss: 'Hunger: the city has too little food.',
-    supplied: '{good} supplied {streak} of {turns}',
     ready: 'Ready to advance to {level}',
     unitReady: '{unit} is ready',
     unitsReadyOne: '1 unit is ready',
@@ -295,7 +293,7 @@ export const en = {
     notOwnCity: 'That is not your city.',
     cityMaxLevel: 'This city has reached the highest level.',
     notEnoughResidents: 'Not enough residents yet.',
-    supplyNotReady: 'Supply the city with {good} for {turns} turns in a row first.',
+    supplyNotReady: 'Produce more {good} first: it makes {made} per turn but {needed} are needed.',
     noMarketplace: 'You need a connected, staffed marketplace to trade.',
     cannotTradeGood: "Drachmas can't be traded.",
     invalidAmount: 'Choose an amount of at least 1.',

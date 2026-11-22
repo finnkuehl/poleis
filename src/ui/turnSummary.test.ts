@@ -13,8 +13,6 @@ function cityReport(over: Partial<CityReport>): CityReport {
     fed: true,
     needsMet: true,
     needsConsumed: {},
-    supplied: null,
-    supplyStreak: 0,
     taxes: 0,
     ...over,
   };
@@ -58,22 +56,6 @@ describe('turnSummary', () => {
     expect(turnSummary(r)).toEqual([
       { text: 'Hunger: the city has too little food.', kind: 'error' },
     ]);
-  });
-  it('shows supply progress only when supplied and the context is known', () => {
-    const r = report(cityReport({ supplied: true, supplyStreak: 2 }));
-    expect(turnSummary(r)).toEqual([]);
-    expect(turnSummary(r, { supply: { 1: { good: 'oil', turnsNeeded: 3 } } })).toEqual([
-      { text: 'Oil supplied 2 of 3 turns', kind: 'info' },
-    ]);
-    const missed = report(cityReport({ supplied: false }));
-    expect(turnSummary(missed, { supply: { 1: { good: 'oil', turnsNeeded: 3 } } })).toEqual([]);
-  });
-  it('stops reporting supply once the goal is reached', () => {
-    const ctx = { supply: { 1: { good: 'oil' as const, turnsNeeded: 3 } } };
-    expect(turnSummary(report(cityReport({ supplied: true, supplyStreak: 3 })), ctx)).toEqual([
-      { text: 'Oil supplied 3 of 3 turns', kind: 'info' },
-    ]);
-    expect(turnSummary(report(cityReport({ supplied: true, supplyStreak: 16 })), ctx)).toEqual([]);
   });
   it('announces cities that are ready to advance', () => {
     const r = report(cityReport({ taxes: 3 }));

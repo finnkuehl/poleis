@@ -90,7 +90,7 @@ function pickCombat(ctx: AiContext, city: City, role: 'defender' | 'attacker'): 
 /** Goods a city that is ready to advance still needs: units must not eat into them. */
 function advanceKeep(ctx: AiContext): Goods {
   for (const ci of ctx.cities) {
-    const check = advanceCheck(ctx.state, ci.city.id);
+    const check = advanceCheck(ctx.state, ci.city.id, ctx.production);
     if (check && check.to !== null && check.residents.ok && !check.canAdvance) {
       return check.cost.cost;
     }

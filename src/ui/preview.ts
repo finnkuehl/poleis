@@ -174,12 +174,13 @@ const cityStats: CityStats = {
   foodPerTurn: 6,
   needs: [],
   supply: null,
+  growthPerTurn: 1,
   taxPerTurn: 6,
 };
 const settlementCheck: AdvanceCheck = {
   to: 'polis',
   residents: { have: 12, need: 20, ok: false },
-  supply: { good: 'oil', streak: 2, turns: 3, ok: false },
+  supply: { good: 'oil', made: 1, needed: 2, ok: false },
   cost: {
     cost: { planks: 20, stone: 20, drachmas: 30 },
     missing: { stone: 19, drachmas: 30 },
@@ -210,7 +211,7 @@ addControl('City: settlement, ready', () =>
     {
       to: 'polis',
       residents: { have: 20, need: 20, ok: true },
-      supply: { good: 'oil', streak: 3, turns: 3, ok: true },
+      supply: { good: 'oil', made: 2, needed: 2, ok: true },
       cost: { cost: settlementCheck.cost.cost, missing: {}, ok: true },
       canAdvance: true,
     },
@@ -234,7 +235,7 @@ addControl('City: polis, no oil', () =>
     {
       to: 'metropolis',
       residents: { have: 30, need: 50, ok: false },
-      supply: { good: 'wine', streak: 0, turns: 3, ok: false },
+      supply: { good: 'wine', made: 0, needed: 3, ok: false },
       cost: {
         cost: { planks: 40, stone: 40, bronze: 10, drachmas: 80 },
         missing: { bronze: 10, drachmas: 40 },
@@ -262,7 +263,7 @@ addControl('City: metropolis', () =>
     {
       to: null,
       residents: { have: 60, need: 0, ok: true },
-      supply: { good: 'oil', streak: 0, turns: 0, ok: true },
+      supply: { good: 'oil', made: 0, needed: 0, ok: true },
       cost: { cost: {}, missing: {}, ok: true },
       canAdvance: false,
     },
@@ -350,8 +351,6 @@ function cityReport(over: Partial<CityReport>): CityReport {
     fed: true,
     needsMet: true,
     needsConsumed: {},
-    supplied: null,
-    supplyStreak: 0,
     taxes: 3,
     ...over,
   };
@@ -370,9 +369,6 @@ function turnReport(...cities: CityReport[]): TurnReport {
 }
 addControl('Turn summary toasts', () => {
   const sequence = [
-    ...turnSummary(turnReport(cityReport({ supplied: true, supplyStreak: 2 })), {
-      supply: { 1: { good: 'oil', turnsNeeded: 3 } },
-    }),
     ...turnSummary(turnReport(cityReport({ fed: false, residentsAfter: 5, taxes: 2 }))),
     ...turnSummary(turnReport(cityReport({ taxes: 0, residentsAfter: 6 })), {
       canAdvance: { 1: 'polis' },

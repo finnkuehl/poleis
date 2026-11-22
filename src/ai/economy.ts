@@ -7,14 +7,7 @@
 import type { Action } from '../core/actions';
 import { neighbors, type Hex } from '../core/hex';
 import { terrainAt, tileIndex } from '../core/map';
-import {
-  advanceCheck,
-  canAfford,
-  cityStats,
-  foodIn,
-  missingGoods,
-  territoryGain,
-} from '../core/rules';
+import { advanceCheck, canAfford, foodIn, missingGoods, territoryGain } from '../core/rules';
 import {
   aiConfig,
   BUILDINGS,
@@ -280,7 +273,7 @@ function houseWishes(g: Gen): void {
 function advanceWishes(g: Gen): void {
   const { ctx } = g;
   for (const ci of ctx.cities) {
-    const check = advanceCheck(ctx.state, ci.city.id);
+    const check = advanceCheck(ctx.state, ci.city.id, ctx.production);
     if (!check || check.to === null) continue;
     if (check.canAdvance) {
       g.demand.push({
@@ -290,7 +283,7 @@ function advanceWishes(g: Gen): void {
         key: `advance:${ci.city.id}`,
         cost: check.cost.cost,
       });
-    } else if (check.residents.ok && (check.supply.ok || ctx.stock[check.supply.good] > 0)) {
+    } else if (check.residents.ok && check.supply.ok) {
       g.demand.push({
         action: null,
         utility: U.advanceReserve,
@@ -312,12 +305,26 @@ function chainWishes(g: Gen): void {
     cities.some((c) => levelIndex(c) === level && c.city.residents >= minRes);
   const atLeast = (level: number): boolean => cities.some((c) => levelIndex(c) >= level);
 
+  // Production still missing for an advance (made vs needed, see `advanceCheck`): a city
+  // prepares its advance once it is nearly big enough. Oil/wine already used by Polis /
+  // Metropolis cities are covered by the net target.
+  const supplyShort = (good: GoodId, level: number, minRes: number): number => {
+    let short = 0;
+    for (const ci of cities) {
+      if (levelIndex(ci) !== level || ci.city.residents < minRes) continue;
+      const check = advanceCheck(ctx.state, ci.city.id, ctx.production);
+      if (check && check.to !== null && check.supply.good === good) {
+        short = Math.max(short, check.supply.needed - check.supply.made);
+      }
+    }
+    return short;
+  };
+
   // Oil: needed from Polis on, prepared by a settlement that is nearly big enough.
   const oilNeedy = anyLevel(0, cfg.oilChainResidents) || atLeast(1);
   if (
     oilNeedy &&
-    ctx.net.oil < cfg.oilNetTarget &&
-    (ctx.stock.oil < cfg.oilStartStock || ctx.net.oil < 0)
+    (ctx.net.oil < cfg.oilNetTarget || supplyShort('oil', 0, cfg.oilChainResidents) > 0)
   ) {
     const groveCap = cfg.maxPerCity.oliveGrove * cities.length;
     if (ctx.count.oliveGrove <= ctx.count.oilPress) {
@@ -335,8 +342,7 @@ function chainWishes(g: Gen): void {
   const wineNeedy = anyLevel(1, cfg.wineChainResidents) || atLeast(2);
   if (
     wineNeedy &&
-    ctx.net.wine < cfg.wineNetTarget &&
-    (ctx.stock.wine < cfg.wineStartStock || ctx.net.wine < 0)
+    (ctx.net.wine < cfg.wineNetTarget || supplyShort('wine', 1, cfg.wineChainResidents) > 0)
   ) {
     if (ctx.count.vineyard <= ctx.count.winery) {
       if (
@@ -586,25 +592,6 @@ function tradeWishes(g: Gen): Candidate[] {
       reason: `sell surplus ${good}`,
       key: `sell:${good}`,
       cost: { [good]: lots * sellAmount },
-    });
-  }
-  // Buy the oil / wine a city needs to count its supply turns for the next level.
-  for (const ci of ctx.cities) {
-    const check = advanceCheck(ctx.state, ci.city.id);
-    if (!check || check.to === null || !check.residents.ok || check.supply.ok) continue;
-    const supply = cityStats(ctx.state, ci.city.id).supply;
-    if (!supply) continue;
-    const lots = supply.amount - ctx.stock[supply.good];
-    const keep = Math.max(cfg.buyKeepDrachmas, check.cost.cost.drachmas ?? 0);
-    const rich = ctx.stock.drachmas >= cfg.buyRichDrachmas;
-    if (lots < 1 || lots > (rich ? cfg.buyMaxGoodsRich : cfg.buyMaxGoods)) continue;
-    if (ctx.stock.drachmas < lots * buyPrice + keep) continue;
-    out.push({
-      action: { type: 'trade', good: supply.good, direction: 'buy', lots },
-      utility: U.buy * w,
-      reason: `buy ${supply.good} for the supply of ${check.to}`,
-      key: `buy:${supply.good}`,
-      cost: { drachmas: lots * buyPrice },
     });
   }
   // Buy what blocks the strongest wish if that is only a few goods and the drachmas allow it.

@@ -53,7 +53,8 @@ export interface RuleError {
   terrains?: readonly TerrainId[];
   /** levelTooLow: the city level that is needed. */
   level?: CityLevel;
-  /** supplyNotReady: the good that must be supplied and for how many turns in a row. */
+  /** supplyNotReady: the supply good, what is produced per turn and what is needed per turn. */
   good?: GoodId;
-  turns?: number;
+  made?: number;
+  needed?: number;
 }

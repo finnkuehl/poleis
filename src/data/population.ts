@@ -9,7 +9,9 @@ export const populationConfig = {
   // Food goods in the order they are eaten (fish first, grain is kept back for settlers and horsemen).
   foodOrder: ['fish', 'grain'] as const,
   // Residents that move in per turn if the city is fed and has free housing.
-  growthPerTurn: { settlement: 1, polis: 2, metropolis: 2 },
+  growthPerTurn: { settlement: 1, polis: 1, metropolis: 1 },
+  // Extra residents per turn when all needs are covered (only on levels that have needs: Polis, Metropolis).
+  growthBonusNeedsMet: 1,
   // Residents lost per turn if there is not enough food.
   starvationLoss: 1,
   // A city never drops below this many residents.

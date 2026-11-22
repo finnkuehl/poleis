@@ -115,7 +115,6 @@ export function addCity(
     center: h,
     level: opts.level ?? 'settlement',
     residents: opts.residents ?? populationConfig.startResidents,
-    supplyStreak: 0,
   });
   claimTerritory(state, h, opts.radius ?? BUILDINGS.cityCenter.territoryRadius, owner, id);
   return id;

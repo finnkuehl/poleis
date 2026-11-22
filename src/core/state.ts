@@ -83,8 +83,6 @@ export interface City {
   center: Hex;
   level: CityLevel;
   residents: number;
-  /** Turns in a row the next level's supply good was supplied. */
-  supplyStreak: number;
 }
 
 /** A multi-turn move order (docs/GAME_DESIGN.md §7, move orders). */
@@ -283,7 +281,6 @@ export function createGameState(
         center: start,
         level: 'settlement',
         residents: populationConfig.startResidents,
-        supplyStreak: 0,
       },
     ],
     tileCity: map.tiles.map(() => -1),

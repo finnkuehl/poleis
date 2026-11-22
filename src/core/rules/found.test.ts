@@ -29,7 +29,7 @@ describe('foundCity', () => {
     const st = res.state;
     expect(st.units).toHaveLength(0);
     const city = st.cities[st.cities.length - 1];
-    expect(city).toMatchObject({ owner: 0, residents: 2, level: 'settlement', supplyStreak: 0 });
+    expect(city).toMatchObject({ owner: 0, residents: 2, level: 'settlement' });
     expect(city.center).toEqual(at(7, 4));
     expect(st.buildings.find((b) => b.id === city.id)?.type).toBe('cityCenter');
     const i = tileIndex(st.map, at(7, 4));

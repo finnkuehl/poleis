@@ -214,7 +214,10 @@ function defendPosts(view: View, roles: Roles): Candidate[] {
     const u = view.units.find((x) => x.id === id);
     if (!u || !ready(view.ctx, u)) continue;
     if (distance(u.hex, city.center) <= 1) continue;
-    const post = [city.center, ...neighbors(city.center)].find((h) => freeKnown(view, h));
+    // Only a post the unit can actually walk to (a defender may be cut off on another island).
+    const post = [city.center, ...neighbors(city.center)].find(
+      (h) => freeKnown(view, h) && planMoveOrder(view.ctx.state, u.id, h).ok,
+    );
     if (!post) continue;
     out.push(
       cmd(

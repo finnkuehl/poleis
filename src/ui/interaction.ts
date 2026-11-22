@@ -45,7 +45,6 @@ import {
   economyConfig,
   type BuildingId,
   type CityLevel,
-  type GoodId,
   type Stock,
   type UnitId,
 } from '../data';
@@ -290,8 +289,9 @@ export async function createGame(
   /** Ids of the player's cities that can advance right now. */
   function readyCities(s: GameState): Set<number> {
     const ready = new Set<number>();
+    const production = previewProduction(s, PLAYER);
     for (const c of s.cities) {
-      if (c.owner === PLAYER && advanceCheck(s, c.id)?.canAdvance) ready.add(c.id);
+      if (c.owner === PLAYER && advanceCheck(s, c.id, production)?.canAdvance) ready.add(c.id);
     }
     return ready;
   }
@@ -312,18 +312,17 @@ export async function createGame(
     const report = state.result ? null : state.lastReport;
     if (report) {
       const canAdvance: Record<number, CityLevel> = {};
-      const supply: Record<number, { good: GoodId; turnsNeeded: number }> = {};
+      const production = previewProduction(state, PLAYER);
       for (const c of state.cities) {
         if (c.owner !== PLAYER) continue;
-        const check = advanceCheck(state, c.id);
+        const check = advanceCheck(state, c.id, production);
         if (!check) continue;
         if (check.to && check.canAdvance && !readyBefore.has(c.id)) canAdvance[c.id] = check.to;
-        supply[c.id] = { good: check.supply.good, turnsNeeded: check.supply.turns };
       }
       const spawnedUnits = ownUnits()
         .filter((u) => !unitsBefore.has(u.id))
         .map((u) => u.type);
-      lines.push(...turnSummary(report, { canAdvance, supply, spawnedUnits }));
+      lines.push(...turnSummary(report, { canAdvance, spawnedUnits }));
     }
     if (lines.length === 0) return;
     const isError = lines.some((l) => l.kind === 'error');
@@ -462,7 +461,8 @@ export async function createGame(
     if (building?.type === 'cityCenter') {
       const cityId = cityIdOf(state, building);
       const city = state.cities.find((c) => c.id === cityId);
-      const check = advanceCheck(state, cityId);
+      const production = previewProduction(state, PLAYER);
+      const check = advanceCheck(state, cityId, production);
       if (city && check) {
         // Residents eat after this turn's production, so judge food, needs and taxes
         // against the stock as it will be after production (a copy – the real state stays).
@@ -472,7 +472,7 @@ export async function createGame(
           hex,
           terrain,
           level: city.level,
-          stats: cityStats(afterProduction, cityId),
+          stats: cityStats(afterProduction, cityId, production),
           check,
           workers: cityWorkers(cityId),
           stock: stockOf(afterProduction),

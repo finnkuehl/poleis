@@ -37,7 +37,8 @@ export function formatError(err: RuleError): string {
     terrains: formatTerrains(err.terrains ?? []),
     level: err.level ? en.levels[err.level] : '',
     good: err.good ? en.goods[err.good].toLowerCase() : '',
-    turns: err.turns ?? 0,
+    made: err.made ?? 0,
+    needed: err.needed ?? 0,
     distance: militaryConfig.foundMinDistance,
   });
 }
@@ -215,9 +216,7 @@ export function formatUsed(flow: GoodFlow): string | null {
           ? en.economy.residentsUse
           : c.source === 'units'
             ? en.economy.unitsUse
-            : c.source === 'needs'
-              ? en.economy.needsUse
-              : en.economy.supplyUse;
+            : en.economy.needsUse;
     return flowPart(name, c.source === 'building' ? c.count : 1, c.amount, -1);
   });
   return `${en.economy.used}: ${parts.join(', ')}`;

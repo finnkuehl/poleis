@@ -81,7 +81,7 @@ export function mayExpandFrom(ctx: AiContext, city: City): boolean {
   if (ctx.cities.length + settlerCount(ctx) >= M.maxCities[ctx.personality]) return false;
   if (city.residents < M.expandMinResidents) return false;
   const waiting = ctx.cities.some((c) => {
-    const check = advanceCheck(ctx.state, c.city.id);
+    const check = advanceCheck(ctx.state, c.city.id, ctx.production);
     return check !== null && check.to !== null && check.residents.ok && !check.canAdvance;
   });
   if (waiting && city.residents < M.expandWaitResidents) return false;

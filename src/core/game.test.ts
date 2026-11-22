@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Goods } from '../data';
 import { applyAction, type Action } from './actions';
-import { checkPlacement, validPlacements } from './rules';
+import { advanceCheck, checkPlacement, validPlacements } from './rules';
 import type { BuildingStatus } from './rules';
 import { createGameState, type GameState } from './state';
 import { addBuilding, addCity, at, makeTestState } from './testing';
@@ -118,18 +118,21 @@ describe('determinism', () => {
 });
 
 describe('advancing to polis', () => {
-  it('grow to 20 residents, supply oil 3 turns, advance, then build a vineyard on hills', () => {
+  it('grow to 20 residents, make enough oil, advance, then build a vineyard on hills', () => {
     const s = makeTestState(['hpppppp', 'pppppppp'.slice(0, 7), 'ppppppp'], {
-      goods: { grain: 200, oil: 60, planks: 40, stone: 40, drachmas: 30, wood: 30 },
+      goods: { grain: 200, planks: 40, stone: 40, drachmas: 30, wood: 30 },
       ownAll: false,
     });
     addCity(s, at(3, 1), { radius: 4 });
     for (const h of [at(2, 1), at(4, 1), at(2, 0), at(4, 0)]) addBuilding(s, 'house', h);
+    // An olive grove and an oil press make 2 oil per turn: enough for 20 residents at a Polis.
+    addBuilding(s, 'oliveGrove', at(3, 2));
+    addBuilding(s, 'oilPress', at(3, 0));
     // 4 houses + city center = 28 housing; the city grows by 1 per turn, from 4 to 20 in 16 turns.
     let t = s;
     for (let i = 0; i < 16; i++) t = run(t, { type: 'endTurn' });
     expect(t.cities[0].residents).toBe(20);
-    expect(t.cities[0].supplyStreak).toBeGreaterThanOrEqual(3);
+    expect(advanceCheck(t, t.cities[0].id)?.supply).toMatchObject({ made: 2, needed: 2, ok: true });
     t = run(t, { type: 'advanceCity', cityId: t.cities[0].id });
     expect(t.cities[0].level).toBe('polis');
     expect(checkPlacement(t, 0, 'vineyard', at(0, 0))).toBeNull();

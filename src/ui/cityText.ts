@@ -10,19 +10,19 @@ import {
   type Stock,
 } from '../data';
 import { en } from '../i18n/en';
-import { fill, formatError, formatGoods, formatResidents, formatTurns } from '../i18n/format';
+import { fill, formatError, formatGoods, formatResidents } from '../i18n/format';
 import { costPartsFromMissing, type CostPart } from './buildingText';
 
 export type GrowthState =
   { kind: 'growing'; perTurn: number } | { kind: 'full' } | { kind: 'hungry'; loss: number };
 
 /** Is the city growing, full or hungry? (hungry = the food in stock does not cover one turn). */
-export function growthState(level: CityLevel, stats: CityStats, stock: Stock): GrowthState {
+export function growthState(_level: CityLevel, stats: CityStats, stock: Stock): GrowthState {
   const food = populationConfig.foodOrder.reduce((sum, g) => sum + stock[g], 0);
   if (food < stats.foodPerTurn) return { kind: 'hungry', loss: populationConfig.starvationLoss };
   const free = stats.housing - stats.residents;
   if (free <= 0) return { kind: 'full' };
-  return { kind: 'growing', perTurn: Math.min(populationConfig.growthPerTurn[level], free) };
+  return { kind: 'growing', perTurn: Math.min(stats.growthPerTurn, free) };
 }
 
 export function growthText(state: GrowthState): string {
@@ -67,9 +67,8 @@ export function advanceRows(check: AdvanceCheck): ChecklistRow[] {
       ok: check.supply.ok,
       text: fill(en.cityPanel.supplyReq, {
         good: en.goods[check.supply.good],
-        // Show at most the goal ("3 of 3"), even if the city has been supplied longer.
-        streak: Math.min(check.supply.streak, check.supply.turns),
-        turns: formatTurns(check.supply.turns),
+        made: check.supply.made,
+        needed: check.supply.needed,
       }),
     },
     {
@@ -89,7 +88,8 @@ export function advanceBlockReason(check: AdvanceCheck): string | null {
     return formatError({
       code: 'supplyNotReady',
       good: check.supply.good,
-      turns: check.supply.turns,
+      made: check.supply.made,
+      needed: check.supply.needed,
     });
   }
   return formatError({ code: 'notAffordable', missing: check.cost.missing });

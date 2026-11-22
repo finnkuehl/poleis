@@ -179,6 +179,7 @@ describe('migration 3 -> 4', () => {
     const buildings = old.buildings as Record<string, unknown>[];
     buildings.push({ id: 900, type: 'bakery', owner: 0, hex: { q: 2, r: 2 }, paused: true });
     old.lastReport = { delta: { bread: 2 } };
+    (old.cities as Record<string, unknown>[]).forEach((c) => (c.supplyStreak = 2));
     const s = fakeStorage();
     s.setItem(
       'poleis.save.auto',
@@ -204,6 +205,7 @@ describe('migration 3 -> 4', () => {
       paused: true,
     });
     expect(res.state.lastReport).toBeNull();
+    expect(res.state.cities.every((c) => !('supplyStreak' in c))).toBe(true);
     expect(() => endTurn(res.state)).not.toThrow();
   });
 });

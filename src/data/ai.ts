@@ -98,9 +98,6 @@ export const aiConfig = {
   preparePolisFactor: 1.2,
   // House wish factor when the city lacks workers.
   workerShortHouseFactor: 1.3,
-  // Oil / wine stock below which the chain is started (also when the net is negative).
-  oilStartStock: 10,
-  wineStartStock: 12,
   // Second building of a chain (press, winery, smelter) is wished a bit more than the first.
   chainSecondFactor: 1.1,
   // Most mines the bronze chain builds.

@@ -125,15 +125,15 @@ Woodcutter ─Wood─┴► Smelter ──Bronze──► Units, wonder
 
 - Residents live in the city center and houses (housing) and work in buildings automatically (order: food first, then raw materials, then processing).
 - **Consumption:** 1 food per 2 residents per turn (rounded up).
-- **Growth:** If food is covered and there is free housing → +1 resident per turn (from Polis +2).
+- **Growth:** If food is covered and there is free housing → +1 resident per turn; **+1 more** on a Polis or Metropolis whose needs are all met.
 - **Starvation:** If food is missing → −1 resident per turn.
 - **Taxes:** 1 drachma per 2 residents; +50 % if all needs of the current level are covered.
 
 | Level | Needs per turn | Level-up requires | Unlocks |
 |---|---|---|---|
-| Settlement | Food | – (start) | Basic buildings, scout, settler, spearman, archer |
-| Polis | Food + 1 oil per 10 residents | 20 residents, 3 turns oil supplied, 20 planks, 20 stone, 30 drachmas | Vineyard, winery, harbor, marketplace, temple, hoplite, transport ship |
-| Metropolis | as Polis + 1 wine per 10 residents | 50 residents, 3 turns wine supplied, 40 planks, 40 stone, 10 bronze, 80 drachmas | World wonder, horseman, trireme |
+| Settlement | Food (never oil or wine) | – (start) | Basic buildings, scout, settler, spearman, archer |
+| Polis | Food + 1 oil per 10 residents | 20 residents, oil production per turn covers the need (see below), 20 planks, 20 stone, 30 drachmas | Vineyard, winery, harbor, marketplace, temple, hoplite, transport ship |
+| Metropolis | as Polis + 1 wine per 10 residents | 50 residents, wine production per turn covers the need (see below), 40 planks, 40 stone, 10 bronze, 80 drachmas | World wonder, horseman, trireme |
 
 Every city of a civilization has its own level; the stock is shared.
 
@@ -141,8 +141,10 @@ Every city of a civilization has its own level; the stock is shared.
 - **Start:** a new city has **4 residents** (its city center is full). Residents live in the city center and the houses in that city's territory and work in that city's buildings.
 - **The city center feeds a little by itself:** it produces **2 grain per turn** without workers, which feeds its first 4 residents. A city never gets stuck – a fishery or a farm can always be staffed again.
 - **Eating:** fish is eaten first, then grain (grain is kept back for settlers and horsemen). If food runs short, residents eat what is there and the city loses 1 resident; a city never drops below 1 resident.
-- **Growth** needs only food and free housing; missing oil or wine does not stop growth.
-- **Oil and wine are supplied beforehand:** as soon as oil is in stock, a settlement starts using 1 oil per 10 residents (rounded up) each turn. Turns in a row with enough oil are counted; a turn without enough oil resets the count to 0. Three supplied turns in a row (plus the other requirements) allow the advance to Polis. Wine works the same way for Polis → Metropolis.
+- **Growth** needs only food and free housing; missing oil or wine never stops or reverses growth, it only removes the +1 growth bonus and the +50 % taxes.
+- **Oil and wine are used only from the level that needs them:** a city uses 1 oil per 10 residents (rounded up) only once it **is** a Polis, and oil and wine once it is a Metropolis. A Settlement never touches oil. There is no supply streak.
+- **Advancing needs enough production:** besides the residents and the one-time cost, the player's buildings must make enough of the next level's supply good (oil for Polis, wine for Metropolis) per turn. `made` = what all the player's buildings produce of it per turn (marketplace purchases and stock do not count); `needed` = what all OTHER own cities already need of it at their current level + what this city will need at the next level (1 per 10 residents, rounded up). The advance is possible when `made >= needed`. The city panel shows it as "Oil: makes 2 / needs 3 per turn".
+- **Needs met** (fed, and every need of the current level covered): +50 % taxes and +1 growth per turn (Polis and Metropolis only). Needs not met: only these bonuses are lost.
 - **Advancing is the player's decision:** the city panel shows the requirements; the "Advance" button pays the goods and raises the level. A city never drops back a level – a Polis without oil only loses the +50 % tax bonus.
 - **Taxes:** rounded down (e.g. 5 residents → 2 drachmas; with the bonus 2 × 1.5 = 3).
 - **Marketplace:** sell 2 of any good for 1 drachma, or buy 1 good for 3 drachmas. Trading works only while the player has a connected, staffed marketplace.

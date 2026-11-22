@@ -23,7 +23,7 @@ describe('createGameState', () => {
   it('creates the starting city with 4 residents and its territory', () => {
     expect(s.cities).toHaveLength(1);
     const city = s.cities[0];
-    expect(city).toMatchObject({ id: 1, level: 'settlement', residents: 4, supplyStreak: 0 });
+    expect(city).toMatchObject({ id: 1, level: 'settlement', residents: 4 });
     expect(s.buildings[0].paused).toBe(false);
     for (let i = 0; i < s.territory.length; i++) {
       expect(s.tileCity[i] === city.id).toBe(s.territory[i] === 0);

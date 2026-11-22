@@ -24,6 +24,7 @@ import {
   workersNeeded,
   cityIdOf,
   type BuildingStatus,
+  type TurnReport,
   type WorkerSummary,
 } from '../core/rules';
 import { neighbors, type Hex } from '../core/hex';
@@ -61,6 +62,8 @@ export interface AiContext {
   pending: Record<BuildingId, number>;
   /** Number of own buildings per type that actually work (producing or open for business). */
   working: Record<BuildingId, number>;
+  /** `previewProduction` of this turn (pass it to `advanceCheck` so it is not recomputed per city). */
+  production: TurnReport;
   statusOf: Map<number, BuildingStatus['kind']>;
   /** Indices of the player's own territory tiles. */
   ownTiles: number[];
@@ -236,6 +239,7 @@ export function buildContext(state: GameState, player: PlayerId): AiContext {
     count,
     pending,
     working,
+    production: report,
     statusOf,
     ownTiles,
     connectedTile,

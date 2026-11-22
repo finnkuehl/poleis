@@ -146,12 +146,16 @@ function applyActionInner(state: GameState, action: Action): ActionResult {
       if (!check || !def || check.to === null) return fail({ code: 'cityMaxLevel' });
       if (!check.residents.ok) return fail({ code: 'notEnoughResidents' });
       if (!check.supply.ok) {
-        return fail({ code: 'supplyNotReady', good: check.supply.good, turns: check.supply.turns });
+        return fail({
+          code: 'supplyNotReady',
+          good: check.supply.good,
+          made: check.supply.made,
+          needed: check.supply.needed,
+        });
       }
       if (!check.cost.ok) return fail({ code: 'notAffordable', missing: check.cost.missing });
       pay(stock, def.cost);
       city.level = def.to;
-      city.supplyStreak = 0;
       return { ok: true, state: next };
     }
     case 'trade': {
