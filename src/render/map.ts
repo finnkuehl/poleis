@@ -9,6 +9,8 @@ import { mapWorldBounds } from './bounds';
 import type { Rect } from './camera';
 import { hexSize } from './config';
 import { createEconomyLayers } from './economyLayers';
+import { createGroundLayer } from './groundLayer';
+import { groundFootprints } from './groundworks';
 import { createOrderLayers, type OrderPath } from './orderLayers';
 import { playerColorOf } from './playerColor';
 import { createTerrainLayer } from './terrainLayer';
@@ -20,7 +22,7 @@ export { mapWorldBounds };
 export interface MapView {
   container: Container;
   bounds: Rect;
-  /** Redraws the dynamic layers (territory, roads, buildings, badges). */
+  /** Redraws the dynamic layers (territory, roads, buildings, badges, the ground under buildings). */
   update(state: GameState, statuses: Record<number, BuildingStatus>, viewer?: PlayerId): void;
   /** Red outlines on attack targets; [] clears. */
   setAttackTargets(hexes: readonly Hex[]): void;
@@ -42,13 +44,18 @@ export function createMapView(map: MapState, art: ArtSet = NO_ART): MapView {
   const container = new Container();
   // Static painted terrain, built once (see terrainLayer.ts)
   const terrain = createTerrainLayer(map, hexSize);
+  // Ground under the buildings (yards, plazas, fields, the fishery's sandy yard), see groundLayer.ts
+  const ground = createGroundLayer(hexSize);
   const selection = new Graphics();
   const economy = createEconomyLayers(art);
   const unitLayers = createUnitLayers(art);
   const orders = createOrderLayers();
+  /** Test option "no fog"; the ground footprints use the same filter as the buildings. */
+  let revealAll = false;
 
   container.addChild(
     terrain.ground,
+    ground.layer,
     terrain.details,
     ...economy.below,
     unitLayers.units,
@@ -64,11 +71,17 @@ export function createMapView(map: MapState, art: ArtSet = NO_ART): MapView {
     container,
     bounds: mapWorldBounds(map, hexSize),
     setRevealAll(value) {
+      revealAll = value;
       economy.setRevealAll(value);
+      ground.setRevealAll(value);
       unitLayers.setRevealAll(value);
     },
     update(state, statuses, viewer = 0) {
       economy.update(state, statuses, viewer);
+      // The terrain makes room (no trees, rocks, flowers) where the ground under a building lies
+      if (ground.update(state, viewer)) {
+        terrain.setFootprints(groundFootprints(state, viewer, revealAll, hexSize));
+      }
       orders.setColor(playerColorOf(state, viewer));
       unitLayers.update(state, viewer);
     },

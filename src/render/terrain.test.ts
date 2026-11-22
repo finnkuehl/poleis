@@ -5,18 +5,26 @@ import { edgeNeighborHex } from './geometry';
 import {
   apothem,
   distanceToEdges,
+  distanceToWavyEdges,
   edgeMask,
+  edgeWave,
   ellipsePoints,
+  footprintRowsToRepaint,
   forestTrees,
   hillMounds,
+  insideFootprint,
   mixColor,
   mountainPeaks,
   scaleColor,
   shoreMask,
+  smoothNoise,
   taperedStroke,
   tileBaseColor,
   tileHash,
   tileRng,
+  valueNoise,
+  WAVE_SEGMENTS,
+  type FootprintShape,
 } from './terrain';
 import { theme } from './theme';
 
@@ -183,5 +191,117 @@ describe('shape helpers', () => {
     expect(Math.min(...ys)).toBeCloseTo(-1, 6);
     // A 2-point dash is subdivided, so it still gets a body
     expect(taperedStroke([line[0], line[4]], 2).length).toBeGreaterThan(4);
+  });
+});
+
+describe('valueNoise / smoothNoise', () => {
+  it('is deterministic, lies in [0, 1) and hits the lattice values', () => {
+    for (let i = 0; i < 200; i++) {
+      const x = i * 0.37 - 20;
+      const y = i * 0.53 - 31;
+      const v = smoothNoise(x, y, 4);
+      expect(v).toBe(smoothNoise(x, y, 4));
+      expect(v).toBeGreaterThanOrEqual(0);
+      expect(v).toBeLessThan(1);
+    }
+    expect(valueNoise(3, -2, 1)).toBeCloseTo(tileHash(3, -2, 1), 12);
+  });
+  it('is continuous: tiny steps give tiny changes (no per-tile jumps)', () => {
+    for (let i = 0; i < 200; i++) {
+      const x = i * 0.113;
+      const y = i * 0.071;
+      expect(Math.abs(smoothNoise(x + 0.01, y) - smoothNoise(x, y))).toBeLessThan(0.03);
+      expect(Math.abs(smoothNoise(x, y + 0.01) - smoothNoise(x, y))).toBeLessThan(0.03);
+    }
+  });
+});
+
+describe('edgeWave', () => {
+  const amp = 5;
+  it('ends in 0, stays within the amplitude and is deterministic', () => {
+    for (let q = -3; q < 3; q++) {
+      for (let e = 0; e < 6; e++) {
+        const w = edgeWave({ q, r: 2 }, e, amp);
+        expect(w).toHaveLength(WAVE_SEGMENTS + 1);
+        expect(w[0]).toBe(0);
+        expect(w[WAVE_SEGMENTS]).toBe(0);
+        for (const v of w) expect(Math.abs(v)).toBeLessThanOrEqual(amp + 1e-9);
+        expect(edgeWave({ q, r: 2 }, e, amp)).toEqual(w);
+      }
+    }
+  });
+  it('the neighbor sees the same curve: reversed and with the normal flipped', () => {
+    for (let e = 0; e < 6; e++) {
+      const a = { q: 4, r: -1 };
+      const b = edgeNeighborHex(a, e);
+      const wa = edgeWave(a, e, amp);
+      const wb = edgeWave(b, (e + 3) % 6, amp);
+      expect(wb).toEqual(wa.map((v) => (v === 0 ? 0 : -v)).reverse());
+    }
+  });
+  it('different edges get different curves', () => {
+    expect(edgeWave({ q: 0, r: 0 }, 0, amp)).not.toEqual(edgeWave({ q: 0, r: 0 }, 1, amp));
+  });
+});
+
+describe('distanceToWavyEdges', () => {
+  const size = 32;
+  const all = [true, true, true, true, true, true];
+  it('equals distanceToEdges for straight edges', () => {
+    const p = { x: 3, y: -4 };
+    expect(distanceToWavyEdges(p, all, [null, null, null, null, null, null], size)).toBeCloseTo(
+      distanceToEdges(p, all, size),
+      9,
+    );
+  });
+  it('is 0 on the curve and grows where the tile bulges outward', () => {
+    const wave = new Array<number>(WAVE_SEGMENTS + 1).fill(0);
+    wave[WAVE_SEGMENTS / 2] = 4;
+    const waves = [wave, null, null, null, null, null];
+    const mask = [true, false, false, false, false, false];
+    // Middle of edge 0 (east), pushed 4 px outward
+    expect(distanceToWavyEdges({ x: apothem(size) + 4, y: 0 }, mask, waves, size)).toBeCloseTo(
+      0,
+      9,
+    );
+    expect(distanceToWavyEdges({ x: 0, y: 0 }, mask, waves, size)).toBeCloseTo(
+      apothem(size) + 4,
+      9,
+    );
+  });
+});
+
+describe('footprints', () => {
+  const size = 32;
+  it('insideFootprint: inside the ellipse and inside the hex', () => {
+    const fp = { rx: 10, ry: 6 };
+    expect(insideFootprint({ x: 0, y: 0 }, fp, size)).toBe(true);
+    expect(insideFootprint({ x: 9, y: 0 }, fp, size)).toBe(true);
+    expect(insideFootprint({ x: 0, y: 7 }, fp, size)).toBe(false);
+    // Larger than the hex: the whole tile, but never beyond its edge
+    const big = { rx: 100, ry: 100 };
+    expect(insideFootprint({ x: apothem(size) - 1, y: 0 }, big, size)).toBe(true);
+    expect(insideFootprint({ x: apothem(size) + 1, y: 0 }, big, size)).toBe(false);
+    expect(insideFootprint({ x: 0, y: 0 }, { rx: 0, ry: 5 }, size)).toBe(false);
+  });
+
+  it('footprintRowsToRepaint: only rows around changed tiles, nothing for the same footprints', () => {
+    const width = 10;
+    const height = 8;
+    const fp = (rx: number, ry = rx): FootprintShape => ({ rx, ry });
+    const a = new Map([
+      [25, fp(10)],
+      [71, fp(12)],
+    ]);
+    expect(footprintRowsToRepaint(a, new Map(a), width, height)).toEqual([]);
+    expect(footprintRowsToRepaint(new Map(), new Map(), width, height)).toEqual([]);
+    // New footprint on tile 25 (row 2): rows 1..3
+    expect(footprintRowsToRepaint(new Map([[71, fp(12)]]), a, width, height)).toEqual([1, 2, 3]);
+    // Removed footprint on tile 71 (last row 7): rows 6..7
+    expect(footprintRowsToRepaint(a, new Map([[25, fp(10)]]), width, height)).toEqual([6, 7]);
+    // Changed size on tile 3 (row 0): rows 0..1
+    expect(
+      footprintRowsToRepaint(new Map([[3, fp(10)]]), new Map([[3, fp(10, 8)]]), width, height),
+    ).toEqual([0, 1]);
   });
 });

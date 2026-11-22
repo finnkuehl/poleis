@@ -2,11 +2,13 @@
 // into a shared texture. Missing or broken files simply have no entry: the map then draws the old
 // colored plate / token with an emoji instead.
 import { Container, ImageSource, Sprite, Texture } from 'pixi.js';
-import { BUILDING_IDS, UNIT_IDS } from '../data';
+import { UNIT_IDS } from '../data';
 import { hexSize } from './config';
 import {
   artPlacement,
+  buildingArtIds,
   isSvgText,
+  parseSvgAnchor,
   parseSvgViewBox,
   rasterSizePx,
   withSvgSize,
@@ -142,7 +144,8 @@ async function loadAsset(kind: ArtKind, id: string, dpr: number): Promise<LoadRe
   if (!main || !vb) {
     return { asset: null, missing: [`${FOLDERS[kind]}/${id}.svg`] };
   }
-  const placement = artPlacement(kind, vb, hexSize);
+  // A canvas other than the fixed one says where its anchor is (data-anchor, e.g. fishery scenes)
+  const placement = artPlacement(kind, vb, hexSize, parseSvgAnchor(main));
   const sizePx = rasterSizePx(placement, dpr, hexSize);
   // The owner layer only counts if it is on the same canvas as the art.
   const accentVb = accentSvg ? parseSvgViewBox(accentSvg) : null;
@@ -173,12 +176,14 @@ async function loadAsset(kind: ArtKind, id: string, dpr: number): Promise<LoadRe
 }
 
 /**
- * Loads all building and unit art in parallel. `dpr` is the renderer's device pixel ratio
- * (the texture size follows it). Never rejects: failed files are left out.
+ * Loads all building and unit art in parallel, including the direction versions of buildings
+ * like the fishery (`fishery.e0` ... `fishery.e5`, see artLayout.ts `buildingArtIds`). `dpr` is
+ * the renderer's device pixel ratio (the texture size follows it). Never rejects: failed files
+ * are left out.
  */
 export async function loadArt(dpr: number): Promise<ArtSet> {
   const jobs: { kind: ArtKind; id: string }[] = [
-    ...BUILDING_IDS.map((id) => ({ kind: 'building' as const, id })),
+    ...buildingArtIds().map((id) => ({ kind: 'building' as const, id })),
     ...[...new Set<string>([...UNIT_IDS, ...EXTRA_UNIT_ART_IDS])].map((id) => ({
       kind: 'unit' as const,
       id,

@@ -25,9 +25,7 @@ export interface ArtFrame {
 
 /**
  * Default cut-out per kind: what the icon box shows of the canvas. The default must never cut a
- * drawing, so it shows nearly the whole canvas. Buildings (256 canvas, base 208 wide from x 24 to
- * 232, center at y 176) always span about x 23–237 (base and earth side) and reach down to
- * y ≈ 251 (rim band); tall ones reach almost to the top (the wonder's torch at y ≈ 8).
+ * drawing, so it shows nearly the whole canvas (buildings without a measured frame below).
  * Units: 128 canvas, token 88 wide with its center at (64, 96).
  */
 export const ART_FRAMES: Readonly<Record<ArtKind, ArtFrame>> = {
@@ -36,19 +34,69 @@ export const ART_FRAMES: Readonly<Record<ArtKind, ArtFrame>> = {
   units: { canvas: 128, x: 4, y: 4, size: 120 },
 };
 
-/** Cut-out for low buildings (highest point at or below y ≈ 57): they fill the box more. */
-const LOW_BUILDING_FRAME: ArtFrame = { canvas: 256, x: 22, y: 40, size: 216 };
+/** Bounding box of a drawing on its canvas: minX, minY, maxX, maxY (art pixels). */
+export type ArtBounds = readonly [number, number, number, number];
 
 /**
- * Buildings that get a tighter cut-out than the default, measured from their drawings
- * (highest point: house y 64, city center y 66, temple roof y 58). Not listed = default.
- * Add a new building here once its drawing exists and is low enough.
+ * Measured bounding boxes of the grounded building art (art + owner layer, pixels with at least
+ * 50 % alpha, 256 canvas; the fishery: its icon file fishery.svg). Update an entry when its
+ * drawing changes; the icon frame is derived from it.
  */
-export const BUILDING_FRAMES: Readonly<Partial<Record<BuildingId, ArtFrame>>> = {
-  house: LOW_BUILDING_FRAME,
-  cityCenter: LOW_BUILDING_FRAME,
-  temple: LOW_BUILDING_FRAME,
+export const BUILDING_ART_BOUNDS: Readonly<Record<BuildingId, ArtBounds>> = {
+  house: [54, 95, 196, 214],
+  farm: [67, 93, 201, 213],
+  woodcutter: [46, 92, 188, 214],
+  storehouse: [54, 88, 210, 216],
+  temple: [47, 60, 204, 216],
+  cityCenter: [47, 43, 224, 216],
+  fishery: [51, 94, 188, 217],
+  sawmill: [46.5, 96.5, 208.5, 211],
+  bakery: [57.5, 84, 195.5, 213],
+  oilPress: [61.5, 88, 212.5, 207.5],
+  winery: [46.5, 93.5, 200, 201.5],
+  // incl. the smoke
+  smelter: [46.5, 52, 197.5, 214.5],
+  quarry: [44.5, 79, 200.5, 214.5],
+  mine: [62, 77.5, 206.5, 204.5],
+  barracks: [49.2, 48.2, 218, 205.5],
+  marketplace: [46.8, 72.2, 199.2, 218.5],
+  wonder: [47, 6.8, 206.5, 217],
+  borderTower: [60, 16, 173.8, 208.8],
+  vineyard: [88, 96.5, 178.5, 201],
+  oliveGrove: [33, 94.2, 220.5, 224.8],
 };
+
+/** Free space around a drawing in its icon: share of its longer side. */
+export const ART_FRAME_MARGIN = 0.08;
+
+/**
+ * Square cut-out around a drawing: centered on its bounding box, the longer side plus the margin,
+ * moved (not shrunk) to stay inside the canvas where possible.
+ */
+export function frameAround(
+  bounds: ArtBounds,
+  canvas: number,
+  margin = ART_FRAME_MARGIN,
+): ArtFrame {
+  const [minX, minY, maxX, maxY] = bounds;
+  const size = Math.min(canvas, Math.max(maxX - minX, maxY - minY) * (1 + margin));
+  const fit = (center: number): number => Math.max(0, Math.min(canvas - size, center - size / 2));
+  const round = (n: number): number => Math.round(n * 10) / 10;
+  return {
+    canvas,
+    x: round(fit((minX + maxX) / 2)),
+    y: round(fit((minY + maxY) / 2)),
+    size: round(size),
+  };
+}
+
+/** The icon cut-out of every building, one per drawing (from its bounding box). */
+export const BUILDING_FRAMES: Readonly<Record<BuildingId, ArtFrame>> = Object.fromEntries(
+  (Object.keys(BUILDING_ART_BOUNDS) as BuildingId[]).map((id) => [
+    id,
+    frameAround(BUILDING_ART_BOUNDS[id], 256),
+  ]),
+) as Record<BuildingId, ArtFrame>;
 
 /** The cut-out of one asset: a building's own frame if it has one, else the kind's default. */
 export function artFrame(kind: ArtKind, id: string): ArtFrame {
@@ -206,7 +254,7 @@ export function goodIcon(id: GoodId): HTMLSpanElement {
   return artIcon('goods', id, GOODS[id].icon);
 }
 
-/** Miniature of a building on its base, the base rim in `color` (default: the human's color). */
+/** Miniature of a building, its owner-colored details in `color` (default: the human's color). */
 export function buildingIcon(id: BuildingId, color: string = ownerColor()): HTMLSpanElement {
   return artIcon('buildings', id, BUILDINGS[id].icon, color);
 }

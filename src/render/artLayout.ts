@@ -1,6 +1,7 @@
 // Pure helpers for the drawn SVG art (no PixiJS, easy to test): reading an SVG's canvas, where
 // and how large a sprite is placed, how large the texture is rasterized, draw order and fallbacks.
-import type { Hex } from '../core/hex';
+import type { Hex, Point } from '../core/hex';
+import { BUILDING_IDS, type BuildingId } from '../data/buildings';
 import { cameraConfig } from './config';
 import { theme } from './theme';
 
@@ -25,19 +26,19 @@ export const ART_CANVAS: Readonly<
   unit: { size: 128, baseX: 64, baseY: 96, baseWidth: 88 },
 };
 
-/**
- * Height of the earth side of a diorama building's round base, in canvas px
- * (tools/art/iso.py: BASE_H = 21 world units x S = 1.08 px per unit).
- */
-export const BUILDING_BASE_DEPTH = 22.7;
-
 /** Where a sprite of the art goes: anchor on the tile point and world size. */
 export interface ArtPlacement {
   /**
-   * 'diorama': new art on the fixed canvas, the base center sits on the tile center.
+   * 'diorama': new art on the fixed canvas (or a larger canvas with a `data-anchor`), the anchor
+   * (ground point under the building / the unit's token) sits on the tile center.
    * 'flat': older art on another canvas, centered on the colored plate / token.
    */
   style: 'diorama' | 'flat';
+  /**
+   * Longer side of the canvas relative to the fixed canvas of its kind (1 for the fixed canvas
+   * and for flat art). The texture cap grows with it, so a larger canvas keeps the same detail.
+   */
+  canvasFactor: number;
   /** Sprite anchor as a share of the canvas (0..1). */
   anchorX: number;
   anchorY: number;
@@ -59,18 +60,32 @@ export function isDioramaCanvas(kind: ArtKind, vb: ViewBox): boolean {
   return vb.width === size && vb.height === size;
 }
 
-export function artPlacement(kind: ArtKind, vb: ViewBox, hexSize: number): ArtPlacement {
-  if (isDioramaCanvas(kind, vb)) {
+/**
+ * `anchor`: the root tag's `data-anchor` (see `parseSvgAnchor`). With it, any canvas is diorama
+ * art in the user units of the fixed canvas: the anchor point goes on the tile center and
+ * 208 units (buildings) are 0.92 x the hex width, as on the fixed canvas. Such a canvas may be
+ * larger than the fixed one and start at negative x / y (e.g. a fishery scene with its jetty).
+ */
+export function artPlacement(
+  kind: ArtKind,
+  vb: ViewBox,
+  hexSize: number,
+  anchor: Point | null = null,
+): ArtPlacement {
+  if (anchor || isDioramaCanvas(kind, vb)) {
     const c = ART_CANVAS[kind];
     const factor = kind === 'building' ? theme.buildingArtWidthFactor : theme.unitArtWidthFactor;
     const scale = (factor * hexWidth(hexSize)) / c.baseWidth;
+    const ax = anchor ? anchor.x : c.baseX;
+    const ay = anchor ? anchor.y : c.baseY;
     return {
       style: 'diorama',
-      anchorX: (c.baseX - vb.x) / vb.width,
-      anchorY: (c.baseY - vb.y) / vb.height,
+      anchorX: (ax - vb.x) / vb.width,
+      anchorY: (ay - vb.y) / vb.height,
       scale,
       width: vb.width * scale,
       height: vb.height * scale,
+      canvasFactor: Math.max(vb.width, vb.height) / c.size,
     };
   }
   const radiusFactor = kind === 'building' ? theme.plateRadiusFactor : theme.unitRadiusFactor;
@@ -83,6 +98,7 @@ export function artPlacement(kind: ArtKind, vb: ViewBox, hexSize: number): ArtPl
     scale,
     width: vb.width * scale,
     height: vb.height * scale,
+    canvasFactor: 1,
   };
 }
 
@@ -94,16 +110,15 @@ export interface RingEllipse {
 }
 
 /**
- * Center line of a ring of `width` px on the ground around the foot of a diorama building's
- * base, `gap` px away from it. The base's top ellipse is 2:1 (dimetric); its foot lies one base
- * depth lower. Drawn under the art, only the front and the sides of the ring show.
+ * Center line of a ring of `width` px on the ground around a building, `gap` px outside the
+ * ring radius (theme.ground.ringRadius). Buildings stand directly on the map (no base, docs/ART.md
+ * "Grounded buildings"), so the ring lies flat (2:1 like the art's ground) around the tile
+ * center. Drawn under the art, only its front and sides show.
  */
-export function baseRingEllipse(hexSize: number, gap: number, width: number): RingEllipse {
-  const c = ART_CANVAS.building;
-  const scale = (theme.buildingArtWidthFactor * hexWidth(hexSize)) / c.baseWidth;
-  const rx = (c.baseWidth / 2) * scale;
+export function groundRingEllipse(hexSize: number, gap: number, width: number): RingEllipse {
+  const r = theme.ground.ringRadius * hexSize;
   const out = gap + width / 2;
-  return { cy: BUILDING_BASE_DEPTH * scale, rx: rx + out, ry: rx / 2 + out };
+  return { cy: 0, rx: r + out, ry: r * theme.ground.ringFlatten + out };
 }
 
 /** Texture sizes are rounded up to a multiple of this (px). */
@@ -112,12 +127,51 @@ const RASTER_STEP_PX = 32;
 /**
  * Texture size (px, longer side) at which an SVG is rasterized: as many pixels as the art covers
  * on the screen at maximum zoom with this device pixel ratio, rounded up, capped by the theme.
+ * The cap is for the fixed canvas; a larger canvas gets a cap grown by its `canvasFactor`, so it
+ * has the same pixels per SVG unit (its building is not blurrier than the others).
  */
 export function rasterSizePx(placement: ArtPlacement, dpr: number, hexSize: number): number {
   const worldPx = Math.max(placement.width, placement.height);
   const maxZoom = cameraConfig.maxHexScreenRadiusPx / hexSize;
   const px = Math.ceil((worldPx * maxZoom * dpr) / RASTER_STEP_PX) * RASTER_STEP_PX;
-  return Math.max(RASTER_STEP_PX, Math.min(theme.artMaxTexturePx, px));
+  const cap = Math.round(theme.artMaxTexturePx * placement.canvasFactor);
+  return Math.max(RASTER_STEP_PX, Math.min(cap, px));
+}
+
+/**
+ * Buildings whose art also comes in six direction versions `<id>.e0` ... `<id>.e5`, one per
+ * edge of the tile (0 = east, then clockwise in 60° steps; see groundworks.ts `edgeNormal`):
+ * the fishery scene with its jetty reaching into the water. `<id>` stays the icon and fallback.
+ */
+export const EDGE_ART_BUILDINGS: readonly BuildingId[] = ['fishery'];
+
+/** Art id of the direction version of `type` toward `edge` (e.g. 'fishery.e1'). */
+export function edgeArtId(type: BuildingId, edge: number): string {
+  return `${type}.e${edge}`;
+}
+
+/** Every building art file to load (without extension): each building, then its direction versions. */
+export function buildingArtIds(): string[] {
+  const ids: string[] = [...BUILDING_IDS];
+  for (const type of EDGE_ART_BUILDINGS) {
+    for (let e = 0; e < 6; e++) ids.push(edgeArtId(type, e));
+  }
+  return ids;
+}
+
+/**
+ * Which art a building on the map uses: its direction version toward `edge` if it has those and
+ * that one loaded, else its own art. `edge` is null when the tile has no fitting edge (e.g. a
+ * fishery without water around).
+ */
+export function buildingArtId(
+  type: BuildingId,
+  edge: number | null,
+  loaded: (id: string) => boolean,
+): string {
+  if (edge === null || !EDGE_ART_BUILDINGS.includes(type)) return type;
+  const id = edgeArtId(type, edge);
+  return loaded(id) ? id : type;
 }
 
 /**
@@ -159,6 +213,21 @@ export function isSvgText(text: string): boolean {
 function attr(tag: string, name: string): string | null {
   const m = tag.match(new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`, 'i'));
   return m ? (m[1] ?? m[2]) : null;
+}
+
+/**
+ * The anchor point of the art in SVG user units, from `data-anchor="x y"` on the root tag
+ * (canvases other than the fixed one carry it, e.g. `data-anchor="128 176"`); null if missing.
+ */
+export function parseSvgAnchor(svg: string): Point | null {
+  const tag = rootTag(svg)?.[0];
+  const value = tag ? attr(tag, 'data-anchor') : null;
+  if (!value) return null;
+  const n = value
+    .trim()
+    .split(/[\s,]+/)
+    .map(Number);
+  return n.length === 2 && n.every(Number.isFinite) ? { x: n[0], y: n[1] } : null;
 }
 
 /** The canvas of an SVG: its viewBox, else its plain numeric width/height; null if neither. */

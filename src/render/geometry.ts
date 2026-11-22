@@ -59,6 +59,89 @@ export function insetEdge(
   return [start, end];
 }
 
+/** Unit vector from the tile center through the middle of edge `edge` (edge e faces 60° * e). */
+export function edgeOutward(edge: number): Point {
+  const a = (Math.PI / 3) * edge;
+  return { x: Math.cos(a), y: Math.sin(a) };
+}
+
+/**
+ * A line along edge `edge` (corner `edge` -> corner `edge + 1`), `depth` px inside the tile,
+ * that follows a wavy edge: `offsets[i]` pushes the point at t = i / n outward (n =
+ * offsets.length - 1; offsets[0] and offsets[n] should be 0 so the curve ends in the corners).
+ * `follow` is the share of the wave the line follows (1 = parallel to the curve), `extra[i]` an
+ * optional additional inward depth per point. The two ends are those of `insetEdge`, so lines of
+ * neighboring edges and tiles join exactly as with straight edges. With depth 0, follow 1 and no
+ * extra, this is the wavy edge itself.
+ */
+export function wavyInsetLine(
+  center: Point,
+  corners: readonly Point[],
+  edge: number,
+  offsets: readonly number[],
+  depth: number,
+  prevIn: boolean,
+  nextIn: boolean,
+  follow = 1,
+  extra?: readonly number[],
+): Point[] {
+  const [s, e] = insetEdge(center, corners, edge, depth, prevIn, nextIn);
+  const out = edgeOutward(edge);
+  const n = offsets.length - 1;
+  const pts: Point[] = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    const w = offsets[i] * follow - (extra ? extra[i] : 0);
+    pts.push({ x: s.x + (e.x - s.x) * t + out.x * w, y: s.y + (e.y - s.y) * t + out.y * w });
+  }
+  return pts;
+}
+
+/**
+ * Outline of a tile as points: straight edges where `waves[e]` is null, otherwise the wavy edge
+ * (see `wavyInsetLine`). Each corner appears once; neighbors that use the same (reversed)
+ * offsets for their shared edge fit together without gaps.
+ */
+export function wavyTileOutline(
+  corners: readonly Point[],
+  waves: readonly (readonly number[] | null)[],
+): Point[] {
+  const pts: Point[] = [];
+  for (let e = 0; e < 6; e++) {
+    const a = corners[e];
+    const offsets = waves[e];
+    pts.push(a);
+    if (!offsets) continue;
+    const b = corners[(e + 1) % 6];
+    const out = edgeOutward(e);
+    const n = offsets.length - 1;
+    for (let i = 1; i < n; i++) {
+      const t = i / n;
+      const w = offsets[i];
+      pts.push({ x: a.x + (b.x - a.x) * t + out.x * w, y: a.y + (b.y - a.y) * t + out.y * w });
+    }
+  }
+  return pts;
+}
+
+/** Part of a polyline between t0 and t1 (0 = first point, 1 = last point, by point index). */
+export function subPolyline(points: readonly Point[], t0: number, t1: number): Point[] {
+  const n = points.length - 1;
+  if (n < 1) return [...points];
+  const at = (u: number): Point => {
+    const f = Math.max(0, Math.min(n, u * n));
+    const i = Math.min(n - 1, Math.floor(f));
+    const k = f - i;
+    const a = points[i];
+    const b = points[i + 1];
+    return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k };
+  };
+  const out: Point[] = [at(t0)];
+  for (let i = Math.floor(t0 * n) + 1; i < t1 * n; i++) out.push(points[i]);
+  out.push(at(t1));
+  return out;
+}
+
 export interface InsetRun {
   /** Points of the line, `depth` inside the tile edges. */
   points: Point[];

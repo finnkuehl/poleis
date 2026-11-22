@@ -14,8 +14,12 @@ import {
   insetStrips,
   sharedEdgeMidpoint,
   roadGeometry,
+  subPolyline,
   territoryEdges,
+  wavyInsetLine,
+  wavyTileOutline,
 } from './geometry';
+import { edgeWave, WAVE_SEGMENTS } from './terrain';
 
 describe('EDGE_DIRECTION', () => {
   it('each edge faces the neighbor it is mapped to', () => {
@@ -199,5 +203,107 @@ describe('insetRuns / insetBands / insetStrips', () => {
     const [strip] = insetStrips(c, corners, edgeMaskOf([2]), 2, 6);
     expect(distToLine(strip[0], corners[2], corners[3])).toBeCloseTo(2, 6);
     expect(distToLine(strip[2], corners[2], corners[3])).toBeCloseTo(6, 6);
+  });
+});
+
+describe('wavy edges (shared curve between two tiles)', () => {
+  const size = 32;
+  const amp = 0.15 * size;
+  const tile = (h: { q: number; r: number }): { c: Point; corners: Point[] } => {
+    const c = hexToPixel(h, size);
+    return { c, corners: hexCorners(c, size) };
+  };
+
+  it('both tiles draw the identical curve (reversed), ending exactly in the shared corners', () => {
+    for (const a of [
+      { q: 0, r: 0 },
+      { q: 3, r: -2 },
+      { q: -5, r: 7 },
+    ]) {
+      for (let e = 0; e < 6; e++) {
+        const b = edgeNeighborHex(a, e);
+        const back = (e + 3) % 6;
+        const ta = tile(a);
+        const tb = tile(b);
+        const lineA = wavyInsetLine(ta.c, ta.corners, e, edgeWave(a, e, amp), 0, false, false);
+        const lineB = wavyInsetLine(
+          tb.c,
+          tb.corners,
+          back,
+          edgeWave(b, back, amp),
+          0,
+          false,
+          false,
+        );
+        expect(lineA).toHaveLength(WAVE_SEGMENTS + 1);
+        const reversed = [...lineB].reverse();
+        lineA.forEach((p, i) => {
+          expect(p.x).toBeCloseTo(reversed[i].x, 9);
+          expect(p.y).toBeCloseTo(reversed[i].y, 9);
+        });
+        expect(lineA[0].x).toBeCloseTo(ta.corners[e].x, 9);
+        expect(lineA[0].y).toBeCloseTo(ta.corners[e].y, 9);
+        expect(lineA[WAVE_SEGMENTS].x).toBeCloseTo(ta.corners[(e + 1) % 6].x, 9);
+        expect(lineA[WAVE_SEGMENTS].y).toBeCloseTo(ta.corners[(e + 1) % 6].y, 9);
+      }
+    }
+  });
+
+  it('a line inside the tile keeps the insetEdge ends and follows the curve', () => {
+    const { c, corners } = tile({ q: 2, r: 1 });
+    const offsets = edgeWave({ q: 2, r: 1 }, 1, amp);
+    const line = wavyInsetLine(c, corners, 1, offsets, 6, true, false);
+    const [s, e] = insetEdge(c, corners, 1, 6, true, false);
+    expect(line[0]).toEqual(s);
+    expect(line[WAVE_SEGMENTS].x).toBeCloseTo(e.x, 9);
+    expect(line[WAVE_SEGMENTS].y).toBeCloseTo(e.y, 9);
+    // Straight offsets give a straight line between the two ends
+    const flatLine = wavyInsetLine(
+      c,
+      corners,
+      1,
+      new Array(WAVE_SEGMENTS + 1).fill(0),
+      6,
+      true,
+      false,
+    );
+    const mid = flatLine[WAVE_SEGMENTS / 2];
+    expect(mid.x).toBeCloseTo((s.x + e.x) / 2, 9);
+    expect(mid.y).toBeCloseTo((s.y + e.y) / 2, 9);
+  });
+
+  it('tile outline: corners once, wavy edges add their inner points', () => {
+    const { corners } = tile({ q: 0, r: 0 });
+    const waves = [
+      edgeWave({ q: 0, r: 0 }, 0, amp),
+      null,
+      null,
+      edgeWave({ q: 0, r: 0 }, 3, amp),
+      null,
+      null,
+    ];
+    const outline = wavyTileOutline(corners, waves);
+    expect(outline).toHaveLength(6 + 2 * (WAVE_SEGMENTS - 1));
+    for (const corner of corners) expect(outline).toContainEqual(corner);
+    expect(wavyTileOutline(corners, [null, null, null, null, null, null])).toEqual(corners);
+  });
+});
+
+describe('subPolyline', () => {
+  const line: Point[] = [
+    { x: 0, y: 0 },
+    { x: 10, y: 0 },
+    { x: 20, y: 0 },
+    { x: 30, y: 0 },
+    { x: 40, y: 0 },
+  ];
+  it('cuts out the part between t0 and t1, keeping the points inside', () => {
+    expect(subPolyline(line, 0.1, 0.6)).toEqual([
+      { x: 4, y: 0 },
+      { x: 10, y: 0 },
+      { x: 20, y: 0 },
+      { x: 24, y: 0 },
+    ]);
+    expect(subPolyline(line, 0, 1)).toEqual(line);
   });
 });

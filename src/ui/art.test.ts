@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { BUILDING_IDS } from '../data';
 import {
   ART_FRAMES,
+  ART_FRAME_MARGIN,
+  BUILDING_ART_BOUNDS,
   BUILDING_FRAMES,
   accentUrl,
   artFrame,
   artColorsOf,
   artUrl,
+  frameAround,
   frameLayout,
   hasAccentLayer,
   ownerColor,
@@ -67,21 +70,36 @@ describe('frameLayout', () => {
     }
   });
 
-  it('keeps the whole base of every building visible (x 23–237, rim down to y 251)', () => {
+  it('gives every building its own square frame around its whole drawing', () => {
     for (const id of BUILDING_IDS) {
       const f = artFrame('buildings', id);
+      const [minX, minY, maxX, maxY] = BUILDING_ART_BOUNDS[id];
+      expect(f, id).toBe(BUILDING_FRAMES[id]);
       expect(f.canvas).toBe(256);
-      expect(f.x).toBeLessThanOrEqual(23);
-      expect(f.x + f.size).toBeGreaterThanOrEqual(237);
-      expect(f.y + f.size).toBeGreaterThanOrEqual(251);
+      // Nothing cut off
+      expect(f.x, id).toBeLessThanOrEqual(minX);
+      expect(f.y, id).toBeLessThanOrEqual(minY);
+      expect(f.x + f.size, id).toBeGreaterThanOrEqual(maxX);
+      expect(f.y + f.size, id).toBeGreaterThanOrEqual(maxY);
+      // ... and not much more than the drawing: every icon about equally prominent
+      const longer = Math.max(maxX - minX, maxY - minY);
+      expect(f.size, id).toBeLessThanOrEqual(Math.min(256, longer * (1 + ART_FRAME_MARGIN)) + 0.1);
     }
   });
 
-  it('does not cut tall buildings: the default reaches the torch of the wonder, low ones the temple roof', () => {
-    expect(BUILDING_FRAMES.wonder).toBeUndefined();
-    expect(artFrame('buildings', 'wonder').y).toBeLessThanOrEqual(6);
-    expect(artFrame('buildings', 'temple').y).toBeLessThanOrEqual(56);
-    expect(artFrame('buildings', 'house').size).toBeLessThan(ART_FRAMES.buildings.size);
+  it('centers the frame on the drawing and keeps it inside the canvas', () => {
+    expect(frameAround([100, 100, 150, 200], 256, 0.1)).toEqual({
+      canvas: 256,
+      x: 70,
+      y: 95,
+      size: 110,
+    });
+    // A drawing near the top: the frame moves down instead of leaving the canvas
+    const tall = frameAround([47, 6.8, 206.5, 217], 256);
+    expect(tall.y).toBe(0);
+    expect(tall.size).toBeLessThanOrEqual(256);
+    // Larger than the canvas: the whole canvas
+    expect(frameAround([0, 0, 256, 256], 256)).toEqual({ canvas: 256, x: 0, y: 0, size: 256 });
   });
 
   it('uses the kind default for goods and units', () => {

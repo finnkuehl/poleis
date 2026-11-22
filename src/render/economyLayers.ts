@@ -7,15 +7,18 @@ import type { GameState, PlayerId } from '../core/state';
 import { BUILDINGS, type BuildingId, type CityLevel } from '../data';
 import { createArtObject, NO_ART, type ArtSet } from './art';
 import {
+  EDGE_ART_BUILDINGS,
   artModeOf,
-  baseRingEllipse,
+  buildingArtId,
   depthKey,
   drawsOwnerDisc,
+  groundRingEllipse,
   type ArtMode,
   type ArtPlacement,
 } from './artLayout';
 import { hexSize } from './config';
 import { buildingsShownTo } from './fog';
+import { jettyEdge } from './groundworks';
 import { edgeMaskOf, insetRuns, roadGeometry, territoryEdges, type InsetRun } from './geometry';
 import { playerColorOf } from './playerColor';
 import { badgeKind, cityRingStyle } from './style';
@@ -171,6 +174,8 @@ export function createEconomyLayers(art: ArtSet = NO_ART): EconomyLayers {
   /** Visuals of one building, created/destroyed only when buildings appear/disappear. */
   interface BuildingVisual {
     type: string;
+    /** Art used: the building id or one of its direction versions (e.g. 'fishery.e1'). */
+    artId: string;
     mode: ArtMode;
     style: ArtPlacement['style'] | null;
     /** Art container [owner layer, art] or the fallback emoji; sorted as one piece. */
@@ -179,13 +184,22 @@ export function createEconomyLayers(art: ArtSet = NO_ART): EconomyLayers {
   }
   const visuals = new Map<number, BuildingVisual>();
 
-  function createVisual(type: BuildingId, hex: Hex): BuildingVisual {
-    const asset = art.buildings[type];
+  /**
+   * Which art a building uses: the fishery scene facing its jetty edge (fishery.e0-e5), falling
+   * back to its own art when there is no water edge or that version did not load.
+   */
+  function artIdOf(state: GameState, type: BuildingId, hex: Hex): string {
+    const edge = EDGE_ART_BUILDINGS.includes(type) ? jettyEdge(state.map, hex) : null;
+    return buildingArtId(type, edge, (id) => art.buildings[id] !== undefined);
+  }
+
+  function createVisual(type: BuildingId, artId: string, hex: Hex): BuildingVisual {
+    const asset = art.buildings[artId];
     const mode = artModeOf(asset);
     let visual: BuildingVisual;
     if (asset) {
       const { root, accent } = createArtObject(asset);
-      visual = { type, mode, style: asset.placement.style, root, accent };
+      visual = { type, artId, mode, style: asset.placement.style, root, accent };
     } else {
       const icon = new Text({
         text: BUILDINGS[type].icon,
@@ -193,14 +207,14 @@ export function createEconomyLayers(art: ArtSet = NO_ART): EconomyLayers {
         resolution: 2,
       });
       icon.anchor.set(0.5);
-      visual = { type, mode, style: null, root: icon, accent: null };
+      visual = { type, artId, mode, style: null, root: icon, accent: null };
     }
     objects.addChild(visual.root);
     visual.root.zIndex = depthKey(hex);
     return visual;
   }
 
-  /** City-level rings: circles around the plate, or an ellipse on the ground around a diorama base. */
+  /** City-level rings: circles around the plate, or a flat ellipse on the ground around diorama art. */
   function drawCityRings(p: Point, level: CityLevel, diorama: boolean, radius: number): void {
     const ring = cityRingStyle(level);
     if (!diorama) {
@@ -216,14 +230,14 @@ export function createEconomyLayers(art: ArtSet = NO_ART): EconomyLayers {
       }
       return;
     }
-    const { cy, rx, ry } = baseRingEllipse(hexSize, theme.cityArtRingGap, ring.outerWidth);
+    const { cy, rx, ry } = groundRingEllipse(hexSize, theme.cityArtRingGap, ring.outerWidth);
     if (ring.outerColor !== null) {
       ground
         .ellipse(p.x, p.y + cy, rx, ry)
         .stroke({ color: ring.outerColor, width: ring.outerWidth });
     }
     if (ring.innerColor !== null) {
-      // Second ring outside the first one: an inner ring would be hidden by the base.
+      // Second ring outside the first one: an inner ring would be hidden by the building.
       const d = ring.outerWidth / 2 + theme.cityArtSecondRingGap + theme.cityInnerRingWidth / 2;
       ground
         .ellipse(p.x, p.y + cy, rx + d, ry + d)
@@ -276,10 +290,11 @@ export function createEconomyLayers(art: ArtSet = NO_ART): EconomyLayers {
       const color = playerColorOf(state, b.owner);
 
       let v = visuals.get(b.id);
-      if (!v || v.type !== b.type) {
+      const artId = artIdOf(state, b.type, b.hex);
+      if (!v || v.type !== b.type || v.artId !== artId) {
         // destroy() keeps the shared textures (only Text frees its own)
         v?.root.destroy({ children: true });
-        v = createVisual(b.type, b.hex);
+        v = createVisual(b.type, artId, b.hex);
         visuals.set(b.id, v);
       }
       v.root.position.set(p.x, p.y);
