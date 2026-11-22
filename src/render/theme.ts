@@ -842,6 +842,16 @@ export const theme = {
   attackColor: 0xd6453a,
   attackWidth: 3,
   attackFillAlpha: 0.2,
+  /** Expected-result label on an attack target ("-3", "-3 skull"): text size and pill (fractions of the hex size) */
+  attackLabelSizeFactor: 0.36,
+  attackLabelColor: 0xfff6e8,
+  attackLabelBackColor: 0x8e2a22,
+  attackLabelBackAlpha: 0.92,
+  attackLabelRimColor: 0xfff6e8,
+  attackLabelPadXFactor: 0.1,
+  attackLabelPadYFactor: 0.05,
+  /** Label center: this far above the tile center (fraction of the hex size) */
+  attackLabelOffsetFactor: 0.78,
   /** Move-order paths: marble line, dark under-stroke, number badge (sizes are fractions of the hex size) */
   orderMarbleColor: 0xf4e9d8,
   orderDarkColor: 0x1d2b36,

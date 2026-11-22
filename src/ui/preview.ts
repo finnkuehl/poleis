@@ -39,8 +39,7 @@ import type { Unit } from '../core/state';
 import { BUILDING_IDS, GOOD_IDS, UNIT_IDS, UNITS, type UnitId } from '../data';
 import { el, button } from './dom';
 import { PLAYER_COLOR_COUNT, playerCssColor } from './playerColors';
-import { formatAttacked } from '../i18n/format';
-import { attackPreviewLines, trainOptions } from './unitText';
+import { trainOptions } from './unitText';
 
 const ui = document.getElementById('ui');
 const controls = document.getElementById('preview-controls');
@@ -117,6 +116,11 @@ const menu = createBuildMenu(ui, {
     bottom.setMode('build');
     banner.show(en.flow.placePrompt.replace('{building}', en.buildings[id]));
   },
+  onRoad: () => {
+    menu.close();
+    bottom.setMode('build');
+    banner.show(en.flow.roadStartPrompt);
+  },
   onClose: () => bottom.setMode('idle'),
 });
 const bottom = createBottomBar(ui, {
@@ -124,10 +128,7 @@ const bottom = createBottomBar(ui, {
     bottom.setMode('build');
     menu.open(stock, menuLevel);
   },
-  onRoad: () => {
-    bottom.setMode('road');
-    banner.show(en.flow.roadStartPrompt);
-  },
+  onUndo: () => toast.show('Undo'),
   onUnits: () => {
     bottom.setMode('units');
     toast.show('Units mode');
@@ -135,6 +136,7 @@ const bottom = createBottomBar(ui, {
   onEndTurn: () => toast.show('Turn ended'),
 });
 bottom.setTurn(3);
+bottom.setUndoEnabled(true);
 bottom.setMode('idle');
 
 const hex = { q: 4, r: 3 };
@@ -558,51 +560,6 @@ function showBarracks(pending: UnitId | null): void {
 }
 addControl('Barracks: train list', () => showBarracks(null));
 addControl('Barracks: order pending', () => showBarracks('spearman'));
-addControl('Confirm attack', () => {
-  const a = sampleUnit('spearman');
-  const d = sampleUnit('spearman', { id: 2, owner: 1 });
-  confirm.show({
-    title: en.attack.confirmTitle.replace('{unit}', en.units.spearman),
-    lines: attackPreviewLines(
-      { damage: 5, counter: 5, defenderDies: false, attackerDies: false },
-      a,
-      d,
-    ),
-    confirmLabel: en.attack.confirm,
-    onConfirm: () =>
-      toast.show(
-        formatAttacked('Spearman', {
-          damage: 5,
-          counter: 5,
-          defenderDies: false,
-          attackerDies: false,
-        }),
-      ),
-    onCancel: () => undefined,
-  });
-});
-addControl('Confirm attack: kill', () => {
-  const d = sampleUnit('archer', { id: 2, owner: 1, hp: 4 });
-  confirm.show({
-    title: en.attack.confirmTitle.replace('{unit}', en.units.archer),
-    lines: attackPreviewLines(
-      { damage: 5, counter: 0, defenderDies: true, attackerDies: false },
-      sampleUnit('spearman'),
-      d,
-    ),
-    confirmLabel: en.attack.confirm,
-    onConfirm: () =>
-      toast.show(
-        formatAttacked('Spearman', {
-          damage: 5,
-          counter: 0,
-          defenderDies: true,
-          attackerDies: false,
-        }),
-      ),
-    onCancel: () => undefined,
-  });
-});
 addControl('Turn summary: units', () => {
   const base = turnReport();
   const sequence = [

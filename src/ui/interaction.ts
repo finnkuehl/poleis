@@ -28,6 +28,9 @@ import {
   ownerAt,
   planRoad,
   previewProduction,
+  revealsNothing,
+  roadConnection,
+  roadField,
   runProduction,
   territoryGain,
   towerTotals,
@@ -46,6 +49,7 @@ import {
   economyConfig,
   type BuildingId,
   type CityLevel,
+  type Goods,
   type Stock,
   type UnitId,
 } from '../data';
@@ -80,11 +84,10 @@ import {
   createSeedLabel,
   createTileInfoPanel,
   createToast,
-  attackPreviewLines,
+  attackLabel,
   civName,
   eventLines,
   formatSaveError,
-  orderConfirm,
   perTurnText,
   setArtPlayers,
   aboardState,
@@ -130,6 +133,9 @@ export async function createGame(
   let menuOpen = false;
   // A unit stands on the selected building tile and the player asked for the building panel.
   let preferBuilding = false;
+  // States before the player's last moves (newest last). Only moves that revealed nothing new are
+  // kept; every other action, ending the turn or loading clears the stack.
+  const undoStack: { before: GameState; unitId: number }[] = [];
 
   // Seed label first: later elements stack above it.
   createSeedLabel(uiContainer, state.seedText, testMode, watch);
@@ -203,6 +209,7 @@ export async function createGame(
   });
   const menu = createBuildMenu(uiContainer, {
     onPick: (id) => startPlacing(id),
+    onRoad: () => startRoadFlow(),
     onClose: () => {
       menuOpen = false;
       if (mode.kind === 'idle') bottomBar.setMode('idle');
@@ -211,7 +218,13 @@ export async function createGame(
   const bottomBar = createBottomBar(uiContainer, {
     onBuild: () => {
       economySheet.close();
-      if (menuOpen || mode.kind === 'placing') {
+      // A second tap on Build cancels whatever it started: the menu, placing or a road.
+      if (
+        menuOpen ||
+        mode.kind === 'placing' ||
+        mode.kind === 'roadStart' ||
+        mode.kind === 'roadEnd'
+      ) {
         resetToIdle();
         return;
       }
@@ -221,16 +234,9 @@ export async function createGame(
       bottomBar.setMode('build');
       menu.open(stockOf(state), highestLevel(state), towerTotals(state, PLAYER));
     },
-    onRoad: () => {
+    onUndo: () => {
       economySheet.close();
-      if (mode.kind === 'roadStart' || mode.kind === 'roadEnd') {
-        resetToIdle();
-        return;
-      }
-      resetToIdle();
-      mode = { kind: 'roadStart' };
-      bottomBar.setMode('road');
-      banner.show(en.flow.roadStartPrompt);
+      undo();
     },
     onUnits: () => {
       if (state.result) return;
@@ -266,6 +272,7 @@ export async function createGame(
         return;
       }
       state = takeAiTurn(state, PLAYER);
+      undoStack.length = 0;
       endTurn();
     }, aiConfig.watchIntervalMs);
   }
@@ -403,21 +410,44 @@ export async function createGame(
       endScreen.show(state, PLAYER);
     }
     bottomBar.setUnitsEnabled(ownUnits().length > 0);
+    bottomBar.setUndoEnabled(undoStack.length > 0 && !watch);
     if (mode.kind === 'idle') showPanel();
     else if (mode.kind === 'unit') refreshUnitMode();
     showOrderPaths();
   }
 
-  /** Applies an action; on success stores the state and refreshes, otherwise shows the error. */
-  function commit(action: Action): boolean {
+  /**
+   * Applies an action; on success stores the state and refreshes, otherwise shows the error.
+   * `undoUnit`: the action is a move of this unit that can be taken back, provided it revealed
+   * nothing new. Every other action clears the undo stack.
+   */
+  function commit(action: Action, undoUnit?: number): boolean {
+    const before = state;
     const result = applyAction(state, action);
     if (!result.ok) {
       toast.show(formatError(result.error), 'error');
       return false;
     }
     state = result.state;
+    if (undoUnit !== undefined && revealsNothing(before, state, PLAYER)) {
+      undoStack.push({ before, unitId: undoUnit });
+    } else {
+      undoStack.length = 0;
+    }
     refresh();
     return true;
+  }
+
+  /** Undo: takes back the last move (the state before it comes back, no action is applied). */
+  function undo(): void {
+    const entry = undoStack.pop();
+    if (!entry || state.result || watch) return;
+    resetToIdle();
+    state = entry.before;
+    refresh();
+    const unit = ownUnits().find((u) => u.id === entry.unitId);
+    if (unit) enterUnitMode(unit);
+    toast.show(en.ui.undone);
   }
 
   function buildingAt(h: Hex): GameState['buildings'][number] | undefined {
@@ -510,6 +540,7 @@ export async function createGame(
                 },
               }
             : undefined,
+        connect: connectInfo(building),
         train:
           building.type === 'barracks' || building.type === 'harbor'
             ? trainInfo(building)
@@ -534,6 +565,31 @@ export async function createGame(
     } else {
       showEmptyTile(hex, terrain);
     }
+  }
+
+  /** "Connect with road": the cheapest road from an unconnected building to the network. */
+  function connectInfo(
+    building: GameState['buildings'][number],
+  ): { cost: Goods; ok: boolean; reason?: string; onConnect(): void } | undefined {
+    if (statuses[building.id]?.kind !== 'notConnected') return undefined;
+    const info = roadConnection(state, roadField(state, PLAYER), building.hex);
+    const target = info?.target;
+    if (!target) return undefined;
+    const planned = planRoad(state, PLAYER, building.hex, target);
+    if (!planned.ok || planned.plan.newTiles.length === 0) return undefined;
+    const { cost } = planned.plan;
+    const stock = stockOf(state);
+    const ok = canAfford(stock, cost);
+    return {
+      cost,
+      ok,
+      reason: ok ? undefined : formatMissing(missingGoods(stock, cost)),
+      onConnect: () => {
+        if (commit({ type: 'buildRoad', from: building.hex, to: target })) {
+          toast.show(en.flow.roadBuilt);
+        }
+      },
+    };
   }
 
   function ownUnits(): Unit[] {
@@ -686,32 +742,79 @@ export async function createGame(
     return planned.ok && planned.plan.turns >= 1 ? planned.plan : null;
   }
 
-  /** Sets the move order; reports it if the walk of this turn stopped right away. */
+  /** Sets the move order at once (no confirmation); reports it if the walk of this turn stopped. */
   function commitOrder(unit: Unit, hex: Hex): void {
-    if (!commit({ type: 'setOrder', unitId: unit.id, to: hex })) {
+    if (!commit({ type: 'setOrder', unitId: unit.id, to: hex }, unit.id)) {
       refreshUnitMode();
       return;
     }
     const after = state.units.find((u) => u.id === unit.id);
+    let stopped: string | undefined;
     if (after && !after.order && !hexEquals(after.hex, hex)) {
       const text =
         enemiesInSight(state, after).length > 0 ? en.orders.stoppedEnemy : en.orders.stoppedBlocked;
-      toast.show(fill(text, { unit: en.units[after.type] }), 'error');
+      stopped = fill(text, { unit: en.units[after.type] });
     }
-    refreshUnitMode();
+    afterUnitAction(unit.id, stopped, stopped ? 'error' : 'info');
   }
 
-  function askOrder(unit: Unit, hex: Hex, plan: OrderPlan): void {
-    panel.hide();
-    showOrderPaths({ unitId: unit.id, plan });
-    confirm.show({
-      ...orderConfirm(unit.type, plan.turns),
-      onConfirm: () => commitOrder(unit, hex),
-      onCancel: () => {
-        refreshUnitMode();
-        showOrderPaths();
-      },
-    });
+  /** Moves the unit to a reachable tile; the move can be undone unless it boards or lands. */
+  function moveUnit(unit: Unit, hex: Hex): void {
+    const step = reachableTiles(state, unit.id, { ignoreHiddenUnits: true }).find((r) =>
+      hexEquals(r.hex, hex),
+    );
+    const undoable = step !== undefined && step.kind === undefined && unit.aboard === null;
+    if (commit({ type: 'move', unitId: unit.id, to: hex }, undoable ? unit.id : undefined)) {
+      afterUnitAction(unit.id);
+    }
+  }
+
+  /** Attacks at once (no confirmation); the expected result was shown on the target. */
+  function attackUnit(attacker: Unit, defender: Unit): void {
+    const preview = combatPreview(state, attacker.id, defender.id);
+    if (commit({ type: 'attack', unitId: attacker.id, targetId: defender.id })) {
+      afterUnitAction(attacker.id, formatAttacked(en.units[attacker.type], preview));
+    } else {
+      refreshUnitMode();
+    }
+  }
+
+  /** Is this unit still to be handled this turn (no order, can still act)? */
+  function isWaiting(u: Unit): boolean {
+    return !u.order && inUnitCycle(u, canAct(u), landingTiles(u));
+  }
+
+  /**
+   * After a move, order or attack: when the unit is done (nothing left to do or sent on an
+   * order), the next unit that can act is selected; if none is left, back to idle with the
+   * "all done" hint. `message` (e.g. the attack result) is always shown.
+   */
+  function afterUnitAction(
+    unitId: number,
+    message?: string,
+    kind: 'info' | 'error' = 'info',
+  ): void {
+    const unit = state.units.find((u) => u.id === unitId && u.owner === PLAYER);
+    if (unit && !unit.order && canAct(unit)) {
+      if (message) toast.show(message, kind);
+      return;
+    }
+    const sorted = ownUnits().sort((a, b) => a.id - b.id);
+    const ordered = [
+      ...sorted.filter((u) => u.id > unitId),
+      ...sorted.filter((u) => u.id < unitId),
+    ];
+    const next = ordered.find(isWaiting);
+    if (next) {
+      enterUnitMode(next);
+      if (message) toast.show(message, kind);
+      return;
+    }
+    if (mode.kind === 'unit') {
+      leaveUnitMode();
+      showPanel();
+    }
+    toast.show(message ? `${message}\n${en.unitText.allDone}` : en.unitText.allDone, kind);
   }
 
   function foundHere(unit: Unit): void {
@@ -755,8 +858,7 @@ export async function createGame(
       ...sorted.filter((u) => u.id === currentId && !inUnitMode),
     ];
     // If the selected unit is the only one that can still act, keep it (and re-center on it).
-    const waiting = (u: Unit): boolean => !u.order && inUnitCycle(u, canAct(u), landingTiles(u));
-    const next = ordered.find(waiting) ?? sorted.find((u) => u.id === currentId && waiting(u));
+    const next = ordered.find(isWaiting) ?? sorted.find((u) => u.id === currentId && isWaiting(u));
     if (!next) {
       toast.show(en.unitText.allDone);
       return;
@@ -816,7 +918,7 @@ export async function createGame(
     if (hex && !hexEquals(hex, unit.hex)) {
       const target = visibleTargets(unit).find((t) => hexEquals(t.hex, hex));
       if (target) {
-        askAttack(unit, target);
+        attackUnit(unit, target);
         return;
       }
       if (
@@ -824,7 +926,7 @@ export async function createGame(
           hexEquals(r.hex, hex),
         )
       ) {
-        commit({ type: 'move', unitId: unit.id, to: hex });
+        moveUnit(unit, hex);
         return;
       }
       if (farPlan(unit, hex)) {
@@ -904,7 +1006,12 @@ export async function createGame(
       reach.map((r) => r.hex),
       reach.filter((r) => r.kind === 'board').map((r) => r.hex),
     );
-    renderer.setAttackTargets(visibleTargets(unit).map((t) => t.hex));
+    renderer.setAttackTargets(
+      visibleTargets(unit).map((t) => ({
+        hex: t.hex,
+        label: attackLabel(combatPreview(state, unit.id, t.id)),
+      })),
+    );
     showUnitPanel(unit);
     showOrderPaths();
   }
@@ -913,25 +1020,7 @@ export async function createGame(
     return attackTargets(state, unit.id).filter((t) => isVisible(state, PLAYER, t.hex));
   }
 
-  function askAttack(attacker: Unit, defender: Unit): void {
-    const preview = combatPreview(state, attacker.id, defender.id);
-    panel.hide();
-    confirm.show({
-      title: fill(en.attack.confirmTitle, { unit: en.units[defender.type] }),
-      lines: attackPreviewLines(preview, attacker, defender),
-      confirmLabel: en.attack.confirm,
-      onConfirm: () => {
-        if (commit({ type: 'attack', unitId: attacker.id, targetId: defender.id })) {
-          toast.show(formatAttacked(en.units[attacker.type], preview));
-        } else {
-          refreshUnitMode();
-        }
-      },
-      onCancel: () => refreshUnitMode(),
-    });
-  }
-
-  /** A tap while a unit is selected: move, attack, switch unit or fall back to the idle tap. */
+  /** A tap while a unit is selected: move, order or attack at once, switch unit or fall back to the idle tap. */
   function tapUnitMode(unitId: number, hex: Hex | null): void {
     const unit = state.units.find((u) => u.id === unitId);
     if (!unit || !hex) {
@@ -941,13 +1030,13 @@ export async function createGame(
     }
     const target = visibleTargets(unit).find((t) => hexEquals(t.hex, hex));
     if (target) {
-      askAttack(unit, target);
+      attackUnit(unit, target);
       return;
     }
     if (
       reachableTiles(state, unit.id, { ignoreHiddenUnits: true }).some((r) => hexEquals(r.hex, hex))
     ) {
-      commit({ type: 'move', unitId: unit.id, to: hex });
+      moveUnit(unit, hex);
       return;
     }
     const other = unitAt(state, hex);
@@ -961,9 +1050,8 @@ export async function createGame(
       }
       return;
     }
-    const plan = farPlan(unit, hex);
-    if (plan) {
-      askOrder(unit, hex, plan);
+    if (farPlan(unit, hex)) {
+      commitOrder(unit, hex);
       return;
     }
     leaveUnitMode();
@@ -998,7 +1086,7 @@ export async function createGame(
         },
       },
       onRoadFrom: roadOk ? () => startRoadFrom(hex) : undefined,
-      note: options.length === 0 ? en.tileInfo.nothingToBuild : undefined,
+      note: options.length === 0 && !roadOk ? en.tileInfo.nothingToBuild : undefined,
     });
   }
 
@@ -1006,9 +1094,18 @@ export async function createGame(
   function startRoadFrom(hex: Hex): void {
     resetToIdle();
     mode = { kind: 'roadEnd', from: hex };
-    bottomBar.setMode('road');
+    bottomBar.setMode('build');
     renderer.setHighlights([hex]);
     banner.show(en.flow.roadEndPrompt);
+  }
+
+  /** Build menu → Road: waits for the road's start tile. */
+  function startRoadFlow(): void {
+    menuOpen = false;
+    menu.close();
+    mode = { kind: 'roadStart' };
+    bottomBar.setMode('build');
+    banner.show(en.flow.roadStartPrompt);
   }
 
   function askDemolish(title: string, doneText: string, hex: Hex): void {

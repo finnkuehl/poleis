@@ -12,6 +12,7 @@ import {
   type BuildingId,
   type CityLevel,
   type GoodId,
+  type Goods,
   type Stock,
   type UnitId,
 } from '../data';
@@ -22,6 +23,7 @@ import {
   fill,
   formatAdvanceTo,
   formatDrachmas,
+  formatGoods,
   formatMissing,
   formatMoves,
   formatResidents,
@@ -105,6 +107,8 @@ export interface BuildingInfo {
   trade?: TradeInfo;
   /** Barracks only: the units that can be trained. */
   train?: TrainInfo;
+  /** Not connected: a button that builds the cheapest road to the network. */
+  connect?: { cost: Goods; ok: boolean; reason?: string; onConnect(): void };
 }
 
 export interface TrainInfo {
@@ -169,7 +173,7 @@ export interface RoadInfo {
 export interface TerrainExtra {
   /** "Build here" list; one tap on an affordable entry calls `onBuild`. */
   build?: { options: BuildOption[]; stock: Stock; onBuild(id: BuildingId): void };
-  /** If set, a "Road from here" button is shown. */
+  /** If set, a "Road from here" row is shown in the build list. */
   onRoadFrom?: () => void;
   note?: string;
 }
@@ -500,8 +504,23 @@ export function createTileInfoPanel(root: HTMLElement, onClose: () => void): Til
     }
     if (o.onDemolish) actions.appendChild(demolishButton(o.onDemolish));
     if (actions.childElementCount > 0) nodes.push(actions);
+    if (o.connect) nodes.splice(1, 0, connectSection(o.connect));
     content.replaceChildren(...nodes);
     panel.hidden = false;
+  }
+
+  /** "Connect with road (N wood)": one tap builds the cheapest road to the network. */
+  function connectSection(c: NonNullable<BuildingInfo['connect']>): HTMLElement {
+    const wrap = el('div', 'tile-info__connect');
+    const btn = button(
+      'btn btn--primary tile-info__road',
+      fill(en.tileInfo.connectRoad, { cost: formatGoods(c.cost) }),
+    );
+    btn.disabled = !c.ok;
+    btn.addEventListener('click', c.onConnect);
+    wrap.appendChild(btn);
+    if (c.reason) wrap.appendChild(el('p', 'city-next__reason', c.reason));
+    return wrap;
   }
 
   function checkMark(ok: boolean): HTMLElement {
@@ -615,6 +634,21 @@ export function createTileInfoPanel(root: HTMLElement, onClose: () => void): Til
     return item;
   }
 
+  /** The "Road from here" row of the "Build here" list (starts the road flow at this tile). */
+  function roadRow(onRoadFrom: () => void): HTMLElement {
+    const item = button('build-item build-item--here', '');
+    const icon = el('span', 'build-item__icon', '\u{1F6E4}\uFE0F');
+    icon.setAttribute('aria-hidden', 'true');
+    const body = el('span', 'build-item__body');
+    body.appendChild(el('span', 'build-item__name', en.tileInfo.roadFromHere));
+    body.appendChild(
+      el('span', 'build-item__effect', `${formatGoods(economyConfig.roadCost)} ${en.ui.perTile}`),
+    );
+    item.append(icon, body);
+    item.addEventListener('click', onRoadFrom);
+    return item;
+  }
+
   function showTerrain(h: Hex, terrain: TerrainId, extra: TerrainExtra = {}): void {
     setHeader(h, en.terrain[terrain], null, terrain);
     const list = el('dl', 'tile-info__rows');
@@ -626,16 +660,14 @@ export function createTileInfoPanel(root: HTMLElement, onClose: () => void): Til
     const nodes: HTMLElement[] = [list, el('p', 'tile-info__note', en.terrainNote[terrain])];
     if (extra.note) nodes.push(el('p', 'tile-info__hint', extra.note));
     const build = extra.build;
-    if (build && build.options.length > 0) {
+    if ((build && build.options.length > 0) || extra.onRoadFrom) {
       const section = el('div', 'build-here');
       section.appendChild(el('h3', 'build-here__title', en.tileInfo.buildHere));
-      for (const o of build.options) section.appendChild(buildRow(o, build.stock, build.onBuild));
+      if (build) {
+        for (const o of build.options) section.appendChild(buildRow(o, build.stock, build.onBuild));
+      }
+      if (extra.onRoadFrom) section.appendChild(roadRow(extra.onRoadFrom));
       nodes.push(section);
-    }
-    if (extra.onRoadFrom) {
-      const road = button('btn btn--secondary tile-info__road', en.tileInfo.roadFromHere);
-      road.addEventListener('click', extra.onRoadFrom);
-      nodes.push(road);
     }
     content.replaceChildren(...nodes);
     content.scrollTop = 0;

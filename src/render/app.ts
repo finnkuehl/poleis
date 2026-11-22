@@ -10,6 +10,7 @@ import { hexSize, startHexScreenRadiusPx } from './config';
 import { createMapView } from './map';
 import type { OrderPath } from './orderLayers';
 import { theme } from './theme';
+import type { AttackTarget } from './unitLayers';
 
 /** Optional hooks for dragging a unit; `h` is the hex under the pointer (null outside the map). */
 export interface DragHandlers {
@@ -20,12 +21,14 @@ export interface DragHandlers {
   onCancel(): void;
 }
 
+export type { AttackTarget };
+
 export interface Renderer {
   app: Application;
   /** Redraws everything from `viewer`'s perspective (fog of war, visible enemy units). */
   setState(state: GameState, statuses: Record<number, BuildingStatus>, viewer?: PlayerId): void;
   /** Red outlines on attack targets; [] clears. */
-  setAttackTargets(hexes: readonly Hex[]): void;
+  setAttackTargets(targets: readonly AttackTarget[]): void;
   selectTile(h: Hex | null): void;
   /** Test option: shows the whole map (no fog, all units and buildings); takes effect on the next setState. */
   setRevealAll(value: boolean): void;

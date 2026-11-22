@@ -23,17 +23,23 @@ import { playerColorOf } from './playerColor';
 import { scaleColor, taperedStroke, tileRng } from './terrain';
 import { theme } from './theme';
 
+/** An attackable enemy tile with the expected result shown on it (e.g. "-3 skull"). */
+export interface AttackTarget {
+  hex: Hex;
+  label: string;
+}
+
 export interface UnitLayers {
-  /** Layers in drawing order: units, fog, attack targets. */
+  /** Layers in drawing order: units, fog, attack targets (outlines and result labels). */
   units: Container;
   fog: Graphics;
-  attack: Graphics;
+  attack: Container;
   /** Drag ghost, to be added on top of everything. */
   ghost: Container;
   update(state: GameState, viewer: PlayerId): void;
   /** Test option: no fog, enemy units drawn everywhere. Takes effect on the next update. */
   setRevealAll(value: boolean): void;
-  setAttackTargets(hexes: readonly Hex[]): void;
+  setAttackTargets(targets: readonly AttackTarget[]): void;
   /** Semi-transparent ghost token at world position (x, y); null hides it. */
   setGhost(unit: { type: string; owner: number } | null, x?: number, y?: number): void;
 }
@@ -76,7 +82,10 @@ export function createUnitLayers(art: ArtSet = NO_ART): UnitLayers {
   units.addChild(tokens, figures, bars, badges);
   const badgeTexts = new Map<number, Text>();
   const fog = new Graphics();
-  const attack = new Graphics();
+  const attack = new Container();
+  const attackShapes = new Graphics();
+  const attackLabels = new Container();
+  attack.addChild(attackShapes, attackLabels);
 
   /** Visuals of one unit, created/destroyed only when units appear/disappear. */
   interface UnitVisual {
@@ -372,13 +381,40 @@ export function createUnitLayers(art: ArtSet = NO_ART): UnitLayers {
       drawUnits(state, viewer, visible);
       drawFog(state, viewer, visible);
     },
-    setAttackTargets(hexes) {
-      attack.clear();
-      for (const h of hexes) {
-        attack
-          .poly(flatCorners(h))
+    setAttackTargets(targets) {
+      attackShapes.clear();
+      for (const t of attackLabels.removeChildren()) t.destroy({ children: true });
+      for (const { hex, label } of targets) {
+        attackShapes
+          .poly(flatCorners(hex))
           .fill({ color: theme.attackColor, alpha: theme.attackFillAlpha })
           .stroke({ color: theme.attackColor, width: theme.attackWidth, join: 'round' });
+        // The expected result in a dark red pill at the top of the tile (readable at any zoom).
+        const text = new Text({
+          text: label,
+          style: {
+            fontSize: hexSize * theme.attackLabelSizeFactor,
+            fontWeight: 'bold',
+            fill: theme.attackLabelColor,
+            fontFamily: theme.fontFamily,
+          },
+          resolution: 2,
+        });
+        text.anchor.set(0.5);
+        const c = hexToPixel(hex, hexSize);
+        const cy = c.y - hexSize * theme.attackLabelOffsetFactor;
+        const padX = hexSize * theme.attackLabelPadXFactor;
+        const padY = hexSize * theme.attackLabelPadYFactor;
+        const w = text.width + padX * 2;
+        const h = text.height + padY * 2;
+        text.position.set(c.x, cy);
+        const pill = new Graphics()
+          .roundRect(c.x - w / 2, cy - h / 2, w, h, h / 2)
+          .fill({ color: theme.attackLabelBackColor, alpha: theme.attackLabelBackAlpha })
+          .stroke({ color: theme.attackLabelRimColor, width: 1.5, alpha: 0.9 });
+        const group = new Container();
+        group.addChild(pill, text);
+        attackLabels.addChild(group);
       }
     },
   };
