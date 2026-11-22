@@ -75,6 +75,11 @@ buildings and units. Reference keyframe: house and temple by `tools/art/` (see b
   shields, crests or sails – drawn in **neutral greys with their light and shade**, so the game
   can tint them with the player color: PixiJS `sprite.tint` on the map, a CSS mask in the UI).
   This gives every civilization slightly different-looking cities and armies.
+  **Draw order: the accent layer goes UNDER the art.** The art file has transparent holes exactly
+  where the accents are (the library punches them automatically), so anything in front of an
+  accent hides it and trims/shadows painted later sit on top of the tinted color. In PixiJS:
+  a container `[accentSprite (tint = player color), artSprite]`; in CSS: the accent image with a
+  player-color layer in `mix-blend-mode: multiply` masked by the accent, then the art on top.
 - **Canvas and anchor (fixed, the game relies on it):**
   - Buildings: `viewBox="0 0 256 256"`; the center of the base's top ellipse is at **(128, 176)**
     and the base's top ellipse is **208 wide** (x 24 → 232). The game scales the image so this
