@@ -39,6 +39,7 @@ import {
   isFieldKind,
   isoPoint,
   jettyEdge,
+  laneMeetPoint,
   longestRun,
   moundsNear,
   organicBlob,
@@ -48,7 +49,12 @@ import {
   patchCenter,
   patchRadii,
   polygonArea,
+  roadPairsBetweenBuildings,
   slopeOutline,
+  spacedWells,
+  tilePairKey,
+  townJoinMask,
+  townTiles,
   unitFootprints,
   unitsShownTo,
   withinLimits,
@@ -408,14 +414,14 @@ describe('field joins', () => {
 });
 
 describe('groundSignature', () => {
-  it('changes with the shown buildings only', () => {
+  it('changes with the shown buildings and their owners', () => {
     const state = town();
     addBuilding(state, 'house', at(1, 1));
     const key = groundSignature(state.buildings);
     expect(groundSignature(state.buildings)).toBe(key);
-    // The ground shows no owner: a captured building keeps its ground
+    // Town areas are per owner: a captured building may leave or join a town
     state.buildings[0].owner = 1;
-    expect(groundSignature(state.buildings)).toBe(key);
+    expect(groundSignature(state.buildings)).not.toBe(key);
     state.buildings[0].type = 'storehouse';
     expect(groundSignature(state.buildings)).not.toBe(key);
     addBuilding(state, 'farm', at(2, 2));
@@ -682,5 +688,110 @@ describe('patch geometry', () => {
     expect(lines.length).toBe(5);
     expect(insideConvex({ x: 5, y: 5 }, square, 1)).toBe(true);
     expect(insideConvex({ x: 0.5, y: 5 }, square, 1)).toBe(false);
+  });
+});
+
+describe('town ground', () => {
+  it('joins neighboring yard and plaza tiles of one owner into town areas', () => {
+    const state = makeTestState(['ppppp', 'ppppp', 'ppppp']);
+    addBuilding(state, 'cityCenter', at(1, 1));
+    addBuilding(state, 'house', at(2, 1));
+    addBuilding(state, 'bakery', at(2, 0));
+    // A field and another owner's house next to the town stay out of it
+    addBuilding(state, 'farm', at(1, 2));
+    addBuilding(state, 'house', at(0, 1), 1);
+    // A single building far away keeps its own yard
+    addBuilding(state, 'house', at(4, 2));
+    const towns = townTiles(state.map, state.buildings);
+    const idx = (q: number, r: number): number => tileIndex(state.map, at(q, r));
+    expect([...towns.keys()].sort((a, b) => a - b)).toEqual(
+      [idx(1, 1), idx(2, 1), idx(2, 0)].sort((a, b) => a - b),
+    );
+    expect(new Set(towns.values()).size).toBe(1);
+    const mask = townJoinMask(state.map, at(1, 1), towns);
+    expect(mask.filter(Boolean).length).toBe(2);
+  });
+
+  it('takes road tiles inside a town into it (the street), not those at its edge', () => {
+    const state = makeTestState(['ppppp', 'ppppp'], { ownAll: true });
+    const idx = (q: number, r: number): number => tileIndex(state.map, at(q, r));
+    // Two houses with a road tile between them: one town across the street
+    addBuilding(state, 'house', at(0, 0));
+    addBuilding(state, 'house', at(2, 0));
+    state.roads[idx(1, 0)] = true;
+    // A road leading out of town: only one town neighbor
+    state.roads[idx(3, 0)] = true;
+    const towns = townTiles(state.map, state.buildings, state.roads, state.territory);
+    expect(towns.has(idx(1, 0))).toBe(true);
+    expect(towns.get(idx(0, 0))).toBe(towns.get(idx(2, 0)));
+    expect(towns.has(idx(3, 0))).toBe(false);
+    // The street gets a footprint (the terrain keeps it free), the outer road does not
+    const fps = groundFootprints(state, 0, false, size).map((f) => tileIndex(state.map, f.hex));
+    expect(fps).toContain(idx(1, 0));
+    expect(fps).not.toContain(idx(3, 0));
+    // A single building with a road next to it stays a single building
+    const lone = makeTestState(['ppppp', 'ppppp'], { ownAll: true });
+    addBuilding(lone, 'house', at(1, 0));
+    lone.roads[tileIndex(lone.map, at(2, 0))] = true;
+    lone.roads[tileIndex(lone.map, at(1, 1))] = true;
+    expect(townTiles(lone.map, lone.buildings, lone.roads, lone.territory).size).toBe(0);
+  });
+
+  it('lets both tiles of a lane meet at the same point on their edge', () => {
+    const state = makeTestState(['ppppp', 'ppppp', 'ppppp']);
+    for (let e = 0; e < 6; e++) {
+      const a = laneMeetPoint(state.map, at(2, 1), e, size);
+      const b = laneMeetPoint(state.map, edgeNeighborHex(at(2, 1), e), (e + 3) % 6, size);
+      expect(a.x).toBeCloseTo(b.x, 6);
+      expect(a.y).toBeCloseTo(b.y, 6);
+    }
+  });
+
+  it('gives town tiles a large footprint; single buildings keep their own', () => {
+    const state = makeTestState(['pppp', 'pppp']);
+    addBuilding(state, 'house', at(0, 0));
+    const single = groundFootprints(state, 0, false, size)[0];
+    expect(single.rx).toBeLessThan(theme.ground.town.footprint * size);
+    addBuilding(state, 'house', at(1, 0));
+    for (const fp of groundFootprints(state, 0, false, size)) {
+      expect(fp.rx).toBeCloseTo(theme.ground.town.footprint * size);
+    }
+  });
+
+  it('knows the roads between building tiles (no lane there) and repaints when they change', () => {
+    const state = makeTestState(['pppp', 'pppp']);
+    addBuilding(state, 'house', at(0, 0));
+    addBuilding(state, 'bakery', at(1, 0));
+    const a = tileIndex(state.map, at(0, 0));
+    const b = tileIndex(state.map, at(1, 0));
+    const c = tileIndex(state.map, at(2, 0));
+    // Only pairs with a building at both ends count
+    const pairs = roadPairsBetweenBuildings(
+      state.map,
+      [
+        [a, b],
+        [b, c],
+      ],
+      state.buildings,
+    );
+    expect([...pairs]).toEqual([tilePairKey(a, b)]);
+    expect(groundSignature(state.buildings, pairs)).not.toBe(groundSignature(state.buildings));
+  });
+
+  it('keeps wells about two tiles apart', () => {
+    const d = theme.ground.town.wellSpacing * size;
+    const kept = spacedWells(
+      [
+        { x: 0, y: 0 },
+        { x: d * 0.5, y: 0 },
+        { x: d * 1.1, y: 0 },
+        { x: d * 1.5, y: 0 },
+      ],
+      d,
+    );
+    expect(kept).toEqual([
+      { x: 0, y: 0 },
+      { x: d * 1.1, y: 0 },
+    ]);
   });
 });

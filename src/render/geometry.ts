@@ -300,7 +300,7 @@ export function roadGeometry(state: GameState): RoadGeometry {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Road tracks: worn dirt tracks that bend smoothly through the tiles (docs/ART.md "Roads")
+// Road tracks: gravel roads that bend smoothly through the tiles (docs/ART.md "Roads")
 // ---------------------------------------------------------------------------------------------
 
 /** Deterministic hash in [0, 1) of two ints and a salt (a local copy: terrain.ts imports this file). */
@@ -313,26 +313,55 @@ function roadHash(a: number, b: number, salt: number): number {
   return (h >>> 0) / 4294967296;
 }
 
-/** Look of a piece of road: earth track, or light stone paving next to a city center. */
+function smooth01(e0: number, e1: number, x: number): number {
+  const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0)));
+  return t * t * (3 - 2 * t);
+}
+
+/** Look of a piece of road: a gravel track, or light stone paving on and next to a city center. */
 export type TrackStyle = 'dirt' | 'paved';
 
-/** One piece of track inside one tile: a sampled center line with a width at every point. */
+/**
+ * What a piece of road does in its tile:
+ * - 'through': from one road edge through (near) the center to another;
+ * - 'junction': a curve between two neighboring arms of a junction (dirt) or a spoke from an arm
+ *   to the center (paving), under the crossing's worn spot / paved square;
+ * - 'deadEnd': from the edge to the center, fading out;
+ * - 'yard': into a building's yard, fading out there;
+ * - 'plaza': onto a city center, ending cleanly at its plaza.
+ */
+export type TrackKind = 'through' | 'junction' | 'deadEnd' | 'yard' | 'plaza';
+
+/** One piece of road inside one tile: a sampled center line with its look at every point. */
 export interface TrackPiece {
   tile: number;
   style: TrackStyle;
+  kind: TrackKind;
   points: Point[];
-  /** Full width (world px) at every point; it runs to 0 where a dead end fades out. */
+  /** Unit direction of the road at every point; exact at the ends, so neighboring pieces join. */
+  dirs: Point[];
+  /** Full width of the surface (world px) at every point. */
   widths: number[];
-  /** Part of a junction: its ruts fade out toward its middle (the worn crossing). */
-  junction?: boolean;
-  /** Runs into a building's yard: its ruts fade out toward its end. */
-  yard?: boolean;
+  /**
+   * Distance along the road (world px) at every point. It runs on across the joints of a chain of
+   * pieces, so textures laid along the road continue from tile to tile without a seam.
+   */
+  along: number[];
+  /** Opacity of the surface, 0..1 (fades out at dead ends and in yards). */
+  fade: number[];
+  /** Strength of the wheel ruts, 0..1 (they fade in junctions, yards, toward paving). */
+  ruts: number[];
+  /** Strength of the cut banks on hills, 0..1 (0 off the hills, growing in from other terrain). */
+  banks: number[];
+  /** Paving: a row of edge stones across its start / end (where it meets a gravel track). */
+  curbs: [boolean, boolean];
 }
 
-/** A worn spot where tracks meet (junction) or a lone road tile. */
+/** A worn spot (gravel) or a small paved square where roads meet, end, or a lone road tile. */
 export interface TrackCrossing {
   tile: number;
   style: TrackStyle;
+  kind: 'junction' | 'deadEnd' | 'lone';
   center: Point;
   r: number;
 }
@@ -344,24 +373,40 @@ export interface RoadTracks {
 
 /** Sizes of the tracks (fractions of the hex size unless noted). */
 export interface TrackParams {
-  /** Average track width */
+  /** Width of the gravel track */
   width: number;
-  /** Width varies by up to this share between edges and tiles */
-  widthVar: number;
+  /** Paving width as a share of the gravel track's width */
+  pavingWidth: number;
   /** The track crosses an edge up to this far beside its midpoint, and a tile up to this far beside its center */
   edgeJitter: number;
   centerJitter: number;
   /** A track onto a building tile ends this share of the way from its midpoint to the center (the yard) */
   buildingEnd: number;
-  /** ... onto a city center: at the plaza's edge */
-  plazaEnd: number;
+  /** ... onto a city center: at this ellipse around the center (the plaza) */
+  plazaRx: number;
+  plazaRy: number;
   /** Samples per half piece (edge to center) */
   samples: number;
+  /** Banks grow in from a non-hill edge over this share of the way to the center */
+  bankRamp: number;
+  /** Radii of crossings: junction, dead end, lone tile (shares of the track width) */
+  junctionRadius: number;
+  deadEndRadius: number;
+  loneRadius: number;
+  /** Radius of a paved square (share of the paving width) */
+  squareRadius: number;
 }
 
-/** Cubic Hermite curve from p0 to p1 with tangents t0, t1 (n samples after p0, p0 included). */
-function hermite(p0: Point, p1: Point, t0: Point, t1: Point, n: number): Point[] {
-  const pts: Point[] = [];
+/** A sampled curve: points and unit directions. */
+interface Curve {
+  points: Point[];
+  dirs: Point[];
+}
+
+/** Cubic Hermite curve from p0 to p1 with tangents t0, t1: n + 1 points (p0 included) and directions. */
+function hermiteCurve(p0: Point, p1: Point, t0: Point, t1: Point, n: number): Curve {
+  const points: Point[] = [];
+  const dirs: Point[] = [];
   for (let i = 0; i <= n; i++) {
     const t = i / n;
     const t2 = t * t;
@@ -370,12 +415,28 @@ function hermite(p0: Point, p1: Point, t0: Point, t1: Point, n: number): Point[]
     const h10 = t3 - 2 * t2 + t;
     const h01 = -2 * t3 + 3 * t2;
     const h11 = t3 - t2;
-    pts.push({
+    points.push({
       x: h00 * p0.x + h10 * t0.x + h01 * p1.x + h11 * t1.x,
       y: h00 * p0.y + h10 * t0.y + h01 * p1.y + h11 * t1.y,
     });
+    // Derivative of the basis: the curve's direction
+    const d00 = 6 * t2 - 6 * t;
+    const d10 = 3 * t2 - 4 * t + 1;
+    const d01 = -6 * t2 + 6 * t;
+    const d11 = 3 * t2 - 2 * t;
+    dirs.push(
+      unit({
+        x: d00 * p0.x + d10 * t0.x + d01 * p1.x + d11 * t1.x,
+        y: d00 * p0.y + d10 * t0.y + d01 * p1.y + d11 * t1.y,
+      }),
+    );
   }
-  return pts;
+  return { points, dirs };
+}
+
+/** Cubic Hermite curve from p0 to p1 with tangents t0, t1 (n samples after p0, p0 included). */
+function hermite(p0: Point, p1: Point, t0: Point, t1: Point, n: number): Point[] {
+  return hermiteCurve(p0, p1, t0, t1, n).points;
 }
 
 function scaled(v: Point, k: number): Point {
@@ -403,51 +464,151 @@ export function pavedTiles(state: GameState): Set<number> {
   return out;
 }
 
+/** Where a road arm enters a tile: across edge `edge`, from the tile `other`. */
+interface Arm {
+  edge: number;
+  other: number;
+  /** Where the road crosses the edge (the same point from both tiles) */
+  mid: Point;
+  /** Inward direction (from the edge toward this tile's center) */
+  inward: Point;
+  /** Key of the edge crossing (shared by the pieces of both tiles that end there) */
+  key: string;
+}
+
 /**
  * A smooth curve from one road edge through the point `c` (near the tile center) to another:
  * it crosses each edge at right angles and passes `c` heading from the first edge to the second.
  */
-function throughCenter(
-  a: { mid: Point; inward: Point },
-  b: { mid: Point; inward: Point },
-  c: Point,
-  n: number,
-): Point[] {
+function throughCenter(a: Arm, b: Arm, c: Point, n: number): Curve {
   const la = Math.hypot(c.x - a.mid.x, c.y - a.mid.y);
   const lb = Math.hypot(c.x - b.mid.x, c.y - b.mid.y);
   const through = scaled({ x: b.mid.x - a.mid.x, y: b.mid.y - a.mid.y }, 0.5);
-  const first = hermite(a.mid, c, scaled(a.inward, la), through, n);
-  const second = hermite(c, b.mid, through, scaled(b.inward, -lb), n).slice(1);
-  return [...first, ...second];
+  const first = hermiteCurve(a.mid, c, scaled(a.inward, la), through, n);
+  const second = hermiteCurve(c, b.mid, through, scaled(b.inward, -lb), n);
+  return {
+    points: [...first.points, ...second.points.slice(1)],
+    dirs: [...first.dirs, ...second.dirs.slice(1)],
+  };
+}
+
+/** A straight-ish curve from an arm's edge point inward to `end`, crossing the edge at right angles. */
+function inwardCurve(arm: Arm, end: Point, n: number): Curve {
+  const len = Math.hypot(end.x - arm.mid.x, end.y - arm.mid.y);
+  const toEnd = unit({ x: end.x - arm.mid.x, y: end.y - arm.mid.y });
+  return hermiteCurve(arm.mid, end, scaled(arm.inward, len), scaled(toEnd, len), n);
+}
+
+/** Where a line from `from` toward the center `c` meets the ellipse (rx, ry) around `c`. */
+function onEllipse(from: Point, c: Point, rx: number, ry: number): Point {
+  const d = { x: from.x - c.x, y: from.y - c.y };
+  const k = Math.hypot(d.x / rx, d.y / ry);
+  // Never past the edge point itself: a short stub at least
+  const s = Math.min(0.92, 1 / (k || 1));
+  return { x: c.x + d.x * s, y: c.y + d.y * s };
+}
+
+/** A piece under construction: its curve and its keys at both ends (null = no joint). */
+interface Draft {
+  piece: TrackPiece;
+  keys: [string | null, string | null];
+}
+
+/** Reverses a piece in place (and its end keys). */
+function reverseDraft(d: Draft): void {
+  const p = d.piece;
+  p.points.reverse();
+  p.dirs.reverse();
+  for (let i = 0; i < p.dirs.length; i++) p.dirs[i] = { x: -p.dirs[i].x, y: -p.dirs[i].y };
+  p.widths.reverse();
+  p.fade.reverse();
+  p.ruts.reverse();
+  p.banks.reverse();
+  p.curbs.reverse();
+  d.keys.reverse();
+}
+
+/**
+ * Distances along the road: pieces that meet at an edge crossing shared by exactly two pieces
+ * form a chain; along a chain the pieces are turned to run one way and `along` runs on from piece
+ * to piece. Chains break at junctions (three or more pieces at a crossing) and at loose ends.
+ */
+function chainAlong(drafts: Draft[]): void {
+  const ends = new Map<string, { d: number; end: 0 | 1 }[]>();
+  drafts.forEach((draft, d) => {
+    draft.keys.forEach((key, end) => {
+      if (key === null) return;
+      const list = ends.get(key);
+      const entry = { d, end: end as 0 | 1 };
+      if (list) list.push(entry);
+      else ends.set(key, [entry]);
+    });
+  });
+  /** The other piece end at the crossing of piece `d`'s end `end`, if exactly two meet there. */
+  const across = (d: number, end: 0 | 1): { d: number; end: 0 | 1 } | null => {
+    const key = drafts[d].keys[end];
+    if (key === null) return null;
+    const list = ends.get(key);
+    if (!list || list.length !== 2) return null;
+    return list[0].d === d && list[0].end === end ? list[1] : list[0];
+  };
+  const done = new Set<number>();
+  for (let start = 0; start < drafts.length; start++) {
+    if (done.has(start)) continue;
+    // Walk back to the first piece of the chain (or once around a loop)
+    let cur = start;
+    let free: 0 | 1 = 0;
+    for (let guard = 0; guard < drafts.length; guard++) {
+      const prev = across(cur, free);
+      if (!prev || prev.d === start || done.has(prev.d)) break;
+      cur = prev.d;
+      free = prev.end === 0 ? 1 : 0;
+    }
+    // ... then forward, turning every piece to start where the last one ended
+    let s = 0;
+    let entry: 0 | 1 = free;
+    for (let guard = 0; guard <= drafts.length; guard++) {
+      const draft = drafts[cur];
+      done.add(cur);
+      if (entry === 1) reverseDraft(draft);
+      const p = draft.piece;
+      p.along = [s];
+      for (let i = 1; i < p.points.length; i++) {
+        s += Math.hypot(p.points[i].x - p.points[i - 1].x, p.points[i].y - p.points[i - 1].y);
+        p.along.push(s);
+      }
+      const next = across(cur, 1);
+      if (!next || done.has(next.d)) break;
+      cur = next.d;
+      entry = next.end;
+    }
+  }
 }
 
 /**
  * The road network as smooth tracks (world px), from `roadGeometry`:
  * - every connection crosses its shared edge at one point (near the edge midpoint, a little
- *   beside it, the same from both tiles) at right angles to the edge, with one width there, so
- *   the tracks of neighboring tiles run on without a kink;
+ *   beside it, the same from both tiles) at right angles to the edge, so the pieces of
+ *   neighboring tiles run on without a kink (and with the same direction at the joint);
  * - a tile with two road edges: one curve through (near) its center;
- * - a dead end: the track fades out toward the center;
- * - a junction: curves between neighboring arms (they cut the corners like worn paths) and a
- *   worn crossing spot in the middle, so no star of straight lines;
- * - onto a building tile: the track ends softly in its yard (at the plaza's edge for a city center);
+ * - a dead end: the track fades out toward the center and ends in a small worn spot;
+ * - a junction: gravel curves between neighboring arms (they cut the corners like worn paths)
+ *   with a worn crossing in the middle; paving: spokes into a small paved square;
+ * - onto a building tile: the track fades out in its yard; onto a city center it ends cleanly
+ *   at the plaza;
  * - a lone road tile: only a worn spot.
- * On city center tiles and their neighbors the pieces are paved.
+ * On city center tiles and their neighbors the pieces are paved. On hills the pieces carry the
+ * strength of the banks of their cut through the slope.
  */
 export function roadTracks(state: GameState, size: number, params: TrackParams): RoadTracks {
   const map = state.map;
   const { segments, stubs } = roadGeometry(state);
   const paved = pavedTiles(state);
   const styleOf = (i: number): TrackStyle => (paved.has(i) ? 'paved' : 'dirt');
+  const hill = (i: number): boolean => map.tiles[i] === 'hills';
   const center = (i: number): Point => hexToPixel(hexAtIndex(map, i), size);
   const w0 = params.width * size;
-  interface Arm {
-    edge: number;
-    mid: Point;
-    /** Inward direction (from the edge toward this tile's center). */
-    inward: Point;
-    width: number;
-  }
+  const widthOf = (style: TrackStyle): number => (style === 'paved' ? w0 * params.pavingWidth : w0);
   const arms = new Map<number, Arm[]>();
   const addArm = (tile: number, arm: Arm): void => {
     const list = arms.get(tile);
@@ -459,52 +620,112 @@ export function roadTracks(state: GameState, size: number, params: TrackParams):
     const cb = center(b);
     const lo = Math.min(a, b);
     const hi = Math.max(a, b);
-    // Seen from the lower index, so both tiles get the same point and width
+    // Seen from the lower index, so both tiles get the same point
     const along = unit({ x: -(center(hi).y - center(lo).y), y: center(hi).x - center(lo).x });
     const shift = (roadHash(lo, hi, 301) - 0.5) * 2 * params.edgeJitter * size;
     const mid = {
       x: (ca.x + cb.x) / 2 + along.x * shift,
       y: (ca.y + cb.y) / 2 + along.y * shift,
     };
-    const width = w0 * (1 + (roadHash(lo, hi, 302) - 0.5) * 2 * params.widthVar);
     const ha = hexAtIndex(map, a);
     let edge = 0;
     for (let e = 0; e < 6; e++) if (mapEdgeNeighborIndex(map, ha, e) === b) edge = e;
-    addArm(a, { edge, mid, inward: unit({ x: ca.x - cb.x, y: ca.y - cb.y }), width });
+    const key = `${lo}-${hi}`;
+    addArm(a, { edge, other: b, mid, inward: unit({ x: ca.x - cb.x, y: ca.y - cb.y }), key });
     addArm(b, {
       edge: (edge + 3) % 6,
+      other: a,
       mid,
       inward: unit({ x: cb.x - ca.x, y: cb.y - ca.y }),
-      width,
+      key,
     });
   }
-  const pieces: TrackPiece[] = [];
+  /** A road tile where three or more roads meet. */
+  const isJunction = (i: number): boolean => state.roads[i] && (arms.get(i)?.length ?? 0) >= 3;
+  const drafts: Draft[] = [];
   const crossings: TrackCrossing[] = [];
   const n = params.samples;
   for (const [tile, list] of arms) {
     list.sort((u, v) => u.edge - v.edge);
     const c0 = center(tile);
     const style = styleOf(tile);
+    const w = widthOf(style);
     const h = hexAtIndex(map, tile);
-    const wobble = (k: number): number =>
-      1 + 0.5 * params.widthVar * Math.sin(k * 1.7 + roadHash(h.q, h.r, 305) * 6.28);
+    /**
+     * Bank strength at share `t` of the way from `arm`'s edge to the center: full on a hill tile
+     * whose neighbor across that edge is a hill too, else growing in from the edge.
+     */
+    const bankAt = (arm: Arm, t: number): number => {
+      if (!hill(tile)) return 0;
+      return hill(arm.other) ? 1 : smooth01(0, params.bankRamp, t);
+    };
+    /**
+     * Rut strength near an edge toward paving or a junction: the ruts fade out before the stones
+     * begin, and before a crossing (it is one worn place without ruts).
+     */
+    const rutNear = (arm: Arm, t: number): number =>
+      style === 'dirt' && (styleOf(arm.other) === 'paved' || isJunction(arm.other))
+        ? smooth01(0, 0.5, t)
+        : 1;
+    /** A piece from the curve; `look(i, t)` gives its look at point i (t = 0..1 along it). */
+    const add = (
+      kind: TrackKind,
+      curve: Curve,
+      keys: [string | null, string | null],
+      look: (i: number, t: number) => { width: number; fade: number; ruts: number; banks: number },
+    ): void => {
+      const m = curve.points.length - 1;
+      const piece: TrackPiece = {
+        tile,
+        style,
+        kind,
+        points: curve.points,
+        dirs: curve.dirs,
+        widths: [],
+        along: [],
+        fade: [],
+        ruts: [],
+        banks: [],
+        curbs: [false, false],
+      };
+      for (let i = 0; i <= m; i++) {
+        const l = look(i, i / m);
+        piece.widths.push(l.width);
+        piece.fade.push(l.fade);
+        piece.ruts.push(style === 'paved' ? 0 : l.ruts);
+        piece.banks.push(l.banks);
+      }
+      drafts.push({ piece, keys });
+    };
     if (!state.roads[tile]) {
-      // Onto a building tile: the track runs into the yard and ends softly there
+      // Onto a building tile: a city center's plaza (clean end), or a yard (fading out)
       const plaza = state.buildings.some(
         (b) => b.type === 'cityCenter' && tileIndex(map, b.hex) === tile,
       );
-      const k = plaza ? params.plazaEnd : params.buildingEnd;
       for (const arm of list) {
+        if (plaza) {
+          const end = onEllipse(arm.mid, c0, params.plazaRx * size, params.plazaRy * size);
+          add('plaza', inwardCurve(arm, end, n), [arm.key, null], (_i, t) => ({
+            width: w,
+            fade: 1,
+            ruts: 0,
+            banks: bankAt(arm, t) * (1 - t),
+          }));
+          continue;
+        }
+        const k = params.buildingEnd;
         const end = {
           x: arm.mid.x + (c0.x - arm.mid.x) * k,
           y: arm.mid.y + (c0.y - arm.mid.y) * k,
         };
-        const len = Math.hypot(end.x - arm.mid.x, end.y - arm.mid.y);
-        const points = hermite(arm.mid, end, scaled(arm.inward, len), scaled(arm.inward, len), n);
-        // It spreads a little into the yard and ends in a worn spot there (no point)
-        const widths = points.map((_, i) => arm.width * (plaza ? 1 : 1 + (0.25 * i) / n));
-        pieces.push({ tile, style, points, widths, yard: !plaza });
-        if (!plaza) crossings.push({ tile, style, center: end, r: arm.width * 0.7 });
+        // It spreads a little into the yard and fades out there, its ruts first (paving: a
+        // clean end)
+        add('yard', inwardCurve(arm, end, n), [arm.key, null], (_i, t) => ({
+          width: style === 'paved' ? w : w * (1 + 0.18 * t),
+          fade: style === 'paved' ? 1 : 1 - smooth01(0.3, 1, t),
+          ruts: (1 - smooth01(0.05, 0.6, t)) * rutNear(arm, t),
+          banks: bankAt(arm, t) * (1 - smooth01(0.2, 0.9, t)),
+        }));
       }
       continue;
     }
@@ -512,51 +733,106 @@ export function roadTracks(state: GameState, size: number, params: TrackParams):
     const jx = (roadHash(h.q, h.r, 303) - 0.5) * 2 * params.centerJitter * size;
     const jy = (roadHash(h.q, h.r, 304) - 0.5) * 2 * params.centerJitter * size;
     const c = { x: c0.x + jx, y: c0.y + jy };
-    const wc = w0 * (1 + (roadHash(h.q, h.r, 306) - 0.5) * 2 * params.widthVar);
     if (list.length === 1) {
-      // Dead end: the track fades out at the center
+      // Dead end: the track narrows a little and fades out at the center, in a small worn spot
+      // (paving: ends in a small paved square)
       const arm = list[0];
-      const len = Math.hypot(c.x - arm.mid.x, c.y - arm.mid.y);
-      const points = hermite(arm.mid, c, scaled(arm.inward, len), scaled(arm.inward, len), n);
-      // ... narrowing and ending in a small worn spot, not in a point
-      const widths = points.map((_, i) => arm.width * (1 - 0.55 * (i / n) ** 1.5));
-      pieces.push({ tile, style, points, widths });
-      crossings.push({ tile, style, center: c, r: arm.width * 0.42 });
+      add('deadEnd', inwardCurve(arm, c, n), [arm.key, null], (_i, t) => ({
+        width: style === 'paved' ? w : w * (1 - 0.2 * t),
+        fade: style === 'paved' ? 1 : 1 - smooth01(0.45, 1, t),
+        ruts: (1 - smooth01(0.2, 0.8, t)) * rutNear(arm, t),
+        banks: bankAt(arm, t),
+      }));
+      crossings.push({
+        tile,
+        style,
+        kind: 'deadEnd',
+        center: c,
+        r: style === 'paved' ? w * params.squareRadius * 0.7 : w * params.deadEndRadius,
+      });
       continue;
     }
+    /**
+     * Look of a curve between arms a and b through the center (t = 0 at a, 1 at b); `inner`
+     * scales the ruts and banks toward its middle (they fade out inside a junction).
+     */
+    const between =
+      (a: Arm, b: Arm, inner: (t: number) => number, ruts = 1) =>
+      (_i: number, t: number): { width: number; fade: number; ruts: number; banks: number } => {
+        const half = t < 0.5 ? 2 * t : 2 * (1 - t);
+        const arm = t < 0.5 ? a : b;
+        const k = inner(t);
+        return {
+          width: w,
+          fade: 1,
+          ruts: ruts * k * rutNear(arm, half),
+          banks: bankAt(arm, half) * k,
+        };
+      };
     if (list.length === 2) {
       // One smooth curve through the center
       const [a, b] = list;
-      const points = throughCenter(a, b, c, n);
-      const widths = points.map((_, i) => {
-        const t = i / (points.length - 1);
-        const edge =
-          t < 0.5 ? a.width + (wc - a.width) * t * 2 : wc + (b.width - wc) * (t - 0.5) * 2;
-        return edge * (i === 0 || i === points.length - 1 ? 1 : wobble(i));
-      });
-      pieces.push({ tile, style, points, widths });
+      add(
+        'through',
+        throughCenter(a, b, c, n),
+        [a.key, b.key],
+        between(a, b, () => 1),
+      );
       continue;
     }
-    // Junction: smooth curves between neighboring arms through (near) the center, so they run
-    // in like the tracks of a two-way tile and merge in a worn crossing in the middle
+    if (style === 'paved') {
+      // Paved junction: a spoke from every arm into a small paved square in the middle
+      for (const arm of list) {
+        add('junction', inwardCurve(arm, c, n), [arm.key, null], (_i, t) => ({
+          width: w,
+          fade: 1,
+          ruts: 0,
+          banks: bankAt(arm, t) * (1 - smooth01(0.3, 0.8, t)),
+        }));
+      }
+      crossings.push({ tile, style, kind: 'junction', center: c, r: w * params.squareRadius });
+      continue;
+    }
+    // Gravel junction: smooth curves between neighboring arms through (near) the center, so they
+    // run in like the track of a two-way tile and merge in a worn crossing. One worn place: no
+    // ruts (the tracks running in let theirs fade out), the banks fade toward the middle.
     for (let k = 0; k < list.length; k++) {
       const a = list[k];
       const b = list[(k + 1) % list.length];
-      const points = throughCenter(a, b, c, n);
-      const widths = points.map((_, i) => {
-        const t = i / (points.length - 1);
-        return (
-          (a.width + (b.width - a.width) * t) * (i === 0 || i === points.length - 1 ? 1 : wobble(i))
-        );
-      });
-      pieces.push({ tile, style, points, widths, junction: true });
+      add(
+        'junction',
+        throughCenter(a, b, c, n),
+        [a.key, b.key],
+        between(a, b, (t) => Math.max(0, 1 - Math.sin(Math.PI * t) * 1.7), 0),
+      );
     }
-    crossings.push({ tile, style, center: c, r: wc * 1.25 });
+    crossings.push({ tile, style, kind: 'junction', center: c, r: w * params.junctionRadius });
   }
   for (const s of stubs) {
-    crossings.push({ tile: s, style: styleOf(s), center: center(s), r: w0 * 0.7 });
+    const style = styleOf(s);
+    crossings.push({
+      tile: s,
+      style,
+      kind: 'lone',
+      center: center(s),
+      r: style === 'paved' ? widthOf(style) * params.squareRadius : w0 * params.loneRadius,
+    });
   }
-  return { pieces, crossings };
+  // Paving ends with a row of edge stones where a gravel track goes on
+  const gravelKeys = new Set<string>();
+  for (const d of drafts) {
+    if (d.piece.style !== 'dirt') continue;
+    for (const k of d.keys) if (k !== null) gravelKeys.add(k);
+  }
+  for (const d of drafts) {
+    if (d.piece.style !== 'paved') continue;
+    d.piece.curbs = [
+      d.keys[0] !== null && gravelKeys.has(d.keys[0]),
+      d.keys[1] !== null && gravelKeys.has(d.keys[1]),
+    ];
+  }
+  chainAlong(drafts);
+  return { pieces: drafts.map((d) => d.piece), crossings };
 }
 
 /**
@@ -585,6 +861,38 @@ export function previewTrack(path: readonly Hex[], size: number, samples = 6): P
     pts.push(...hermite(p1, p2, t0, t1, samples).slice(1));
   }
   return pts;
+}
+
+/**
+ * The planned road along `path` as one piece with the look of a gravel track (for the ghosted
+ * preview): directions and distances along it, full surface, ruts and no banks.
+ */
+export function previewPiece(path: readonly Hex[], size: number, width: number): TrackPiece {
+  const points = previewTrack(path, size);
+  const dirs = points.map((_, i) => {
+    const a = points[Math.max(0, i - 1)];
+    const b = points[Math.min(points.length - 1, i + 1)];
+    return unit({ x: b.x - a.x, y: b.y - a.y });
+  });
+  const along = [0];
+  for (let i = 1; i < points.length; i++) {
+    along.push(
+      along[i - 1] + Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y),
+    );
+  }
+  return {
+    tile: -1,
+    style: 'dirt',
+    kind: 'through',
+    points,
+    dirs,
+    widths: points.map(() => width * size),
+    along,
+    fade: points.map(() => 1),
+    ruts: points.map(() => 1),
+    banks: points.map(() => 0),
+    curbs: [false, false],
+  };
 }
 
 /**
@@ -617,35 +925,6 @@ export function trackRibbon(
   }
   // right holds the other side back to front (unshift keeps each [x, y] pair in order)
   return [...left, ...right];
-}
-
-/** Point and width every `step` px along a track's center line (stones, joints). */
-export function alongTrack(
-  points: readonly Point[],
-  widths: readonly number[],
-  step: number,
-): { p: Point; dir: Point; w: number }[] {
-  const out: { p: Point; dir: Point; w: number }[] = [];
-  let carry = step / 2;
-  for (let i = 1; i < points.length; i++) {
-    const a = points[i - 1];
-    const b = points[i];
-    const len = Math.hypot(b.x - a.x, b.y - a.y);
-    if (len === 0) continue;
-    const dir = { x: (b.x - a.x) / len, y: (b.y - a.y) / len };
-    let t = carry;
-    while (t <= len) {
-      const k = t / len;
-      out.push({
-        p: { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k },
-        dir,
-        w: widths[i - 1] + (widths[i] - widths[i - 1]) * k,
-      });
-      t += step;
-    }
-    carry = t - len;
-  }
-  return out;
 }
 
 /** Cheap key of the road network (same key -> no repaint of the tracks). */

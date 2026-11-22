@@ -1,15 +1,17 @@
 // Painted terrain: built ONCE when the map view is created, never per frame.
-// `ground` (one Graphics, flat): tile fills with soft wavy borders where the terrain changes,
-//   large color washes that flow across tiles, color bleed between land types, sea blends, the
-//   rolling hill country (relief.ts), beaches, small cliffs, faint outlines, foam, waves and
-//   rocks in the surf.
-// `rows` (one Graphics per map row, back to front): grass, flowers and pebbles, then trees, the
-//   texture on the hills, the mountain massifs, terraces and boats. The rows are sorted together
+// `ground` (one Graphics, flat): tile fills with soft wavy borders where the terrain changes
+//   (meadows covered by a seamless painted grass texture, meadow.ts), large color washes that
+//   flow across tiles, color bleed between land types, sea blends, the rolling hill country with
+//   its valleys where roads run (relief.ts) under a layer of dry grass, beaches, small cliffs,
+//   faint outlines, foam, waves and rocks in the surf.
+// `rows` (one Graphics per map row, back to front): meadow clusters (flower drifts, clover,
+//   tufts, stones), grass and pebbles, then trees, the texture on the hills, the mountain
+//   massifs, terraces and boats. The rows are sorted together
 //   with the buildings (zIndex = rowDepthKey), so a mountain of a lower row covers a building of
 //   the row above. Footprints, roads and the explored area change what stands on a tile; only
 //   the rows they touch are repainted.
 // Light comes from the upper left, so shadows fall to the lower right (docs/ART.md).
-import { Container, Graphics, Rectangle, Sprite } from 'pixi.js';
+import { Container, Graphics, Matrix, Rectangle, Sprite } from 'pixi.js';
 import { hexCorners, hexToPixel, pixelToHex, type Hex, type Point } from '../core/hex';
 import { hexAtIndex, tileIndex } from '../core/map';
 import type { MapState } from '../core/state';
@@ -23,6 +25,7 @@ import {
   type RoadGeometry,
 } from './geometry';
 import { crownRadius, woodlandTrees, type TreePlan, type WoodKind, type WoodTree } from './forest';
+import { ATLAS_GRID, meadowLayout, type MeadowCluster, type MeadowSite } from './meadow';
 import {
   coastCliffs,
   hillMounds,
@@ -40,6 +43,7 @@ import {
   massifStanding,
   mountainFootDetails,
   paintHillMounds,
+  reliefTexture,
   terraceStanding,
   type Decal,
   type Shape,
@@ -71,6 +75,7 @@ import { theme } from './theme';
 
 const P = theme.terrainPaint;
 const F = P.forest;
+const G = P.meadow;
 
 /** All six edges (for "keep away from the tile border" checks). */
 const ALL_EDGES: readonly boolean[] = [true, true, true, true, true, true];
@@ -290,13 +295,46 @@ function wobble(rng: () => number, amount: number): number[] {
 // Ground (flat, static)
 // ---------------------------------------------------------------------------------------------
 
-/** Tile fills: one flat color per terrain, so tiles of the same terrain read as one surface. */
-function paintFills(g: Graphics, tiles: readonly Tile[]): void {
+/** Lays a grass texture over the map: `texelsPerHex` of its pixels per hex size, repeating. */
+function grassMatrix(size: number): Matrix {
+  const k = size / G.texelsPerHex;
+  return new Matrix(k, 0, 0, k, 0, 0);
+}
+
+/**
+ * Tile fills: one flat color per terrain, so tiles of the same terrain read as one surface.
+ * Meadows get the painted grass instead: one seamless texture laid over all of them in map
+ * space (its mean color is the meadow color), so it runs on from tile to tile without a seam.
+ */
+function paintFills(g: Graphics, tiles: readonly Tile[], size: number): void {
   const groups = new FillGroups();
+  const meadows: number[][] = [];
   for (const t of tiles) {
-    groups.add(theme.terrainColors[t.terrain], 1, flat(wavyTileOutline(t.corners, t.waves)));
+    const poly = flat(wavyTileOutline(t.corners, t.waves));
+    if (t.terrain === 'plains') meadows.push(poly);
+    else groups.add(theme.terrainColors[t.terrain], 1, poly);
   }
   groups.fill(g);
+  if (meadows.length === 0) return;
+  for (const poly of meadows) g.poly(poly);
+  g.fill({ texture: reliefTexture('meadow'), matrix: grassMatrix(size), textureSpace: 'global' });
+}
+
+/** A light layer of dry golden grass over the hills (and their mounds), seamless like the meadow. */
+function paintHillGrass(g: Graphics, tiles: readonly Tile[], size: number): void {
+  let any = false;
+  for (const t of tiles) {
+    if (t.terrain !== 'hills') continue;
+    g.poly(flat(wavyTileOutline(t.corners, t.waves)));
+    any = true;
+  }
+  if (!any) return;
+  g.fill({
+    texture: reliefTexture('hillGrass'),
+    matrix: grassMatrix(size),
+    textureSpace: 'global',
+    alpha: G.hillAlpha,
+  });
 }
 
 /**
@@ -328,7 +366,7 @@ function paintWashes(g: Graphics, tiles: readonly Tile[], size: number): void {
       const level = Math.round(Math.min(1, Math.max(0, Math.abs(n) * 6 - 0.1)) * 3);
       if (level === 0) continue;
       const color = n > 0 ? light : dark;
-      const alpha = (P.washAlpha * level) / 3;
+      const alpha = (P.washAlpha * P.washStrength[t.terrain] * level) / 3;
       const shapeRng = tileRng(t.hex.q, t.hex.r, 11 + Math.floor(seed * 1000));
       for (const f of [1, 0.72, 0.44]) {
         groups.add(color, alpha, ellipsePoints(x, y, r * f, r * f * 0.66, 10, 0.14, shapeRng));
@@ -702,14 +740,18 @@ function paintCliffs(g: Graphics, tiles: readonly Tile[], size: number): void {
   fillAll(g, foam, P.foamColor, P.foamAlpha);
 }
 
-/** Flat ground of the whole map (fills, washes, bleed, water, beaches, outlines, surf, cliffs). */
+/**
+ * Flat ground of the whole map (fills and the painted meadow grass, washes, bleed, water, hill
+ * mounds and their dry grass, beaches, outlines, surf, cliffs).
+ */
 function paintGround(g: Graphics, tiles: readonly Tile[], map: MapState, size: number): void {
-  paintFills(g, tiles);
+  paintFills(g, tiles, size);
   paintWashes(g, tiles, size);
   paintForestFloor(g, tiles, size);
   paintSea(g, tiles, size);
   paintBleed(g, tiles, size);
   paintHillMounds(g, hillMounds(map, size, shoreDistanceAt(map, tiles, size)), size);
+  paintHillGrass(g, tiles, size);
   paintBeaches(g, tiles, size);
   paintOutlines(g, tiles, map);
   paintSurf(g, tiles, size);
@@ -884,6 +926,89 @@ function spillTrees(t: Tile, size: number): TreeSpot[] {
   return trees;
 }
 
+/**
+ * What the meadow layout needs to know about a plains tile: denser beside forests and water,
+ * sparser beside hills; lush toward the damp side; drier beside hills and in the golden regions
+ * of the washes; more flowers in some regions (a smooth noise over the map). Clusters keep off
+ * the beach and inside the meadow (they may run on into a neighboring meadow).
+ */
+function meadowSite(t: Tile, size: number, shoreDist: (p: Point) => number): MeadowSite {
+  let forest = 0;
+  let water = 0;
+  let hills = 0;
+  let dx = 0;
+  let dy = 0;
+  for (let e = 0; e < 6; e++) {
+    const n = t.across[e];
+    if (n === null) continue;
+    if (n === 'forest' || isWater(n)) {
+      dx += Math.cos((Math.PI / 3) * e);
+      dy += Math.sin((Math.PI / 3) * e);
+    }
+    if (n === 'forest') forest++;
+    else if (isWater(n)) water++;
+    else if (n === 'hills' || n === 'mountains') hills++;
+  }
+  const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
+  const [lo, hi] = G.densityRange;
+  const density = Math.max(
+    lo,
+    Math.min(hi, 1 + forest * G.densityForest + water * G.densityWater + hills * G.densityHills),
+  );
+  const len = Math.hypot(dx, dy);
+  const { x, y } = t.center;
+  const flowers = smoothNoise(x / (G.flowerNoise * size), y / (G.flowerNoise * size), 24);
+  const golden = smoothNoise(x / (P.washNoiseScale * size), y / (P.washNoiseScale * size), 1);
+  const foreign = t.across.map((n) => n !== 'plains');
+  return {
+    density,
+    damp: clamp01((forest + water) / 3),
+    dampSide: len > 0.01 ? { x: dx / len, y: dy / len } : null,
+    dry: clamp01(hills * 0.25 + (golden - 0.5) * 2.5),
+    flowers: clamp01((flowers - 0.3) * 2.2),
+    open: forest === 0,
+    ok: (p, r) =>
+      distanceToWavyEdges(p, foreign, t.waves, size) >= r * 0.7 &&
+      shoreDist(p) >= P.beachFringeDepth * size + r * 0.5,
+  };
+}
+
+/** Cells of the meadow atlas as texture matrices (see `fillCluster`). */
+const CELL_MATRICES: readonly Matrix[] = Array.from(
+  { length: ATLAS_GRID * ATLAS_GRID },
+  (_, i) =>
+    new Matrix(ATLAS_GRID, 0, 0, ATLAS_GRID, -(i % ATLAS_GRID), -Math.floor(i / ATLAS_GRID)),
+);
+
+/** A meadow cluster as a decal: a quad that shows its cell of the meadow atlas. */
+function clusterDecal(c: Point, cl: MeadowCluster): Decal {
+  const x = c.x + cl.x;
+  const y = c.y + cl.y;
+  const { rx, ry } = cl;
+  return {
+    x,
+    y,
+    color: cl.tint,
+    alpha: cl.alpha,
+    poly: [x - rx, y - ry, x + rx, y - ry, x + rx, y + ry, x - rx, y + ry],
+    cell: cl.cell,
+    rx,
+    ry,
+    layer: cl.layer,
+  };
+}
+
+/** Paints a meadow cluster: its atlas cell stretched over the quad (local texture space). */
+function fillCluster(g: Graphics, d: Decal): void {
+  g.poly(d.poly).fill({
+    texture: reliefTexture('meadowAtlas'),
+    matrix: CELL_MATRICES[d.cell ?? 0],
+    color: d.color,
+    alpha: d.alpha,
+    textureSpace: 'local',
+  });
+}
+
 /** Which tree art is loaded, by kind (see `artOf`). */
 type ArtKinds = Readonly<Record<WoodKind, boolean>>;
 
@@ -912,44 +1037,21 @@ function planTile(
       standing.push(treeStanding(t.center.x + tree.x, t.center.y + tree.y, tree, size));
     }
   };
-  const k = size / 32;
   const c = t.center;
   const shoreDist = (p: Point): number => shoreDistance(t, p, size);
 
   if (t.terrain === 'plains') {
-    const rng = tileRng(t.hex.q, t.hex.r, 20);
-    // Random spot inside the tile, away from the beach; null if it does not fit
-    const spot = (minShore: number): Point | null => {
-      const p = { x: (rng() - 0.5) * 1.2 * size, y: (rng() - 0.5) * 1.1 * size };
-      if (distanceToEdges(p, ALL_EDGES, size) < 0.12 * size) return null;
-      if (shoreDist(p) < minShore * size) return null;
-      return { x: c.x + p.x, y: c.y + p.y };
-    };
-    const tufts = 2 + Math.floor(rng() * 3);
-    for (let i = 0; i < tufts; i++) {
-      const p = spot(0.26);
-      if (!p) continue;
-      for (const side of [-1, 0, 1]) {
-        const bx = p.x + side * 0.9 * k;
-        const tipX = bx + side * 0.8 * k + (rng() - 0.5) * 0.6 * k;
-        const tipY = p.y - (2.4 + rng() * 1.4 - Math.abs(side) * 0.5) * k;
-        const poly = [bx - 0.55 * k, p.y, bx + 0.55 * k, p.y, tipX, tipY];
-        decals.push({ x: p.x, y: p.y, color: P.grassColor, alpha: P.grassAlpha, poly });
-      }
-    }
-    const flowerCount = Math.floor(rng() * 4);
-    for (let i = 0; i < flowerCount; i++) {
-      const p = spot(0.24);
-      if (!p) continue;
-      const color = P.flowerColors[Math.floor(rng() * P.flowerColors.length)];
-      const r = 1.1 * k;
-      decals.push({
-        x: p.x,
-        y: p.y,
-        color,
-        alpha: 1,
-        poly: [p.x, p.y - r, p.x + r, p.y, p.x, p.y + r, p.x - r, p.y],
-      });
+    // Meadow: clusters of flowers, clover, tufts and stones, now and then a shrub or a lone tree
+    const { clusters, plants } = meadowLayout(
+      tileRng(t.hex.q, t.hex.r, 20),
+      size,
+      meadowSite(t, size, shoreDist),
+    );
+    for (const cl of clusters) decals.push(clusterDecal(c, cl));
+    for (const pl of plants) {
+      const tree: WoodTree = { ...pl, x: c.x + pl.x, y: c.y + pl.y, tile: t.index };
+      if (art[pl.kind]) sprites.push(tree);
+      else standing.push(codeTree(tree, size));
     }
   }
 
@@ -1083,7 +1185,7 @@ interface PaintState {
 /** Trees, shrubs and rocks keep this far (fraction of the hex size) from the middle of a road. */
 const ROAD_CLEAR = 0.24;
 /** Grass tufts, flowers and pebbles keep this far. */
-const ROAD_CLEAR_DECAL = 0.15;
+const ROAD_CLEAR_DECAL = 0.2;
 
 /** What lies in one slice (see `sliceOfY`), each item with the tile it belongs to. */
 interface SliceItems {
@@ -1213,11 +1315,30 @@ function paintSlice(
     return roadDistance(rel, roads[i], size) >= clear * size;
   };
   const shown = (tile: number): boolean => explored === null || explored[tile] === true;
+  /** A decal with a size (a meadow cluster) shows only where all of it is free. */
+  const freeDecal = (d: Decal): boolean => {
+    if (!free(d.x, d.y, false)) return false;
+    if (d.rx === undefined || d.ry === undefined) return true;
+    const rx = d.rx * 0.8;
+    const ry = d.ry * 0.8;
+    return (
+      free(d.x - rx, d.y, false) &&
+      free(d.x + rx, d.y, false) &&
+      free(d.x, d.y - ry, false) &&
+      free(d.x, d.y + ry, false)
+    );
+  };
 
+  // Meadow clusters first (patches, stones, flowers; back to front), then the small decals
   const decals = new FillGroups();
+  const clusters: Decal[] = [];
   for (const { tile, item } of items.decals) {
-    if (shown(tile) && free(item.x, item.y, false)) decals.add(item.color, item.alpha, item.poly);
+    if (!shown(tile) || !freeDecal(item)) continue;
+    if (item.cell === undefined) decals.add(item.color, item.alpha, item.poly);
+    else clusters.push(item);
   }
+  clusters.sort((a, b) => (a.layer ?? 0) - (b.layer ?? 0) || a.y - b.y || a.x - b.x);
+  for (const d of clusters) fillCluster(g, d);
   decals.fill(g);
 
   const visible: Standing[] = [];

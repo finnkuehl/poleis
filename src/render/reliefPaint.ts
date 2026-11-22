@@ -28,6 +28,7 @@ import {
   type P3,
 } from './relief';
 import type { TreePlan } from './forest';
+import { ATLAS_GRID, hillGrassPixels, meadowAtlasPixels, meadowGrassPixels } from './meadow';
 import { ellipsePoints, taperedStroke, tileRng, type FootprintShape } from './terrain';
 import { theme } from './theme';
 
@@ -36,6 +37,7 @@ const H = P.hills;
 const M = P.mountains;
 const T = P.terrace;
 const C = P.cuts;
+const G = P.meadow;
 
 /** A filled polygon; with `texture` the texture is stretched over the polygon's bounds and tinted. */
 export interface Shape {
@@ -68,30 +70,51 @@ export interface Decal {
   color: number;
   alpha: number;
   poly: number[];
+  /**
+   * A meadow cluster: this cell of the meadow atlas is laid over the poly's bounds, tinted with
+   * `color`; `rx` / `ry`: its half size around the ground point (it shows only where all of it is
+   * free); `layer`: draw order among the clusters (patches, stones, flowers).
+   */
+  cell?: number;
+  rx?: number;
+  ry?: number;
+  layer?: number;
 }
 
-export type ReliefTexture = 'spot' | 'mound' | 'face';
+export type ReliefTexture = 'spot' | 'mound' | 'face' | 'meadow' | 'hillGrass' | 'meadowAtlas';
 
 const textures: Partial<Record<ReliefTexture, Texture>> = {};
 
-/** The shared shading textures (made once, from pixels: no canvas needed). */
+/** Size (px) and pixels of each shared texture; the grass textures repeat and get mipmaps. */
+const TEXTURE_PIXELS: Readonly<
+  Record<ReliefTexture, { n: number; pixels: (n: number) => Uint8Array; mipmaps: boolean }>
+> = {
+  spot: { n: 64, pixels: softSpotPixels, mipmaps: false },
+  mound: { n: 64, pixels: moundShadePixels, mipmaps: false },
+  face: { n: 64, pixels: faceShadePixels, mipmaps: false },
+  meadow: { n: G.grassTexture, pixels: meadowGrassPixels, mipmaps: true },
+  hillGrass: { n: G.hillTexture, pixels: hillGrassPixels, mipmaps: true },
+  meadowAtlas: {
+    n: G.atlasCell * ATLAS_GRID,
+    pixels: () => meadowAtlasPixels(G.atlasCell),
+    mipmaps: true,
+  },
+};
+
+/** The shared textures (made once, from pixels: no canvas needed). */
 export function reliefTexture(kind: ReliefTexture): Texture {
   let tex = textures[kind];
   if (!tex) {
-    const n = 64;
-    const resource =
-      kind === 'spot'
-        ? softSpotPixels(n)
-        : kind === 'mound'
-          ? moundShadePixels(n)
-          : faceShadePixels(n);
+    const { n, pixels, mipmaps } = TEXTURE_PIXELS[kind];
     tex = new Texture({
       source: new BufferImageSource({
-        resource,
+        resource: pixels(n),
         width: n,
         height: n,
         format: 'rgba8unorm',
         alphaMode: 'premultiplied-alpha',
+        autoGenerateMipmaps: mipmaps,
+        addressMode: mipmaps ? 'repeat' : 'clamp-to-edge',
       }),
     });
     textures[kind] = tex;
@@ -152,7 +175,7 @@ function moundShapes(m: HillMound, size: number, shadow = true): Shape[] {
   }
   shapes.push({ poly: flat(outline), color: H.tones[m.tone], alpha: 1, texture: 'mound' });
   shapes.push({
-    poly: taperedStroke(outline.slice(1, 8), Math.max(1, 0.05 * size * (m.h / (H.centerH * size)))),
+    poly: taperedStroke(outline.slice(1, 8), Math.max(1, 0.05 * size * (m.h / (H.cornerH * size)))),
     color: H.crestColor,
     alpha: H.crestAlpha,
   });

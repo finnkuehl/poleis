@@ -4,11 +4,11 @@
 // Repainted only when the shown buildings change (compared by a cheap key), never per frame.
 // Light comes from the upper left; shadows fall to the lower right.
 import { Graphics, Matrix } from 'pixi.js';
-import { hexToPixel, type Point } from '../core/hex';
-import { tileIndex } from '../core/map';
+import { hexToPixel, type Hex, type Point } from '../core/hex';
+import { hexAtIndex, tileIndex } from '../core/map';
 import type { Building, GameState, MapState, PlayerId } from '../core/state';
 import { buildingsShownTo } from './fog';
-import { edgeNeighborHex, trackRibbon } from './geometry';
+import { edgeNeighborHex, roadGeometry, trackRibbon } from './geometry';
 import type { HillMound } from './relief';
 import {
   ISO_A,
@@ -16,6 +16,7 @@ import {
   FIELD_CELL_REACH,
   OUTLINE_SAMPLES_PER_EDGE,
   YARD_LITTER,
+  artGroundEllipse,
   cellCorners,
   clampToLimits,
   clampToOutline,
@@ -25,6 +26,7 @@ import {
   dedupe,
   densify,
   edgeLimits,
+  edgeNormal,
   fieldCells,
   fieldMounds,
   fieldJoinMask,
@@ -41,6 +43,7 @@ import {
   insideOutline,
   isFieldKind,
   jettyEdge,
+  laneMeetPoint,
   longestRun,
   moundsNear,
   organicBlob,
@@ -50,8 +53,14 @@ import {
   patchCenter,
   patchRadii,
   polygonArea,
+  roadPairsBetweenBuildings,
   scalePoints,
   slopeOutline,
+  spacedWells,
+  tilePairKey,
+  townLanes,
+  townJoinMask,
+  townTiles,
   translate,
   withinLimits,
   type FieldMound,
@@ -342,12 +351,15 @@ function isoOctagon(rx: number, ry: number): Point[] {
   return pts;
 }
 
-function paintPlaza(p: Painter, s: Site, rx: number, ry: number): void {
+/** Paved plaza; `apron`: on its own trodden-earth apron (not inside a shared town ground). */
+function paintPlaza(p: Painter, s: Site, rx: number, ry: number, apron = true): void {
   const P = G.plaza;
   const { c, size, rng, limits } = s;
   // Trodden earth apron, so the paving does not sit on the grass like a sticker
-  const apron = organicBlob(rx * P.apronGrow, ry * P.apronGrowY, rng, G.wobble);
-  patchBase(p, s, rx * P.apronGrow, ry * P.apronGrow, apron, patchColor(s, G.yard.color));
+  if (apron) {
+    const shape = organicBlob(rx * P.apronGrow, ry * P.apronGrowY, rng, G.wobble);
+    patchBase(p, s, rx * P.apronGrow, ry * P.apronGrow, shape, patchColor(s, G.yard.color));
+  }
   let paving = isoOctagon(rx, ry);
   for (let e = 0; e < 6; e++) {
     const a = (Math.PI / 3) * e;
@@ -625,14 +637,24 @@ interface FieldSite extends Site {
 /** Densify step (px) for parcel outlines: fine enough to follow the outline and the warp. */
 const PARCEL_STEP = 3.5;
 
-function fieldSite(map: MapState, s: Site, fields: ReadonlyMap<number, GroundKind>): FieldSite {
+function fieldSite(
+  map: MapState,
+  s: Site,
+  fields: ReadonlyMap<number, GroundKind>,
+  towns: ReadonlyMap<number, number> = new Map(),
+): FieldSite {
   const F = G.field;
   const { size, rng } = s;
   const joined = fieldJoinMask(map, s.b.hex, fields, s.kind);
   const outline = fieldOutline(map, s.b.hex, size, joined);
   const warp = fieldWarp(s.b.hex, size);
   const index = tileIndex(map, s.b.hex);
-  const meadow = theme.terrainColors[map.tiles[index]];
+  const terrainColor = theme.terrainColors[map.tiles[index]];
+  // Next to a town the field fades into the town's worn ground
+  const byTown = [0, 1, 2, 3, 4, 5].some((e) =>
+    towns.has(tileIndex(map, edgeNeighborHex(s.b.hex, e))),
+  );
+  const meadow = byTown ? mixColor(terrainColor, G.yard.color, G.town.baseEarthMix) : terrainColor;
   const crop =
     s.kind === 'farm'
       ? F.wheatColors[0]
@@ -704,7 +726,11 @@ function fieldSite(map: MapState, s: Site, fields: ReadonlyMap<number, GroundKin
  * Quads of a band along the outline, from `from` to `to` px off it (negative = inside), only
  * where the outline is open (toward a neighbor without a field).
  */
-function rimBand(f: FieldSite, from: number, to: number): Point[][] {
+function rimBand(
+  f: { outline: readonly OutlineSample[]; c: Point },
+  from: number,
+  to: number,
+): Point[][] {
   const quads: Point[][] = [];
   const n = f.outline.length;
   for (let i = 0; i < n; i++) {
@@ -947,7 +973,12 @@ function tuft(
 }
 
 /** Point on the outline between samples i and i + 1, `off` px outside it (relative). */
-function rimPoint(f: FieldSite, i: number, t: number, off: number): Point {
+function rimPoint(
+  f: { outline: readonly OutlineSample[] },
+  i: number,
+  t: number,
+  off: number,
+): Point {
   const n = f.outline.length;
   const s0 = f.outline[i];
   const s1 = f.outline[(i + 1) % n];
@@ -1150,12 +1181,312 @@ function paintVines(p: Painter, f: FieldSite): void {
 // The layer
 // ---------------------------------------------------------------------------------------------
 
-/** Paints the ground of `shown` into `g` (cleared first). */
+// ---------------------------------------------------------------------------------------------
+// Towns share one ground (docs/ART.md)
+// ---------------------------------------------------------------------------------------------
+
+/** The ground of one tile of a town area (a building tile or a street: a road tile in a town). */
+interface TownGround {
+  /** Tile center (world px). */
+  c: Point;
+  size: number;
+  /** Per edge: the neighbor belongs to the same town area (the ground and a lane run on). */
+  joined: boolean[];
+  /** Organic outline (like a field's): reaches the shared edges, runs inside open ones. */
+  outline: OutlineSample[];
+  /** Worn town ground (meadow with packed earth mixed in). */
+  base: number;
+  index: number;
+  neighbors: number[];
+}
+
+/** One building tile of a town area. */
+interface TownSite extends Site, TownGround {
+  /** Id of its town area (see townTiles). */
+  area: number;
+}
+
+function townGround(
+  map: MapState,
+  h: Hex,
+  size: number,
+  towns: ReadonlyMap<number, number>,
+): TownGround {
+  const joined = townJoinMask(map, h, towns);
+  const index = tileIndex(map, h);
+  const meadow = theme.terrainColors[map.tiles[index]];
+  return {
+    c: hexToPixel(h, size),
+    size,
+    joined,
+    outline: fieldOutline(map, h, size, joined),
+    base: mixColor(meadow, G.yard.color, G.town.baseEarthMix),
+    index,
+    neighbors: [0, 1, 2, 3, 4, 5].map((e) => tileIndex(map, edgeNeighborHex(h, e))),
+  };
+}
+
+function townSite(map: MapState, s: Site, towns: ReadonlyMap<number, number>): TownSite {
+  const ground = townGround(map, s.b.hex, s.size, towns);
+  return { ...s, ...ground, area: towns.get(ground.index) ?? ground.index };
+}
+
+/** A lane from a building to the point where it meets its neighbor's lane (world px). */
+function laneLine(map: MapState, t: TownSite, e: number): Point[] {
+  const a = add(t.c, t.o);
+  const b = laneMeetPoint(map, t.b.hex, e, t.size);
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  // Leaves the building toward the meeting point, crosses the edge straight (both halves join)
+  const t0 = { x: b.x - a.x, y: b.y - a.y };
+  const n = edgeNormal(e);
+  const t1 = { x: n.x * len, y: n.y * len };
+  const pts: Point[] = [];
+  const steps = 6;
+  for (let i = 0; i <= steps; i++) {
+    const u = i / steps;
+    const h00 = 2 * u ** 3 - 3 * u ** 2 + 1;
+    const h10 = u ** 3 - 2 * u ** 2 + u;
+    const h01 = -2 * u ** 3 + 3 * u ** 2;
+    const h11 = u ** 3 - u ** 2;
+    pts.push({
+      x: h00 * a.x + h10 * t0.x + h01 * b.x + h11 * t1.x,
+      y: h00 * a.y + h10 * t0.y + h01 * b.y + h11 * t1.y,
+    });
+  }
+  return pts;
+}
+
+/**
+ * One town ground over all tiles of a town area (`streets`: its road tiles): worn ground with a
+ * soft rim, packed-earth lanes
+ * from building to building (paved next to the city center; none where a real road joins the two
+ * tiles: `roads`, tilePairKey keys), a square under every building, gardens, wells (spaced apart)
+ * and trees in some gaps, low walls on some outer edges.
+ */
+function paintTowns(
+  p: Painter,
+  g: Graphics,
+  sites: readonly TownSite[],
+  streets: readonly TownGround[],
+  map: MapState,
+  roads: ReadonlySet<string>,
+  roadTiles: readonly boolean[],
+): void {
+  const T = G.town;
+  const Y = G.yard;
+  const P = G.plaza;
+  const byIndex = new Map(sites.map((t) => [t.index, t]));
+  const towns = new Map<number, number>();
+  for (const t of sites) towns.set(t.index, t.area);
+  const hubs = new Set(sites.filter((t) => t.b.type === 'cityCenter').map((t) => t.index));
+  const lanes = townLanes(map, towns, hubs);
+  // 1. Worn ground with a soft rim toward the land around (also under the streets: the road
+  // drawn on top is the street, no lane there)
+  for (const t of [...sites, ...streets]) {
+    const w = T.featherWidth * t.size;
+    T.featherAlpha.forEach((alpha, k) => {
+      for (const q of rimBand(t, k * w, (k + 1) * w)) p.fill(t.base, alpha, q);
+    });
+    p.fill(
+      t.base,
+      T.baseAlpha,
+      translate(
+        t.outline.map((o) => outlinePoint(o)),
+        t.c,
+      ),
+    );
+  }
+  p.flush(g);
+  // 2. Lanes: soft edge, packed earth, worn light middle; next to the city center paved
+  const earth: Point[][] = [];
+  const paved: Point[][] = [];
+  for (const t of sites) {
+    for (let e = 0; e < 6; e++) {
+      const key = tilePairKey(t.index, t.neighbors[e]);
+      // A real road between the two tiles takes the lane's place
+      if (!t.joined[e] || !lanes.has(key) || roads.has(key)) continue;
+      const line = laneLine(map, t, e);
+      const other = byIndex.get(t.neighbors[e]);
+      const nearCenter = t.b.type === 'cityCenter' || other?.b.type === 'cityCenter';
+      (nearCenter ? paved : earth).push(line);
+    }
+  }
+  const w = T.laneWidth * sites[0].size;
+  const edge = mixColor(Y.color, sites[0].base, 0.5);
+  for (const line of [...earth, ...paved]) p.line(edge, T.laneEdgeAlpha, w * T.laneEdgeGrow, line);
+  for (const line of earth) p.line(Y.color, T.laneAlpha, w, line);
+  for (const line of earth) p.line(Y.lightColor, T.laneLightAlpha, w * T.laneLightShare, line);
+  for (const line of paved) p.line(P.curbColor, T.paveAlpha, w * 1.15, line);
+  for (const line of paved) p.line(P.stoneColor, T.paveAlpha, w, line);
+  for (const line of paved) {
+    // Joints across the paving
+    const pts = densify(line, P.jointSpacing * sites[0].size, false);
+    for (let i = 1; i < pts.length - 1; i++) {
+      const d = { x: pts[i + 1].x - pts[i - 1].x, y: pts[i + 1].y - pts[i - 1].y };
+      const l = Math.hypot(d.x, d.y) || 1;
+      const nx = (-d.y / l) * w * 0.45;
+      const ny = (d.x / l) * w * 0.45;
+      p.line(P.jointColor, P.jointAlpha, P.jointWidth, [
+        { x: pts[i].x - nx, y: pts[i].y - ny },
+        { x: pts[i].x + nx, y: pts[i].y + ny },
+      ]);
+    }
+  }
+  p.flush(g);
+  // 3. A packed-earth square under every building (not the plazas: their paving comes later)
+  for (const t of sites) {
+    if (t.kind === 'plaza') continue;
+    const { rx, ry } = patchRadii(t.b.type, t.size);
+    const shape = translate(
+      organicBlob(rx * T.squareShare, ry * T.squareShare, t.rng, G.wobble),
+      t.o,
+    );
+    softPatch(p, t.c, shape, t.limits, Y.color, G.coreAlpha, t.o);
+  }
+  p.flush(g);
+  // 4. Gaps, the rim and walls; wells only far apart (candidates in tile order)
+  const wells: Point[] = [];
+  for (const t of [...sites].sort((a, b) => a.index - b.index)) {
+    paintTownGaps(p, t, map, roadTiles, wells);
+  }
+  const size = sites[0].size;
+  for (const q of spacedWells(wells, T.wellSpacing * size)) well(p, q.x, q.y, size);
+  p.flush(g);
+}
+
+/**
+ * Gardens and trees toward some tile corners (spots for a well go to `wells`); meadow tufts and
+ * walls on the outer rim.
+ */
+function paintTownGaps(
+  p: Painter,
+  t: TownSite,
+  map: MapState,
+  roadTiles: readonly boolean[],
+  wells: Point[],
+): void {
+  const T = G.town;
+  const { c, size, rng } = t;
+  const art = artGroundEllipse(t.b.type, size);
+  for (let k = 0; k < 6; k++) {
+    // Toward the corners (between the lanes); not straight behind the building
+    const a = Math.PI / 6 + (Math.PI / 3) * k;
+    if (k === 4) continue;
+    const q = { x: Math.cos(a) * T.gapDistance * size, y: Math.sin(a) * T.gapDistance * size };
+    if (!insideOutline(q, t.outline, 0.12 * size)) continue;
+    const u = (q.x - t.o.x) / (art.rx * 1.05);
+    const v = (q.y - t.o.y) / (art.ry * 1.2);
+    if (u * u + v * v < 1) continue;
+    const h = tileHash(t.b.hex.q, t.b.hex.r, 220 + k);
+    const x = c.x + q.x;
+    const y = c.y + q.y;
+    if (h < T.gardenChance) garden(p, x, y, size, rng);
+    else if (h < T.gardenChance + T.wellChance) wells.push({ x, y });
+    else if (h < T.gardenChance + T.wellChance + T.treeChance) smallTree(p, x, y, size, rng);
+  }
+  // Meadow tufts poking into the rim
+  const n = t.outline.length;
+  for (let i = 0; i < n; i++) {
+    if (t.outline[i].open < 0.6 || rng() >= T.tuftChance) continue;
+    const q = add(c, rimPoint(t, i, rng(), -(0.02 + rng() * 0.06) * size));
+    tuft(p, G.field.meadowTuftColor, q.x, q.y, size, rng);
+  }
+  // Now and then a low dry-stone wall on an outer land edge (not along the vertical edges)
+  const N = OUTLINE_SAMPLES_PER_EDGE;
+  for (let e = 0; e < 6; e++) {
+    const nb = t.neighbors[e];
+    // (no wall across a road leading out of town)
+    if (t.joined[e] || nb < 0 || isWater(map.tiles[nb]) || roadTiles[nb] || e === 0 || e === 3) {
+      continue;
+    }
+    if (tileHash(t.b.hex.q, t.b.hex.r, 230 + e) >= T.wallChance) continue;
+    const start = e * N + 1 + Math.floor(rng() * 2);
+    const pts: Point[] = [];
+    for (let i = start; i <= start + N - 3; i++) {
+      pts.push(add(c, outlinePoint(t.outline[i % n], 0.02 * size)));
+    }
+    wallLine(p, pts, false, size, rng);
+  }
+}
+
+/** A small kitchen garden: a bed along the iso axes with rows of greens. */
+function garden(p: Painter, x: number, y: number, size: number, rng: () => number): void {
+  const T = G.town;
+  const ga = T.gardenSize[0] * size;
+  const gb = T.gardenSize[1] * size;
+  const at = (i: number, j: number): Point => ({
+    x: x + ISO_A.x * ga * i + ISO_B.x * gb * j,
+    y: y + ISO_A.y * ga * i + ISO_B.y * gb * j,
+  });
+  p.fill(T.gardenEdge, 0.9, [at(-1.15, -1.25), at(1.15, -1.25), at(1.15, 1.25), at(-1.15, 1.25)]);
+  p.fill(T.gardenSoil, 1, [at(-1, -1), at(1, -1), at(1, 1), at(-1, 1)]);
+  for (let j = -0.6; j <= 0.61; j += 0.6) {
+    for (let i = -0.8; i <= 0.81; i += 0.2) {
+      const q = at(i, j);
+      const color = T.gardenGreens[Math.floor(rng() * T.gardenGreens.length)];
+      dab(p, color, 1, q.x, q.y - 0.006 * size, 0.022 * size, 0.016 * size, rng, 5);
+    }
+  }
+}
+
+/** A well: stone ring with dark water and a little wooden frame. */
+function well(p: Painter, x: number, y: number, size: number): void {
+  const T = G.town;
+  const rx = 0.065 * size;
+  const ry = 0.04 * size;
+  dab(
+    p,
+    G.shadowColor,
+    G.shadowAlpha,
+    x + rx * 0.5,
+    y + ry * 0.6,
+    rx * 1.3,
+    ry * 1.1,
+    undefined,
+    10,
+  );
+  dab(p, T.wellShade, 1, x, y + ry * 0.35, rx, ry, undefined, 12);
+  dab(p, T.wellStone, 1, x, y, rx, ry, undefined, 12);
+  dab(p, T.wellWater, 1, x, y - ry * 0.1, rx * 0.62, ry * 0.55, undefined, 10);
+  const top = y - 0.11 * size;
+  p.line(T.wellWood, 1, 0.9, [
+    { x: x - rx * 0.8, y: y - ry * 0.2 },
+    { x: x - rx * 0.8, y: top },
+  ]);
+  p.line(T.wellWood, 1, 0.9, [
+    { x: x + rx * 0.8, y: y - ry * 0.2 },
+    { x: x + rx * 0.8, y: top },
+  ]);
+  p.line(T.wellWood, 1, 1.1, [
+    { x: x - rx, y: top },
+    { x: x + rx, y: top },
+  ]);
+}
+
+/** A small tree standing in a gap. */
+function smallTree(p: Painter, x: number, y: number, size: number, rng: () => number): void {
+  const T = G.town;
+  const r = (0.075 + rng() * 0.02) * size;
+  dab(p, G.shadowColor, G.shadowAlpha, x + r * 0.6, y + r * 0.15, r * 1.2, r * 0.45, undefined, 10);
+  p.line(T.treeTrunk, 1, 1.3, [
+    { x, y },
+    { x, y: y - r * 0.9 },
+  ]);
+  dab(p, T.treeDark, 1, x, y - r * 1.35, r, r * 0.85, rng, 9);
+  dab(p, T.treeLight, 1, x - r * 0.3, y - r * 1.6, r * 0.55, r * 0.45, rng, 8);
+}
+
+/**
+ * Paints the ground of `shown` into `g` (cleared first). `roads`: the road segments between
+ * building tiles (see roadPairsBetweenBuildings): no town lane is drawn there.
+ */
 export function paintGround(
   g: Graphics,
   state: GameState,
   shown: readonly Building[],
   size: number,
+  roads: ReadonlySet<string> = new Set(),
+  towns: ReadonlyMap<number, number> = townTiles(state.map, shown, state.roads, state.territory),
 ): void {
   g.clear();
   const map = state.map;
@@ -1178,7 +1509,16 @@ export function paintGround(
       fp: footprintOf(b.type, size),
     };
   });
-  const fieldSites = sites.filter((s) => isFieldKind(s.kind)).map((s) => fieldSite(map, s, fields));
+  // Neighboring buildings of one owner share one town ground (fields next to it fade into it)
+  const fieldSites = sites
+    .filter((s) => isFieldKind(s.kind))
+    .map((s) => fieldSite(map, s, fields, towns));
+  const inTown = (s: Site): boolean => towns.has(tileIndex(map, s.b.hex));
+  const townSites = sites.filter(inTown).map((s) => townSite(map, s, towns));
+  const built = new Set(sites.map((s) => tileIndex(map, s.b.hex)));
+  const streets = [...towns.keys()]
+    .filter((i) => !built.has(i))
+    .map((i) => townGround(map, hexAtIndex(map, i), size, towns));
 
   // 1. Fields painted into the land: soft rim and ground, parcels, faint rows, the ragged rim
   for (const f of fieldSites) paintFieldBase(p, f);
@@ -1195,13 +1535,18 @@ export function paintGround(
   p.flush(g);
   for (const f of fieldSites) paintFieldRim(p, f, map);
   p.flush(g);
+  if (townSites.length > 0) paintTowns(p, g, townSites, streets, map, roads, state.roads);
 
   // 2. Patches under the buildings
   for (const s of sites) {
     const { rx, ry } = patchRadii(s.b.type, size);
     switch (s.kind) {
       case 'plaza':
-        paintPlaza(p, s, rx, ry);
+        if (inTown(s)) {
+          // Inside a town: no apron; the city center's paving reaches further out
+          const k = s.b.type === 'cityCenter' ? G.town.paveGrow : 1;
+          paintPlaza(p, s, rx * k, ry * k, false);
+        } else paintPlaza(p, s, rx, ry);
         break;
       case 'clearing':
         paintClearing(p, s, rx, ry);
@@ -1216,8 +1561,8 @@ export function paintGround(
         paintFishery(p, s, rx, ry, jettyEdge(map, s.b.hex));
         break;
       default:
-        // Plain yards and the small yard in the middle of a field
-        paintYard(p, s, rx, ry, YARD_LITTER[s.b.type]);
+        // Plain yards and the small yard in the middle of a field (a town tile has none)
+        if (!inTown(s)) paintYard(p, s, rx, ry, YARD_LITTER[s.b.type]);
     }
   }
   p.flush(g);
@@ -1225,6 +1570,11 @@ export function paintGround(
   // 3. Vines standing in their rows (the olive trees of a grove are part of the drawn art)
   for (const f of fieldSites) if (f.kind === 'vineyard') paintVines(p, f);
   p.flush(g);
+}
+
+/** Key of the town areas (streets joining or leaving a town change it). */
+function townSignature(towns: ReadonlyMap<number, number>): string {
+  return [...towns].map(([i, area]) => `${i}:${area}`).join(',');
 }
 
 export function createGroundLayer(size: number): GroundLayer {
@@ -1235,10 +1585,12 @@ export function createGroundLayer(size: number): GroundLayer {
     layer,
     update(state, viewer) {
       const shown = buildingsShownTo(state, viewer, revealAll);
-      const next = groundSignature(shown);
+      const roads = roadPairsBetweenBuildings(state.map, roadGeometry(state).segments, shown);
+      const towns = townTiles(state.map, shown, state.roads, state.territory);
+      const next = `${groundSignature(shown, roads)}|${townSignature(towns)}`;
       if (next === key) return false;
       key = next;
-      paintGround(layer, state, shown, size);
+      paintGround(layer, state, shown, size, roads, towns);
       return true;
     },
     setRevealAll(value) {

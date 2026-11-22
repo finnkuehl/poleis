@@ -117,9 +117,9 @@ function moundProbes(m: HillMound): { base: Point[]; top: Point[] } {
 }
 
 /**
- * Does the mound fit? Its base must lie on hills (foothills: hills or mountains), its upper part
- * on land, and everything stays clear of the beach (`shoreDist` = distance of a world point to
- * the nearest shore of the tile it lies in, Infinity inland).
+ * Does the mound fit? Its base must lie on `baseOn` terrain, its upper part on land, everything
+ * stays clear of the beach (`shoreDist` = distance of a world point to the nearest shore of the
+ * tile it lies in, Infinity inland), and its crest keeps off every road corridor.
  */
 function moundFits(
   map: MapState,
@@ -139,10 +139,22 @@ function moundFits(
     if (!t || isWater(t)) return false;
     if (shoreDist(p) < H.shoreMargin * size * 0.8) return false;
   }
-  return true;
+  return clearOfCorridors(map, m, size);
 }
 
-/** Shrinks a mound until it fits (up to 4 steps); null if it never does. */
+/** Small moves tried before a mound that does not fit is shrunk (hex sizes). */
+const NUDGES: readonly (readonly [number, number])[] = [
+  [0, 0],
+  [0, 0.07],
+  [0, -0.07],
+  [0.07, 0],
+  [-0.07, 0],
+];
+
+/**
+ * Fits a mound: at full size it may move a little to find room between the corridors, then it
+ * shrinks (up to 4 steps); null if it never fits.
+ */
 function fitMound(
   map: MapState,
   m: HillMound,
@@ -152,46 +164,154 @@ function fitMound(
 ): HillMound | null {
   let cur = m;
   for (let i = 0; i < 5; i++) {
-    if (moundFits(map, cur, size, shoreDist, baseOn)) return cur;
-    cur = { ...cur, w: cur.w * 0.84, h: cur.h * 0.86 };
-    if (cur.w < 0.18 * size) return null;
+    for (const [dx, dy] of i === 0 ? NUDGES : NUDGES.slice(0, 1)) {
+      const moved = { ...cur, x: cur.x + dx * size, y: cur.y + dy * size };
+      if (moundFits(map, moved, size, shoreDist, baseOn)) return moved;
+    }
+    cur = { ...cur, w: cur.w * 0.86, h: cur.h * 0.84 };
+    if (cur.w < 0.16 * size) return null;
   }
   return null;
 }
 
+/** Every road corridor of a tile and its center (a mask for `roadDistance`). */
+const ALL_CORRIDORS = 127;
+
 /**
- * The mound on the edge between hill tile `h` and its neighbor across `edge` (also a hill tile),
- * or null if that edge has none: the same answer whichever of the two tiles asks (the first tile
- * by row, then column owns it).
+ * The road corridors: on every tile the lines from its center to the middle of each edge (where
+ * a road runs once it is built). No mound crest comes closer than `corridorBand` to them, nor
+ * closer than `saddleRadius` to a tile center (a unit stands there), so the roads always run
+ * through valleys and over saddles, never over a hill.
  */
-export function edgeMound(h: Hex, edge: number, size: number): HillMound | null {
-  const nb = edgeNeighborHex(h, edge);
-  const own = before(h, nb);
-  const base = own ? h : nb;
-  const baseEdge = own ? edge : (edge + 3) % 6;
-  const rng = tileRng(base.q, base.r, 610 + baseEdge);
-  if (rng() >= H.edgeChance) return null;
-  const corners = hexCorners(hexToPixel(base, size), size);
-  const a = corners[baseEdge];
-  const b = corners[(baseEdge + 1) % 6];
-  const t = 0.5 + (rng() - 0.5) * 0.3;
+function clearOfCorridors(map: MapState, m: HillMound, size: number): boolean {
+  const band = H.corridorBand * size;
+  const saddle = H.saddleRadius * size;
+  for (const p of crestPoints(m)) {
+    const h = pixelToHex(p, size);
+    if (tileIndex(map, h) < 0) continue;
+    const c = hexToPixel(h, size);
+    const rel = { x: p.x - c.x, y: p.y - c.y };
+    if (Math.hypot(rel.x, rel.y) < saddle) return false;
+    if (roadDistance(rel, ALL_CORRIDORS, size) < band) return false;
+  }
+  return true;
+}
+
+/** Points spread over a mound's crest (see `onMoundCrest`): four per column of its outline. */
+function crestPoints(m: HillMound): Point[] {
+  const outline = moundOutline(m);
+  const pts: Point[] = [];
+  for (let i = 0; i <= MOUND_SEGMENTS; i++) {
+    const top = outline[i];
+    const rise = m.y - top.y;
+    if (rise < H.crestShare * m.h) continue;
+    for (const f of [0, 1 / 3, 2 / 3, 1]) pts.push({ x: top.x, y: top.y + rise * f });
+  }
+  return pts;
+}
+
+/** Top of a mound's drawn outline at x (world px), null beyond its feet. */
+export function moundTopAt(
+  m: HillMound,
+  x: number,
+  outline: readonly Point[] = moundOutline(m),
+): number | null {
+  const t = (x - m.x) / m.w;
+  if (!(t >= -1 && t <= 1)) return null;
+  const f = ((t + 1) / 2) * MOUND_SEGMENTS;
+  const i = Math.min(MOUND_SEGMENTS - 1, Math.floor(f));
+  return outline[i].y + (outline[i + 1].y - outline[i].y) * (f - i);
+}
+
+/**
+ * Is `p` on the crest of mound `m`: inside its body above the base line, where the mound rises
+ * to at least `crestShare` of its height? Its low feet and the front of its base do not count
+ * (a road may run along them). `outline`: the mound's outline, if already known.
+ */
+export function onMoundCrest(
+  m: HillMound,
+  p: Point,
+  outline: readonly Point[] = moundOutline(m),
+): boolean {
+  const top = moundTopAt(m, p.x, outline);
+  if (top === null || m.y - top < H.crestShare * m.h) return false;
+  return p.y >= top && p.y <= m.y;
+}
+
+/** Odd corners (1, 3, 5) have an edge running straight up from them, even ones straight down. */
+function upCorner(corner: number): boolean {
+  return corner % 2 === 1;
+}
+
+/**
+ * The mound on hex corner `corner` of `h`, where three hill (or mountain) tiles meet: the same
+ * whichever of the three tiles asks. The corridors between the three tile centers form a
+ * triangle around the corner. Below a corner with an edge running down from it that triangle is
+ * wide at the bottom, like a mound: a big one, its base well below the corner. Around a corner
+ * with an edge running up the triangle is wide at the top: a smaller mound just below the corner.
+ */
+export function cornerMound(h: Hex, corner: number, size: number): HillMound {
+  const o = cornerOwner(h, corner);
+  const rng = tileRng(o.hex.q, o.hex.r, 640 + o.corner);
+  const p = cornerPoint(h, corner, size);
   const j = (v: number): number => 1 + (rng() - 0.5) * 2 * v;
+  const up = upCorner(corner);
   return {
-    x: a.x + (b.x - a.x) * t,
-    // The base sits a little in front of the edge, so the crest rises over it
-    y: a.y + (b.y - a.y) * t + (0.1 + (rng() - 0.5) * 0.1) * size,
-    w: H.edgeW * size * j(H.jitter),
-    h: H.edgeH * size * j(H.jitter),
-    tone: Math.floor(rng() * H.tones.length),
+    x: p.x + (rng() - 0.5) * 2 * H.cornerJitter * size,
+    y: p.y + ((up ? H.upCornerDrop : H.cornerDrop) + (rng() - 0.5) * H.cornerJitter) * size,
+    w: (up ? H.upCornerW : H.cornerW) * size * j(H.jitter),
+    h: (up ? H.upCornerH : H.cornerH) * size * j(H.jitter),
+    tone: 0,
   };
 }
 
 /**
- * All hill mounds of the map, back to front (by base y). Per hill tile: a broad mound in the
- * middle and a smaller one at the back; a mound on most edges between two hill tiles (so they
- * join), a foothill on every edge toward a mountain tile and now and then a low mound spilling
- * into a neighboring meadow. Mounds that do not fit shrink or
- * are left out (never on water or the beach, never with their foot on other terrain).
+ * The mound on the edge between `h` and its neighbor across `edge`, near one end of it (`end`
+ * 0 = corner `edge`, 1 = corner `edge + 1`), where a tile of other terrain meets the two: it
+ * straddles their edge so the two hill tiles join, and stays off the corridor that crosses the
+ * middle of the edge. The same whichever of the two tiles asks.
+ */
+export function joinMound(h: Hex, edge: number, end: 0 | 1, size: number): HillMound {
+  const nb = edgeNeighborHex(h, edge);
+  const own = before(h, nb);
+  const base = own ? h : nb;
+  const baseEdge = own ? edge : (edge + 3) % 6;
+  // Corner `edge` of h is the far end (corner edge + 4) of the neighbor's edge
+  const baseEnd = own ? end : 1 - end;
+  const rng = tileRng(base.q, base.r, 610 + baseEdge * 2 + baseEnd);
+  const near = cornerPoint(base, (baseEdge + baseEnd) % 6, size);
+  const far = cornerPoint(base, (baseEdge + 1 - baseEnd) % 6, size);
+  const t = H.joinT * (1 + (rng() - 0.5) * 0.5);
+  const j = (v: number): number => 1 + (rng() - 0.5) * 2 * v;
+  return {
+    x: near.x + (far.x - near.x) * t,
+    y: near.y + (far.y - near.y) * t + (rng() - 0.5) * 0.04 * size,
+    w: H.joinW * size * j(H.jitter),
+    h: H.joinH * size * j(H.jitter),
+    tone: 0,
+  };
+}
+
+/** Terrain a mound joining hill tiles may stand on (foothills run under the mountain massifs). */
+const HILL_LIKE: readonly TerrainId[] = ['hills', 'mountains'];
+
+function hillLike(t: TerrainId | null): boolean {
+  return t === 'hills' || t === 'mountains';
+}
+
+/**
+ * All hill mounds of the map, back to front (by base y). The road corridors of every tile (from
+ * its center to the middle of each edge) stay valleys: the mounds sit in the six sectors between
+ * them, toward the corners, and the tile center is a low saddle where units stand. Per corner
+ * of a hill tile:
+ * - three hill (or mountain) tiles meet there: one mound on the shared corner;
+ * - only one neighbor is a hill (or mountain): a mound on their shared edge near the corner, so
+ *   the two tiles join (toward a mountain it is a foothill that runs under the massif);
+ * - no neighbor is: a smaller mound inside the tile toward the corner;
+ * and most corners get a shoulder: a smaller mound in the tile's own sector toward it.
+ * Now and then a low mound spills into a neighboring meadow near a corner. Mounds that do not fit
+ * shrink or are left out (never on water or the beach, never with their foot on other terrain,
+ * never with their crest over a road corridor).
  */
 export function hillMounds(
   map: MapState,
@@ -209,94 +329,93 @@ export function hillMounds(
     const hex = hexAtIndex(map, i);
     const c = hexToPixel(hex, size);
     const rng = tileRng(hex.q, hex.r, 600);
-    const j = (v: number): number => 1 + (rng() - 0.5) * 2 * v;
-    const add = (m: HillMound | null, baseOn: readonly TerrainId[] = ['hills']): void => {
-      const fit = m && fitMound(map, m, size, shoreDist, baseOn);
+    const add = (m: HillMound, baseOn: readonly TerrainId[] = ['hills']): void => {
+      const fit = fitMound(map, { ...m, tone: tone(m.x, m.y, rng()) }, size, shoreDist, baseOn);
       if (fit) out.push(fit);
     };
-    add({
-      x: c.x + (rng() - 0.5) * 0.4 * size,
-      y: c.y - (0.36 + (rng() - 0.5) * 0.1) * size,
-      w: H.backW * size * j(H.jitter),
-      h: H.backH * size * j(H.jitter),
-      tone: tone(c.x, c.y - 0.4 * size, rng()),
-    });
-    add({
-      x: c.x + (rng() - 0.5) * 0.16 * size,
-      y: c.y + (H.centerY + (rng() - 0.5) * 0.06) * size,
-      w: H.centerW * size * j(H.jitter * 0.6),
-      h: H.centerH * size * j(H.jitter * 0.6),
-      tone: tone(c.x, c.y, rng()),
-    });
+    for (let k = 0; k < 6; k++) {
+      const a = edgeNeighborHex(hex, k); // shares corners k and k + 1
+      const b = edgeNeighborHex(hex, (k + 5) % 6); // shares corners k - 1 and k
+      const ta = terrainOf(map, a);
+      const tb = terrainOf(map, b);
+      if (hillLike(ta) && hillLike(tb)) {
+        // The first hill tile around the corner adds it
+        if ((ta === 'hills' && before(a, hex)) || (tb === 'hills' && before(b, hex))) continue;
+        if (tileRng(hex.q, hex.r, 605 + k)() < H.cornerChance)
+          add(cornerMound(hex, k, size), HILL_LIKE);
+      } else if (hillLike(ta) || hillLike(tb)) {
+        const edge = hillLike(ta) ? k : (k + 5) % 6;
+        const other = hillLike(ta) ? a : b;
+        if (terrainOf(map, other) === 'hills' && before(other, hex)) continue;
+        add(joinMound(hex, edge, edge === k ? 0 : 1, size), HILL_LIKE);
+      }
+      // In the tile's own sector toward the corner: a smaller mound between the corner and the
+      // center (a shoulder in front of or behind the corner mound; alone at a lone corner, where
+      // it may ease out into a meadow beyond)
+      const lone = !hillLike(ta) && !hillLike(tb);
+      const srng = tileRng(hex.q, hex.r, 650 + k);
+      if (!lone && srng() >= H.shoulderChance) continue;
+      const angle = (Math.PI / 3) * k - Math.PI / 6;
+      const d = H.sectorDist * size * (1 + (srng() - 0.5) * 0.2);
+      const j = (v: number): number => 1 + (srng() - 0.5) * 2 * v;
+      const f = lone ? 1 : H.shoulderShare;
+      add(
+        {
+          x: c.x + Math.cos(angle) * d,
+          y: c.y + Math.sin(angle) * d,
+          w: H.sectorW * f * size * j(H.jitter),
+          h: H.sectorH * f * size * j(H.jitter),
+          tone: 0,
+        },
+        lone ? ['hills', 'plains'] : ['hills'],
+      );
+    }
     for (let e = 0; e < 6; e++) {
       const n = mapEdgeNeighborIndex(map, hex, e);
-      if (n < 0) continue;
-      const other = map.tiles[n];
-      if (other === 'hills' && n > i) {
-        const m = edgeMound(hex, e, size);
-        if (m) add(m);
-      }
-      if (other === 'plains') {
-        // Now and then a low mound spills over into the meadow: the hills ease out
-        const srng = tileRng(hex.q, hex.r, 630 + e);
-        if (srng() >= theme.terrainPaint.spillMoundChance) continue;
-        const corners = hexCorners(c, size);
-        const a = corners[e];
-        const b = corners[(e + 1) % 6];
-        const t = 0.35 + srng() * 0.3;
-        const ex = a.x + (b.x - a.x) * t;
-        const ey = a.y + (b.y - a.y) * t;
-        const len = Math.hypot(c.x - ex, c.y - ey) || 1;
-        const f = -0.12 * size;
-        add(
-          {
-            x: ex + ((c.x - ex) / len) * f,
-            y: ey + ((c.y - ey) / len) * f + 0.06 * size,
-            w: (0.26 + srng() * 0.08) * size,
-            h: (0.12 + srng() * 0.05) * size,
-            tone: 1,
-          },
-          ['plains', 'hills'],
-        );
-      }
-      if (other === 'mountains') {
-        const frng = tileRng(hex.q, hex.r, 620 + e);
-        const corners = hexCorners(c, size);
-        const a = corners[e];
-        const b = corners[(e + 1) % 6];
-        const t = 0.5 + (frng() - 0.5) * 0.3;
-        const ex = a.x + (b.x - a.x) * t;
-        const ey = a.y + (b.y - a.y) * t;
-        // Pushed into the hill tile; its far side runs under the massif
-        const f = H.footShift * size;
-        const len = Math.hypot(c.x - ex, c.y - ey) || 1;
-        add(
-          {
-            x: ex + ((c.x - ex) / len) * f,
-            y: ey + ((c.y - ey) / len) * f + 0.08 * size,
-            w: H.footW * size * (1 + (frng() - 0.5) * 2 * H.jitter),
-            h: H.footH * size * (1 + (frng() - 0.5) * 2 * H.jitter),
-            tone: 0,
-          },
-          ['hills', 'mountains'],
-        );
-      }
+      if (n < 0 || map.tiles[n] !== 'plains') continue;
+      // Now and then a low mound spills over into the meadow near one end of the edge
+      const srng = tileRng(hex.q, hex.r, 630 + e);
+      if (srng() >= P.spillMoundChance) continue;
+      const corners = hexCorners(c, size);
+      const a = corners[e];
+      const b = corners[(e + 1) % 6];
+      const t = srng() < 0.5 ? 0.15 + srng() * 0.12 : 0.73 + srng() * 0.12;
+      const ex = a.x + (b.x - a.x) * t;
+      const ey = a.y + (b.y - a.y) * t;
+      const len = Math.hypot(c.x - ex, c.y - ey) || 1;
+      const f = -0.1 * size;
+      add(
+        {
+          x: ex + ((c.x - ex) / len) * f,
+          y: ey + ((c.y - ey) / len) * f + 0.04 * size,
+          w: (0.24 + srng() * 0.08) * size,
+          h: (0.11 + srng() * 0.05) * size,
+          tone: 1,
+        },
+        ['plains', 'hills'],
+      );
     }
   }
   return out.sort((a, b) => a.y - b.y || a.x - b.x);
 }
 
+/** Segments of a mound's upper outline (`moundOutline`). */
+const MOUND_SEGMENTS = 12;
+
 /**
- * Upper outline of a mound from its left foot over the crest to its right foot (`n` + 1 points),
- * then the front of its base back to the left foot: a closed shape (world px).
+ * Upper outline of a mound from its left foot over the crest to its right foot
+ * (MOUND_SEGMENTS + 1 points), then the front of its base back to the left foot: a closed shape
+ * (world px).
  */
-export function moundOutline(m: HillMound, n = 12): Point[] {
+export function moundOutline(m: HillMound): Point[] {
+  const n = MOUND_SEGMENTS;
   const pts: Point[] = [];
   const d = moundDepth(m);
-  // Every mound a little different: crest shifted to one side, rounder or flatter
+  // Every mound a little different: crest shifted to one side, rounder or flatter; the feet
+  // run out low and wide, so neighboring mounds flow into each other
   const rng = tileRng(Math.round(m.x * 4), Math.round(m.y * 4), 670);
   const skew = (rng() - 0.5) * 0.5;
-  const power = 1 + rng() * 0.7;
+  const power = 1.5 + rng() * 0.8;
   for (let i = 0; i <= n; i++) {
     const t = (i / n) * 2 - 1;
     // Broad, rounded crest with soft feet; t is bent so the crest sits at `skew`

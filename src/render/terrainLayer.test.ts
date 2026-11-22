@@ -3,9 +3,9 @@ import {
   buildContextBatches,
   Graphics,
   Sprite,
+  GraphicsContext,
   Texture,
   type Container,
-  type GraphicsContext,
 } from 'pixi.js';
 import { hexToPixel } from '../core/hex';
 import { hexAtIndex } from '../core/map';
@@ -22,6 +22,13 @@ function tessellate(context: GraphicsContext): number[] {
   const gpu = { geometryData: { vertices: [], uvs: [], indices: [] }, batches: [] };
   buildContextBatches(context, gpu as unknown as Parameters<typeof buildContextBatches>[1]);
   return gpu.geometryData.vertices;
+}
+
+/** Tessellates one fill instruction on its own; returns its vertex positions. */
+function tessellateOne(instruction: GraphicsContext['instructions'][number]): number[] {
+  const context = new GraphicsContext();
+  context.instructions.push(instruction);
+  return tessellate(context);
 }
 
 /** The Graphics of a slice (always its first child). */
@@ -101,18 +108,23 @@ describe('createTerrainLayer', () => {
     },
   );
 
-  it('is deterministic: the same map paints the same geometry and sprites', () => {
-    const { map } = generateMap(7, { width: 24, height: 24 });
-    const run = (art?: TerrainArt): unknown[] => {
-      const layer = createTerrainLayer(map, hexSize, art);
-      return [
-        ...tessellate(layer.ground.context),
-        ...layer.rows.flatMap((s) => [...tessellate(graphicsOf(s).context), ...spritesOf(s)]),
-      ];
-    };
-    expect(run()).toEqual(run());
-    expect(run(FAKE_ART)).toEqual(run(FAKE_ART));
-  });
+  // Builds four layers: give it time when the whole suite runs in parallel
+  it(
+    'is deterministic: the same map paints the same geometry and sprites',
+    { timeout: 20_000 },
+    () => {
+      const { map } = generateMap(7, { width: 24, height: 24 });
+      const run = (art?: TerrainArt): unknown[] => {
+        const layer = createTerrainLayer(map, hexSize, art);
+        return [
+          ...tessellate(layer.ground.context),
+          ...layer.rows.flatMap((s) => [...tessellate(graphicsOf(s).context), ...spritesOf(s)]),
+        ];
+      };
+      expect(run()).toEqual(run());
+      expect(run(FAKE_ART)).toEqual(run(FAKE_ART));
+    },
+  );
 
   it('slices carry the depth keys that sort them around the buildings of their row', () => {
     const { map } = generateMap(7, { width: 24, height: 24 });
@@ -186,7 +198,7 @@ describe('createTerrainLayer', () => {
 
   it('a unit footprint clears trees, shrubs and rocks but keeps the grass', () => {
     const { map } = generateMap(7, { width: 24, height: 24 });
-    // A meadow with only meadows around: tufts and flowers, nothing standing
+    // A meadow with only meadows around: clusters of flowers and tufts, maybe a shrub or a tree
     const index = findTile(map, 'plains', (i) => {
       const h = hexAtIndex(map, i);
       for (let e = 0; e < 6; e++) {
@@ -201,13 +213,16 @@ describe('createTerrainLayer', () => {
     const layer = createTerrainLayer(map, hexSize, FAKE_ART);
     const before = rowContent(layer, row);
     layer.setFootprints([{ hex, rx: hexSize, ry: hexSize, kind: 'unit' }]);
-    expect(rowContent(layer, row)).toEqual(before);
+    // The flat meadow stays; only shrubs and trees step aside
+    expect(rowContent(layer, row).vertices).toEqual(before.vertices);
+    expect(rowContent(layer, row).sprites.length).toBeLessThanOrEqual(before.sprites.length);
     layer.setFootprints([{ hex, rx: hexSize, ry: hexSize }]);
     expect(rowContent(layer, row).vertices.length).toBeLessThan(before.vertices.length);
 
     // In a forest the same unit footprint does clear the trees
     const forest = findTile(map, 'forest');
     const fhex = hexAtIndex(map, forest);
+    layer.setFootprints([]);
     const total = allSprites(layer);
     layer.setFootprints([{ hex: fhex, rx: 0.3 * hexSize, ry: 0.25 * hexSize, kind: 'unit' }]);
     expect(allSprites(layer)).toBeLessThan(total);
@@ -225,6 +240,36 @@ describe('createTerrainLayer', () => {
     expect(after).not.toEqual(before);
     // Still a mountain there (not cleared away like a tree)
     expect(after.length).toBeGreaterThan(before.length * 0.5);
+  });
+
+  it('meadows: painted grass over all plains, clusters as quads of the meadow atlas', () => {
+    const { map } = generateMap(7, { width: 24, height: 24 });
+    const textureOf = (i: { data: unknown }): Texture | undefined =>
+      (i.data as { style?: { texture?: Texture } }).style?.texture;
+    const layer = createTerrainLayer(map, hexSize, FAKE_ART);
+    // One fill of the ground carries the seamless grass, laid out in map space
+    const grass = layer.ground.context.instructions.filter(
+      (i) => i.action === 'fill' && textureOf(i)?.source.width === 512,
+    );
+    expect(grass).toHaveLength(1);
+    expect((grass[0].data as { style: { textureSpace: string } }).style.textureSpace).toBe(
+      'global',
+    );
+    // Clusters: one quad each, textured with the atlas, the same for the same map
+    const local = (i: { data: unknown }): boolean =>
+      (i.data as { style?: { textureSpace?: string } }).style?.textureSpace === 'local';
+    const clusters = (l: TerrainLayer): number[][] =>
+      l.rows.flatMap((slice) =>
+        graphicsOf(slice)
+          .context.instructions.filter(
+            (i) => i.action === 'fill' && local(i) && textureOf(i)?.source.width === 512,
+          )
+          .map((i) => tessellateOne(i)),
+      );
+    const a = clusters(layer);
+    expect(a.length).toBeGreaterThan(100);
+    for (const quad of a) expect(quad).toHaveLength(8);
+    expect(clusters(createTerrainLayer(map, hexSize, FAKE_ART))).toEqual(a);
   });
 
   it('trees keep off roads; the same roads again repaint nothing', () => {

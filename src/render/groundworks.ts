@@ -3,10 +3,11 @@
 // fields cut into parcels, the fishery's water edge and the footprints the terrain keeps free of
 // trees and rocks. No PixiJS; deterministic (tile hashes only).
 import { hexToPixel, pixelToHex, type Hex, type Point } from '../core/hex';
-import { tileIndex } from '../core/map';
+import { hexAtIndex, tileIndex } from '../core/map';
 import { visibleTiles } from '../core/rules/vision';
 import type { Building, GameState, MapState, PlayerId, Unit } from '../core/state';
 import type { BuildingId } from '../data/buildings';
+import type { TerrainId } from '../data/terrain';
 import { buildingsShownTo } from './fog';
 import { hillMounds, mineArtTransform, moundOutline, type HillMound } from './relief';
 import type { FootprintKind } from './terrainArt';
@@ -70,6 +71,176 @@ export function groundKindOf(type: BuildingId): GroundKind {
 /** Fields cover the whole tile and join neighboring fields. */
 export function isFieldKind(kind: GroundKind): boolean {
   return kind === 'farm' || kind === 'vineyard' || kind === 'orchard';
+}
+
+// ---------------------------------------------------------------------------------------------
+// Towns share one ground (docs/ART.md): neighboring building tiles of one owner (no fields)
+// ---------------------------------------------------------------------------------------------
+
+/** Buildings whose ground can be part of a town (yards and plazas; not fields, mines, ...). */
+export function isTownKind(kind: GroundKind): boolean {
+  return kind === 'yard' || kind === 'plaza';
+}
+
+/** Flat land a town ground can lie on. */
+function townLand(t: TerrainId | undefined): boolean {
+  return t !== undefined && t !== 'hills' && t !== 'mountains' && !isWater(t);
+}
+
+/**
+ * The town areas: neighboring tiles with a yard or plaza building of the same owner, on flat
+ * land, joined into areas. Road tiles inside a town join it too (`roads`: per tile, `territory`:
+ * per tile owner): a road tile next to at least two tiles of the same owner's town (buildings or
+ * road tiles that already joined) becomes part of it, so the street runs over the town ground;
+ * a road tile with only one town neighbor stays outside (the town's soft rim meets it). Maps
+ * every tile of an area with at least two buildings to the area's id (its lowest tile index); single
+ * buildings are left out (they keep their own yard).
+ */
+export function townTiles(
+  map: MapState,
+  shown: readonly Building[],
+  roads: readonly boolean[] = [],
+  territory: readonly number[] = [],
+): Map<number, number> {
+  const owner = new Map<number, PlayerId>();
+  const built = new Set<number>();
+  for (const b of shown) {
+    const i = tileIndex(map, b.hex);
+    if (i >= 0) built.add(i);
+    if (i < 0 || !isTownKind(GROUND_KIND[b.type]) || !townLand(map.tiles[i])) continue;
+    owner.set(i, b.owner);
+  }
+  const neighborsOf = (i: number): number[] => {
+    const h = hexAtIndex(map, i);
+    return [0, 1, 2, 3, 4, 5].map((e) => tileIndex(map, edgeNeighborHex(h, e)));
+  };
+  // Road tiles (no building) that join: repeat until no more do (streets of several road tiles)
+  const candidates: number[] = [];
+  for (let i = 0; i < roads.length; i++) {
+    if (roads[i] && !built.has(i) && townLand(map.tiles[i]) && (territory[i] ?? -1) >= 0) {
+      candidates.push(i);
+    }
+  }
+  const street = new Set<number>();
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const i of candidates) {
+      if (street.has(i)) continue;
+      const who = territory[i];
+      const near = neighborsOf(i).filter((n) => n >= 0 && owner.get(n) === who).length;
+      if (near < 2) continue;
+      owner.set(i, who);
+      street.add(i);
+      changed = true;
+    }
+  }
+  const out = new Map<number, number>();
+  const seen = new Set<number>();
+  for (const [start, who] of owner) {
+    if (seen.has(start)) continue;
+    seen.add(start);
+    const area = [start];
+    for (let k = 0; k < area.length; k++) {
+      for (const n of neighborsOf(area[k])) {
+        if (n < 0 || seen.has(n) || owner.get(n) !== who) continue;
+        seen.add(n);
+        area.push(n);
+      }
+    }
+    const buildings = area.filter((i) => !street.has(i)).length;
+    if (buildings >= 2) {
+      const id = Math.min(...area);
+      for (const i of area) out.set(i, id);
+    }
+  }
+  return out;
+}
+
+/** One boolean per edge: does the neighbor across it belong to the same town area? */
+export function townJoinMask(map: MapState, h: Hex, towns: ReadonlyMap<number, number>): boolean[] {
+  const area = towns.get(tileIndex(map, h));
+  return [0, 1, 2, 3, 4, 5].map((e) => {
+    const n = tileIndex(map, edgeNeighborHex(h, e));
+    return area !== undefined && n >= 0 && towns.get(n) === area;
+  });
+}
+
+/** Key of the edge between two tiles (same from both sides). */
+export function tilePairKey(a: number, b: number): string {
+  return a < b ? `${a}-${b}` : `${b}-${a}`;
+}
+
+/**
+ * Which neighboring town tiles a lane joins (keys from `tilePairKey`; `towns`: the building tiles
+ * only, see townTiles): in every town area the lanes lead from its hub (a city center, else its first tile) out to every building, like
+ * streets to the square, plus now and then a lane across (`extraChance`, per pair of tiles).
+ */
+export function townLanes(
+  map: MapState,
+  towns: ReadonlyMap<number, number>,
+  hubs: ReadonlySet<number>,
+  extraChance: number = G.town.extraLaneChance,
+): Set<string> {
+  const lanes = new Set<string>();
+  const start = new Map<number, number>();
+  for (const [i, area] of towns) {
+    if (!start.has(area) || hubs.has(i)) start.set(area, i);
+  }
+  const reached = new Set<number>();
+  // From the hubs first, then from any tile not reached yet (parts of an area that only a
+  // street joins: lanes run on town tiles only, the road is the street)
+  const starts = [...start.values(), ...towns.keys()];
+  for (const hub of starts) {
+    if (reached.has(hub)) continue;
+    const area = towns.get(hub);
+    reached.add(hub);
+    const queue = [hub];
+    for (let k = 0; k < queue.length; k++) {
+      const h = hexAtIndex(map, queue[k]);
+      for (let e = 0; e < 6; e++) {
+        const n = tileIndex(map, edgeNeighborHex(h, e));
+        if (n < 0 || towns.get(n) !== area) continue;
+        if (!reached.has(n)) {
+          reached.add(n);
+          queue.push(n);
+          lanes.add(tilePairKey(queue[k], n));
+        } else if (tileHash(Math.min(queue[k], n), Math.max(queue[k], n), 240) < extraChance) {
+          lanes.add(tilePairKey(queue[k], n));
+        }
+      }
+    }
+  }
+  return lanes;
+}
+
+/**
+ * Where the lanes of two neighboring town tiles meet on their shared edge (world px): the edge
+ * midpoint slid along the edge by a jitter both tiles compute the same way.
+ */
+export function laneMeetPoint(map: MapState, h: Hex, e: number, size: number): Point {
+  const here = tileIndex(map, h);
+  const nb = edgeNeighborHex(h, e);
+  const there = tileIndex(map, nb);
+  // Always from the tile with the lower index, so both tiles get the very same point
+  const [from, edge] = there >= 0 && there < here ? [nb, (e + 3) % 6] : [h, e];
+  const lo = Math.min(here, there);
+  const hi = Math.max(here, there);
+  const c = hexToPixel(from, size);
+  const n = edgeNormal(edge);
+  const j = (tileHash(lo, hi, 210) - 0.5) * 2 * G.town.laneJitter * size;
+  const a = apothem(size);
+  return { x: c.x + n.x * a - n.y * j, y: c.y + n.y * a + n.x * j };
+}
+
+/** The art's ground circle as an iso ellipse (world px), else the kind's default yard size. */
+export function artGroundEllipse(type: BuildingId, size: number): { rx: number; ry: number } {
+  const r = artRadiusOf(type);
+  if (r === undefined) {
+    const { rx, ry } = patchRadii(type, size);
+    return { rx: rx / G.artPatchGrow[0], ry: ry / G.artPatchGrow[1] };
+  }
+  const u = G.artWorldUnit * size * r * Math.SQRT2;
+  return { rx: u, ry: u / 2 };
 }
 
 /** Measured ground radius of a building's art (world units of the art), if known. */
@@ -222,7 +393,22 @@ export function groundFootprints(
   size: number,
 ): GroundFootprint[] {
   const out: GroundFootprint[] = [];
-  for (const b of buildingsShownTo(state, viewer, revealAll)) {
+  const shown = buildingsShownTo(state, viewer, revealAll);
+  const towns = townTiles(state.map, shown, state.roads, state.territory);
+  // Road tiles inside a town lie on the town ground too
+  const built = new Set(shown.map((b) => tileIndex(state.map, b.hex)));
+  for (const i of towns.keys()) {
+    if (built.has(i)) continue;
+    const r = G.town.footprint * size;
+    out.push({ hex: hexAtIndex(state.map, i), rx: r, ry: r });
+  }
+  for (const b of shown) {
+    if (towns.has(tileIndex(state.map, b.hex))) {
+      // A tile of a town area: the town ground covers most of it
+      const r = G.town.footprint * size;
+      out.push({ hex: b.hex, rx: r, ry: r });
+      continue;
+    }
     const fp = footprintOf(b.type, size);
     if (GROUND_KIND[b.type] !== 'fishery') {
       const kind = footprintKindOf(b.type, state.map.tiles[tileIndex(state.map, b.hex)]);
@@ -1116,11 +1302,43 @@ export function fieldJoinMask(
 }
 
 /**
- * Cheap key of everything the ground depends on: the shown buildings (id, type, tile; the ground
- * shows no owner). Same key -> no repaint.
+ * Cheap key of everything the ground depends on: the shown buildings (id, type, tile, owner:
+ * town areas are per owner) and the roads between town tiles (`roads`, keys from
+ * `tilePairKey`: no lane is drawn there). Same key -> no repaint.
  */
-export function groundSignature(shown: readonly Building[]): string {
+export function groundSignature(
+  shown: readonly Building[],
+  roads: ReadonlySet<string> = new Set(),
+): string {
   const parts: string[] = [];
-  for (const b of shown) parts.push(`${b.id}.${b.type}.${b.hex.q}.${b.hex.r}`);
-  return parts.join(',');
+  for (const b of shown) parts.push(`${b.id}.${b.type}.${b.hex.q}.${b.hex.r}.${b.owner}`);
+  return `${parts.join(',')}|${[...roads].sort().join(',')}`;
+}
+
+/**
+ * The road segments (roadGeometry `segments`: pairs of tile indices) that join two tiles with a
+ * shown building, as `tilePairKey` keys: a town lane gives way to a real road there.
+ */
+export function roadPairsBetweenBuildings(
+  map: MapState,
+  segments: readonly (readonly [number, number])[],
+  shown: readonly Building[],
+): Set<string> {
+  const built = new Set<number>();
+  for (const b of shown) built.add(tileIndex(map, b.hex));
+  const out = new Set<string>();
+  for (const [a, b] of segments) if (built.has(a) && built.has(b)) out.add(tilePairKey(a, b));
+  return out;
+}
+
+/**
+ * Picks well spots far enough apart: candidates (world px) in the given order, keeping one only
+ * if no kept well lies within `minDistance`.
+ */
+export function spacedWells(candidates: readonly Point[], minDistance: number): Point[] {
+  const kept: Point[] = [];
+  for (const c of candidates) {
+    if (kept.every((k) => Math.hypot(k.x - c.x, k.y - c.y) >= minDistance)) kept.push(c);
+  }
+  return kept;
 }

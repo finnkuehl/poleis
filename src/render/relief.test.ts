@@ -1,19 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { hexCorners, hexToPixel, pixelToHex } from '../core/hex';
+import { hexCorners, hexToPixel, pixelToHex, type Point } from '../core/hex';
 import { hexAtIndex, tileIndex } from '../core/map';
 import { generateMap } from '../core/mapgen';
 import { at, makeTestState } from '../core/testing';
 import { depthKey } from './artLayout';
-import { edgeNeighborHex } from './geometry';
+import { edgeNeighborHex, mapEdgeNeighborIndex } from './geometry';
 import {
   artPoint,
   coastCliffs,
   cornerHeight,
   cornerOwner,
   cornerPoint,
-  edgeMound,
+  cornerMound,
   facetLight,
   hillMounds,
+  joinMound,
   isStarShaped,
   massifFacets,
   massifPlan,
@@ -23,7 +24,10 @@ import {
   mineCut,
   nicheFloor,
   quarryNiche,
+  moundOutline,
   moundShadePixels,
+  moundTopAt,
+  onMoundCrest,
   quarryCut,
   ridgeSaddle,
   roadDistance,
@@ -33,6 +37,7 @@ import {
   sliceOfY,
   softSpotPixels,
   terraceArc,
+  type HillMound,
 } from './relief';
 import { beachEdges, cliffEdges, distanceToEdges, tileRng } from './terrain';
 import { theme } from './theme';
@@ -202,29 +207,118 @@ describe('massifPlan', () => {
 });
 
 describe('hill mounds', () => {
-  it('the mound on a shared edge is the same from both tiles, and straddles the edge', () => {
-    let found = 0;
+  it('corner and join mounds are the same from every tile that shares them', () => {
     for (let q = -4; q < 4; q++) {
-      for (let e = 0; e < 6; e++) {
-        const a = { q, r: 1 };
-        const b = edgeNeighborHex(a, e);
-        const m = edgeMound(a, e, size);
-        expect(edgeMound(b, (e + 3) % 6, size)).toEqual(m);
-        if (!m) continue;
-        found++;
-        // The mound reaches into both tiles
-        const tilesTouched = new Set<string>();
-        for (const dx of [-0.9, 0, 0.9]) {
-          for (const dy of [-0.4, 0, 0.3]) {
-            const h = pixelToHex({ x: m.x + dx * m.w, y: m.y + dy * m.w }, size);
-            tilesTouched.add(`${h.q},${h.r}`);
-          }
+      for (let k = 0; k < 6; k++) {
+        const h = { q, r: 1 };
+        const m = cornerMound(h, k, size);
+        expect(cornerMound(edgeNeighborHex(h, k), (k + 4) % 6, size)).toEqual(m);
+        expect(cornerMound(edgeNeighborHex(h, (k + 5) % 6), (k + 2) % 6, size)).toEqual(m);
+        for (const end of [0, 1] as const) {
+          const j = joinMound(h, k, end, size);
+          expect(joinMound(edgeNeighborHex(h, k), (k + 3) % 6, end === 0 ? 1 : 0, size)).toEqual(j);
+          // Toward its corner, away from the middle of the edge (where the corridor crosses)
+          const near = cornerPoint(h, (k + end) % 6, size);
+          const far = cornerPoint(h, (k + 1 - end) % 6, size);
+          const along =
+            ((j.x - near.x) * (far.x - near.x) + (j.y - near.y) * (far.y - near.y)) / size ** 2;
+          expect(along).toBeGreaterThan(0.1);
+          expect(along).toBeLessThan(0.35);
         }
-        expect(tilesTouched.has(`${a.q},${a.r}`)).toBe(true);
-        expect(tilesTouched.has(`${b.q},${b.r}`)).toBe(true);
       }
     }
-    expect(found).toBeGreaterThan(10);
+  });
+
+  it(
+    'road corridors stay valleys: no point between a tile center and its edge middles is on a crest',
+    { timeout: 30_000 },
+    () => {
+      for (const seed of [3, 7, 12345]) {
+        const { map } = generateMap(seed, { width: 40, height: 40 });
+        // The mounds by grid cell (one hex size), every cell their bounds overlap
+        const cells = new Map<string, { m: HillMound; outline: Point[] }[]>();
+        const key = (x: number, y: number): string =>
+          `${Math.floor(x / size)},${Math.floor(y / size)}`;
+        for (const m of hillMounds(map, size, inland)) {
+          const entry = { m, outline: moundOutline(m) };
+          for (let x = Math.floor((m.x - m.w) / size); x <= Math.floor((m.x + m.w) / size); x++) {
+            for (let y = Math.floor((m.y - m.h) / size); y <= Math.floor(m.y / size); y++) {
+              const list = cells.get(`${x},${y}`) ?? [];
+              list.push(entry);
+              cells.set(`${x},${y}`, list);
+            }
+          }
+        }
+        let samples = 0;
+        let onCrest = 0;
+        for (let i = 0; i < map.tiles.length; i++) {
+          if (map.tiles[i] !== 'hills' && map.tiles[i] !== 'plains') continue;
+          const c = hexToPixel(hexAtIndex(map, i), size);
+          for (let e = 0; e < 6; e++) {
+            const a = (Math.PI / 3) * e;
+            for (let s = 0; s <= 25; s++) {
+              const d = (s / 25) * (Math.sqrt(3) / 2) * size;
+              const p = { x: c.x + Math.cos(a) * d, y: c.y + Math.sin(a) * d };
+              samples++;
+              for (const { m, outline } of cells.get(key(p.x, p.y)) ?? []) {
+                if (onMoundCrest(m, p, outline)) onCrest++;
+              }
+            }
+          }
+        }
+        expect(samples).toBeGreaterThan(10_000);
+        expect(onCrest).toBe(0);
+      }
+    },
+  );
+
+  it('a crest is the body above the base line where the mound rises high, not its feet', () => {
+    const m = { x: 100, y: 100, w: 20, h: 10, tone: 0 };
+    const top = moundTopAt(m, 100);
+    expect(top).not.toBeNull();
+    expect(onMoundCrest(m, { x: 100, y: 99 })).toBe(true);
+    expect(onMoundCrest(m, { x: 100, y: (top ?? 0) - 1 })).toBe(false);
+    expect(onMoundCrest(m, { x: 100, y: 103 })).toBe(false);
+    expect(onMoundCrest(m, { x: 119.5, y: 99.9 })).toBe(false);
+    expect(moundTopAt(m, 125)).toBeNull();
+  });
+
+  it('hill tiles still join: a mound reaches into both tiles of almost every hill edge', () => {
+    for (const seed of [3, 7, 12345]) {
+      const { map } = generateMap(seed, { width: 40, height: 40 });
+      const mounds = hillMounds(map, size, inland);
+      let pairs = 0;
+      let joined = 0;
+      for (let i = 0; i < map.tiles.length; i++) {
+        if (map.tiles[i] !== 'hills') continue;
+        const h = hexAtIndex(map, i);
+        for (let e = 0; e < 6; e++) {
+          const n = mapEdgeNeighborIndex(map, h, e);
+          if (n <= i || map.tiles[n] !== 'hills') continue;
+          pairs++;
+          const both = mounds.some((m) => {
+            const touched = new Set<number>();
+            for (const [dx, dy] of [
+              [-0.8, 0],
+              [0.8, 0],
+              [0, 0],
+              [0, -0.5],
+              [-0.4, -0.3],
+              [0.4, -0.3],
+              [0, -0.85],
+            ]) {
+              touched.add(
+                tileIndex(map, pixelToHex({ x: m.x + dx * m.w, y: m.y + dy * m.h }, size)),
+              );
+            }
+            return touched.has(i) && touched.has(n);
+          });
+          if (both) joined++;
+        }
+      }
+      expect(pairs).toBeGreaterThan(50);
+      expect(joined / pairs).toBeGreaterThan(0.95);
+    }
   });
 
   it('mounds stand on hills only, never on water, sorted back to front', () => {

@@ -66,10 +66,19 @@ export const theme = {
     washRadiusMax: 0.85,
     washNoiseScale: 4.5,
     washAlpha: 0.08,
+    /** Wash strength per terrain (times washAlpha): meadows get more light and shade */
+    washStrength: {
+      ocean: 1,
+      coast: 1,
+      plains: 1.45,
+      forest: 1,
+      hills: 1.15,
+      mountains: 1,
+    } satisfies Record<TerrainId, number>,
     washColors: {
       ocean: [0x2b74a3, 0x174f78],
       coast: [0x63cfc6, 0x2f9fae],
-      plains: [0xd6c45c, 0x7aa943],
+      plains: [0xcdd05a, 0x6a9e3a],
       forest: [0x7ea545, 0x4a7530],
       hills: [0xdcc67a, 0xae9447],
       mountains: [0xb5aa98, 0x867b6d],
@@ -109,6 +118,91 @@ export const theme = {
     grassAlpha: 0.9,
     hillGrassColor: 0x8a8f3e,
     flowerColors: [0xfbf7ea, 0xf3d34a, 0xd8483a, 0xb79ad8],
+    /**
+     * Meadows (src/render/meadow.ts): a fine painted grass texture covers all plains (seamless,
+     * laid over the map, so tiles never show a seam), clusters lie on it (drifts of wildflowers,
+     * clover, lush tufts in damp spots, dry golden patches, stones), now and then a shrub or a
+     * lone tree. Hills get a lighter layer of dry golden grass. Texture sizes are in pixels
+     * ("texels"); clusters are sized in hex sizes.
+     */
+    meadow: {
+      /** Grass textures: texels per hex size (detail), size of the repeating tile (power of 2) */
+      texelsPerHex: 64,
+      grassTexture: 512,
+      hillTexture: 256,
+      /** Blades: colors (dark, mid, light, yellow-green) and how often each is used */
+      grassColors: [0x6f9a3c, 0x89b34c, 0xa6c95f, 0xbcd06a],
+      grassWeights: [0.3, 0.35, 0.22, 0.13],
+      /** Lit edge of the blades (sun from the upper left) and shade at their foot */
+      grassLight: 0xcfe38a,
+      grassShade: 0x3f6a2a,
+      /** Small tufts per 1000 texels, blades per tuft, blade length and width (texels), lean (rad) */
+      tufts: 26,
+      tuftBlades: [3, 6],
+      bladeLength: [5, 10],
+      bladeWidth: [1.6, 2.4],
+      bladeLean: 0.9,
+      tuftShadowAlpha: 0.22,
+      /** Dry grass over the hills: straw colors and weights, lit edge, shade, tufts, blade length */
+      hillColors: [0xe6cf80, 0xc9ad5e, 0xa88f4a, 0xd9c070],
+      hillWeights: [0.3, 0.3, 0.2, 0.2],
+      hillLight: 0xf4e4a6,
+      hillShade: 0x7d6a36,
+      hillTufts: 9,
+      hillTuftBlades: [2, 5],
+      hillBladeLength: [4, 8],
+      hillShadowAlpha: 0.18,
+      /** How strongly the dry grass layer shows on the hills (0..1) */
+      hillAlpha: 0.6,
+      /** Meadow atlas: pixels per cluster cell (4 x 4 cells) */
+      atlasCell: 128,
+      /** Clusters per meadow tile at normal density (fractions: a chance of one more) */
+      lushCount: 1.1,
+      dryCount: 0.45,
+      cloverCount: 0.5,
+      stoneCount: 0.45,
+      driftCount: 1.8,
+      /** Half widths of the clusters (hex sizes): lush, dry, clover, stones, one flower cell */
+      lushSize: [0.2, 0.3],
+      drySize: [0.24, 0.36],
+      cloverSize: [0.14, 0.2],
+      stoneSize: [0.09, 0.14],
+      flowerSize: [0.2, 0.3],
+      /** Drifts by kind: poppies, chamomile, buttercups, mixed, violets */
+      driftWeights: [0.3, 0.26, 0.22, 0.14, 0.08],
+      /** Flower colors: petal, shaded rim, highlight, center */
+      poppy: [0xd8483a, 0xa5302a, 0xf08068, 0x3a2418],
+      chamomile: [0xfbf7ea, 0xd6d0bd, 0xffffff, 0xf0c43c],
+      buttercup: [0xf3d34a, 0xc7a22c, 0xfff0a0, 0xd8a62a],
+      violet: [0xa98ad0, 0x7a5fa6, 0xd6c6ee, 0xf0e0a0],
+      /** Clover leaves (dark, mid, light) and its flower heads (petal, rim) */
+      cloverColors: [0x5c8c36, 0x6f9f42, 0x82b34e],
+      cloverFlower: [0xf6eef0, 0xdcb6c6],
+      /** Lush tufts (dark greens) and their soft base; dry golden patches and their base */
+      lushColors: [0x416f27, 0x51832f, 0x63953a],
+      lushBase: 0x4f7f30,
+      dryColors: [0xe2cd7e, 0xcbb062, 0xb09650],
+      dryBase: 0xc8b45c,
+      /** Small stones: lit top, body, shaded side */
+      stoneColors: [0xe8e0cc, 0xc4baa6, 0x8e8574],
+      /** Brightness variation of the clusters (tint between this gray and white) */
+      tintMin: 0xe2e2e2,
+      /**
+       * Density: per forest neighbor, per water edge (more), per hill / mountain neighbor (fewer),
+       * clamped to this range
+       */
+      densityForest: 0.16,
+      densityWater: 0.12,
+      densityHills: -0.14,
+      densityRange: [0.45, 1.7],
+      /** Size of the regions with many or few flowers (hex sizes per noise cell) */
+      flowerNoise: 3.2,
+      /** Chance of a shrub per meadow tile, of a lone tree on open meadow; tree kinds (olive, oak, pine), size */
+      shrubChance: 0.16,
+      treeChance: 0.07,
+      treeWeights: [0.45, 0.3, 0.25],
+      treeScale: [0.72, 0.92],
+    },
     /**
      * Forest drawn with the tree art (docs/ART.md "Forests", src/render/forest.ts): a dense wood
      * on a jittered lattice in map space, so the canopy runs on from one forest tile into the next.
@@ -181,28 +275,52 @@ export const theme = {
     moundLight: 0xd2c26d,
     moundShade: 0x968842,
     /**
-     * Hills (docs/ART.md "Hills and mountains"): golden Mediterranean hill country. Broad mounds
-     * fill each hill tile and sit across the edges toward neighboring hill tiles (and as
-     * foothills toward mountains), so hill tiles join into one landscape. Sizes are fractions of
-     * the hex size; a mound is `w` half wide and `h` high, its base reaches `depth` x w forward.
+     * Hills (docs/ART.md "Hills and mountains"): golden Mediterranean hill country. Mounds sit on
+     * the corners where hill tiles meet and across their edges near the corners (and as foothills
+     * toward mountains), so hill tiles join into one landscape, with valleys between them where
+     * the roads run. Sizes are fractions of the hex size; a mound is `w` half wide and `h` high,
+     * its base reaches `depth` x w forward.
      */
     hills: {
-      /** The big mound under the middle of the tile (a unit token sits on its gentle front slope) */
-      centerW: 0.8,
-      centerH: 0.34,
-      /** Its base lies this far below the tile center */
-      centerY: 0.3,
-      /** A smaller mound at the back of the tile */
-      backW: 0.6,
-      backH: 0.28,
-      /** A mound on most edges to a neighboring hill tile (straddles the edge; chance per edge) */
-      edgeW: 0.62,
-      edgeH: 0.28,
-      edgeChance: 0.7,
-      /** Foothill on an edge to a mountain tile, pushed this far into the hill tile */
-      footW: 0.5,
-      footH: 0.3,
-      footShift: 0.22,
+      /**
+       * Road corridors stay valleys: on every tile the lines from the center to the middle of each
+       * edge (where roads run) keep this far (hex sizes) from every mound crest, i.e. the part of a
+       * mound that rises above `crestShare` of its height. The mounds sit toward the corners.
+       */
+      corridorBand: 0.12,
+      crestShare: 0.45,
+      /** No crest this close to a tile center (hex sizes): a gentle saddle where a unit stands */
+      saddleRadius: 0.3,
+      /**
+       * Where three hill (or mountain) tiles meet, a mound on their corner. A corner with an edge
+       * running straight down from it lies in a cell between the roads that is wide at the bottom:
+       * a big mound, its base this far below the corner (half width, height, base drop)
+       */
+      cornerW: 0.85,
+      cornerH: 0.5,
+      cornerDrop: 0.28,
+      /** ... a corner with an edge running straight up from it: a smaller one, just below the corner */
+      upCornerW: 0.62,
+      upCornerH: 0.42,
+      upCornerDrop: 0.08,
+      /** Chance of each corner mound (a few are left out, so the country is not too regular) */
+      cornerChance: 0.92,
+      /** Random shift of a corner mound (hex sizes) */
+      cornerJitter: 0.05,
+      /**
+       * Two hill tiles meeting at a corner of other terrain: a mound straddling their edge this
+       * share of the edge away from the corner (so the tiles join; toward a mountain a foothill)
+       */
+      joinW: 0.5,
+      joinH: 0.3,
+      joinT: 0.26,
+      /** A corner with no hill neighbor: a smaller mound inside the tile, this far toward the corner */
+      sectorW: 0.42,
+      sectorH: 0.26,
+      sectorDist: 0.6,
+      /** Other corners: a shoulder in the same spot (chance, size as a share of the mound above) */
+      shoulderChance: 0.75,
+      shoulderShare: 0.8,
       /** Base depth (front bulge) as a share of the half width */
       depth: 0.34,
       /** Random size change (+-share) */
@@ -217,7 +335,7 @@ export const theme = {
       /** Soft cast shadow to the lower right of each mound */
       shadowAlpha: 0.13,
       /** Dry-grass strokes on the slopes (count per tile, light and dark straw, alpha) */
-      grassCount: 9,
+      grassCount: 5,
       grassLight: 0xe9d184,
       grassDark: 0x9c8644,
       grassAlpha: 0.75,
@@ -541,9 +659,6 @@ export const theme = {
   highlightColor: 0xffffff,
   highlightFillAlpha: 0.28,
   highlightWidth: 2,
-  /** Road preview (the ghost track is in ground.road): verdigris ruts, dots on new road tiles */
-  previewColor: 0x3e7d6b,
-  previewDotRadiusFactor: 0.12,
   /** Fog of war: unexplored tiles opaque dark sea-blue; explored but not visible tiles dimmed */
   fogHiddenColor: 0x15384f,
   fogDimColor: 0x0f2638,
@@ -698,53 +813,6 @@ export const theme = {
        * half height, how far in front of the tile center; fractions of the hex size)
        */
       ledge: { rx: 0.42, ry: 0.1, y: 0.16 },
-    },
-    /**
-     * Roads: worn dirt tracks that bend smoothly through the tiles (geometry.ts `roadTracks`),
-     * light stone paving on and next to a city center. Sizes: fractions of the hex size.
-     */
-    road: {
-      /** Track width, how much it varies, how far beside edge midpoints / tile centers it runs */
-      width: 0.27,
-      widthVar: 0.12,
-      edgeJitter: 0.07,
-      centerJitter: 0.05,
-      /** Onto a building tile the track ends this share of the way in (the yard); at a city center the plaza */
-      buildingEnd: 0.55,
-      plazaEnd: 0.82,
-      /** Samples per half track (edge to center) */
-      samples: 6,
-      /** Soft grassy edge fading into the terrain: width (share of the track), color, alpha */
-      edgeGrow: 1.7,
-      edgeColor: 0xa89e66,
-      edgeAlpha: 0.3,
-      /** Earth band */
-      earthColor: 0xb39566,
-      earthAlpha: 0.85,
-      /** Two wheel ruts: color, alpha, their distance from the middle and width (shares of the track) */
-      rutColor: 0x8a6c45,
-      rutAlpha: 0.5,
-      rutOffset: 0.26,
-      rutWidth: 0.14,
-      /** Grassy strip between the ruts */
-      grassColor: 0x9db35c,
-      grassAlpha: 0.55,
-      grassWidth: 0.16,
-      /** Stones and pebbles along the sides: every this many hex sizes, chance, size, colors */
-      stoneStep: 0.09,
-      stoneChance: 0.4,
-      stoneSize: 0.02,
-      stoneColors: [0xe6ddc8, 0x8c7a62],
-      /** Paving next to a city center: stone, joints (color, alpha), edge stones, joint spacing, width share */
-      paveColor: 0xd5cab2,
-      paveJoint: 0xa39880,
-      paveJointAlpha: 0.45,
-      paveEdge: 0xa89c84,
-      paveStep: 0.12,
-      paveWidth: 0.95,
-      /** Road preview: a light ghost of the track */
-      previewColor: 0xffffff,
-      previewAlpha: 0.6,
     },
     /** Under a unit's token on a tile without a building, the terrain makes room (half axes) */
     unitFootprint: { rx: 0.3, ry: 0.18 },
@@ -1001,10 +1069,255 @@ export const theme = {
       pebbleColor: 0xb9ad95,
     },
     /**
+     * Towns share one ground (docs/ART.md): neighboring building tiles of one owner (no fields)
+     * get ONE continuous town ground instead of separate yards; single buildings keep their yard.
+     * Sizes are fractions of the hex size.
+     */
+    town: {
+      /** Worn ground over the whole town: how much packed earth is mixed into the meadow color, alpha */
+      baseEarthMix: 0.58,
+      baseAlpha: 0.78,
+      /** Soft rim outside the town's outer edge: band width, alphas (inner band first) */
+      featherWidth: 0.06,
+      featherAlpha: [0.32, 0.14],
+      /** The terrain keeps this much of a town tile (around its center) free of trees, rocks, flowers */
+      footprint: 0.82,
+      /** Packed-earth square around each building: share of its usual yard size */
+      squareShare: 0.85,
+      /**
+       * Packed-earth lanes from building to building, subtler than the real roads (which take a
+       * lane's place where they join two town tiles): width, alpha, soft edge (width factor,
+       * alpha), how far the point where two tiles' lanes meet may slide along their shared edge,
+       * worn light middle (width share, alpha)
+       */
+      laneWidth: 0.2,
+      laneAlpha: 0.6,
+      laneEdgeGrow: 1.7,
+      laneEdgeAlpha: 0.24,
+      laneJitter: 0.08,
+      laneLightShare: 0.4,
+      laneLightAlpha: 0.3,
+      /** Lanes lead from the city center out to every building; now and then one across (chance per pair) */
+      extraLaneChance: 0.15,
+      /** Stone paving around the city center: its square grows by this; lanes touching it are paved (alpha) */
+      paveGrow: 1.3,
+      paveAlpha: 0.85,
+      /** Gaps between lanes (toward the tile corners, this far out): chance of a garden, a well, a tree */
+      gapDistance: 0.58,
+      gardenChance: 0.22,
+      wellChance: 0.08,
+      treeChance: 0.16,
+      /** Wells keep at least this far apart (about two tiles: 2 x sqrt(3) hex sizes) */
+      wellSpacing: 3.5,
+      /** Kitchen garden: a small bed (half size along the iso axes), soil, rows of greens */
+      gardenSize: [0.15, 0.1],
+      gardenSoil: 0x8a7046,
+      gardenGreens: [0x5f8a34, 0x7fa544],
+      gardenEdge: 0x6f8f3c,
+      /** Well: stone ring, dark water, a wooden frame */
+      wellStone: 0xcfc6b2,
+      wellShade: 0x9a8f7a,
+      wellWater: 0x2e4650,
+      wellWood: 0x6b4a2c,
+      /** Small tree: trunk, dark and sunlit canopy */
+      treeTrunk: 0x6b4a2c,
+      treeDark: 0x4f6b2c,
+      treeLight: 0x7a9640,
+      /** Low dry-stone wall on an outer edge (chance per edge) */
+      wallChance: 0.35,
+      /** Meadow tufts poking into the town's rim (per outline sample) */
+      tuftChance: 0.25,
+    },
+    /**
      * City-level rings on the ground around a building (no base any more): half width of the
      * ring (fraction of the hex size) and its height share (0.5 = flat 2:1 like the art's ground).
      */
     ringRadius: 0.7,
     ringFlatten: 0.5,
+  },
+  /**
+   * Roads (docs/ART.md "Roads"): gravel tracks that bend smoothly through the tiles, light stone
+   * paving on and next to a city center. The course comes from geometry.ts `roadTracks`; the look
+   * from small textures made once at startup (roadTextures.ts) that roadLayer.ts lays along the
+   * road curves. Sizes are fractions of the hex size (a hex has a radius of 32 world px) unless
+   * they say "half widths" (shares of half the track's width) or "px" (texture pixels).
+   */
+  road: {
+    // --- Course of the road (geometry.ts `roadTracks`)
+    /** Width of the gravel track (its surface; the shoulders come on top) */
+    width: 0.25,
+    /** The road crosses an edge up to this far beside its midpoint, and a tile up to this far beside its center */
+    edgeJitter: 0.04,
+    centerJitter: 0.03,
+    /** A road onto a building tile ends this share of the way from the edge to the center (the yard) */
+    buildingEnd: 0.55,
+    /** Samples per half piece (edge to center); more = smoother curves, but more vertices */
+    samples: 6,
+    /**
+     * A road onto a city center ends at its plaza: this ellipse (half width, half height around
+     * the tile center), a little inside the plaza's paving so the two join
+     */
+    plazaRx: 0.74,
+    plazaRy: 0.38,
+    /** Direction toward the sun on the screen (upper left), for the relief shading */
+    light: { x: -0.6, y: -0.8 },
+    /** World size of the planar gravel texture tile and of the flagstone tile (hex sizes) */
+    gravelTile: 1.5,
+    flagstoneTile: 0.62,
+    /** Along-the-road length of one period of the rut and paving textures (hex sizes) */
+    rutPeriod: 2,
+    pavingPeriod: 1.2,
+    bankPeriod: 1.6,
+
+    // --- Gravel track (shares of the half width across the road; colors tint the gravel texture)
+    gravel: {
+      /** The track: full color inside `inner`, fading to nothing at `edge` (soft but clean edge) */
+      inner: 0.86,
+      edge: 0.99,
+      surfaceTint: 0xffffff,
+      /**
+       * The compacted shoulder under and beside the track: darker earth (opaque, so overlapping
+       * shoulders in a junction do not darken) up to `shoulderMid`, then fading into the grass
+       * at `shoulder`
+       */
+      shoulderTint: 0xc2a888,
+      shoulderAlpha: 1,
+      shoulderMid: 1.1,
+      shoulder: 1.4,
+      /** Two wheel ruts: distance from the middle and width of the groove (half widths) */
+      rutOffset: 0.44,
+      rutWidth: 0.15,
+      /** Gravel pushed up along the edges of the track: where (half widths) and how wide */
+      bermAt: 0.9,
+      bermWidth: 0.08,
+      /** The relief strip covers this far across (half widths) */
+      reliefReach: 1.15,
+      /** Strength of the relief: height scale, sunlit slopes, shaded slopes, hollows */
+      reliefScale: 0.045,
+      reliefLight: 0.5,
+      reliefShadow: 0.42,
+      reliefHollow: 0.22,
+      /** Opacity of the whole relief (ruts) */
+      reliefAlpha: 0.95,
+    },
+
+    // --- Crossings (worn spots where tracks meet, dead ends, a lone road tile)
+    /** Radius of a junction's worn crossing (shares of the track width) */
+    junctionRadius: 0.95,
+    /** A dead end fades out and ends in a small worn spot (radius, share of the track width) */
+    deadEndRadius: 0.5,
+    loneRadius: 0.7,
+
+    // --- Stone paving (on a city center tile and its neighbors)
+    paving: {
+      /** Paving width as a share of the gravel track's width */
+      width: 1.12,
+      /** Slab rows along one texture period, curb band width (share of the half width) */
+      rows: 9,
+      curb: 0.22,
+      /** A curb stone is this many slab rows long */
+      curbStoneRows: 1.5,
+      /** Light limestone slabs, some lighter, some warmer; edge stones; joints */
+      stone: 0xe4dccb,
+      stoneLight: 0xf1ebdf,
+      stoneWarm: 0xdfd2b8,
+      curbStone: 0xc8bea9,
+      joint: 0xb2a58b,
+      /** Tone variation between slabs, fine grain, larger worn patches, darker rounded slab edges */
+      toneVar: 0.035,
+      grain: 0.06,
+      wear: 0.08,
+      bevel: 0.1,
+      /** Joint line half width (px of the 128 px high texture) */
+      jointWidth: 0.7,
+      /** Relief: curb height and joint depth (half widths), reach across (half widths), strengths */
+      curbHeight: 0.05,
+      jointDepth: 0.012,
+      reliefReach: 1.18,
+      reliefLight: 0.45,
+      reliefShadow: 0.55,
+      reliefHollow: 0.4,
+      /** Where a paved road turns into gravel: a row of edge stones across it, this long (half widths) */
+      endCurb: 0.24,
+      /** The earth apron under the paving (the gravel shoulder), as for gravel */
+      apronTint: 0xd8cab4,
+      apronAlpha: 1,
+      /**
+       * A small paved square where paved roads meet: a hexagon like the tile (the roads enter it
+       * at right angles), radius to its corners (share of the paving width), curb band (share)
+       */
+      squareRadius: 1.1,
+      squareCurb: 0.12,
+      squareCurbTint: 0xd2c8b2,
+      /** Flagstones per tile side of the square's texture */
+      squareSlabs: 8,
+    },
+
+    // --- Hills: the road is cut into the slope, with a bank on both sides
+    banks: {
+      /**
+       * Across (half widths, from the middle): cast shadow begins, foot of the bank, the face from
+       * `face` to `rim` (its top edge, a thin sunlit lip), then it ends at `top`
+       */
+      shadowFrom: 0.6,
+      foot: 1.08,
+      face: 1.3,
+      rim: 1.78,
+      top: 1.95,
+      /** The sunlit lip along the top of a bank */
+      rimColor: 0xfff4d6,
+      rimAlpha: 0.3,
+      /** Dark crease at the foot (ambient occlusion), its alpha */
+      footColor: 0x3b2a18,
+      footAlpha: 0.22,
+      /** The face: lit by the sun or in shade, by how much it faces the sun */
+      litColor: 0xfff1c8,
+      litAlpha: 0.28,
+      shadeColor: 0x4a3418,
+      shadeAlpha: 0.26,
+      /** Shadow the shaded bank casts onto the road */
+      castAlpha: 0.16,
+      /** How far into a hill tile the banks grow from a non-hill edge (share of edge -> center) */
+      ramp: 0.55,
+    },
+
+    // --- Pixels of the generated textures (roadTextures.ts)
+    textures: {
+      /** Sizes in px (powers of two, so they can repeat and get mipmaps everywhere) */
+      gravelSize: 256,
+      rutSize: { along: 512, across: 128 },
+      pavingSize: { along: 512, across: 128 },
+      flagstoneSize: 256,
+      bankSize: { along: 256, across: 64 },
+      gravel: {
+        /** Compacted ochre earth and grey grit, mixed in soft patches */
+        earth: 0xdcc296,
+        grit: 0xd4c6a8,
+        /** Per-pixel grain (+- share) */
+        grain: 0.09,
+        /** Pebble colors: limestone, sandstone, dark flint */
+        stones: [0xf1eadb, 0xe4d6b8, 0xc9b28a, 0xa08c6e],
+        /** Pebbles per pixel, share of bigger stones */
+        pebbleDensity: 0.008,
+        bigShare: 0.18,
+      },
+      /** Small stones: their shadow to the lower right, how much their upper left is lit */
+      stoneShadow: 0.4,
+      stoneRelief: 0.3,
+      /** Colors of the relief textures: sunlit slopes, shaded slopes and hollows */
+      reliefLight: 0xfff6e0,
+      reliefShade: 0x4a3620,
+    },
+
+    // --- Path preview: the same track, ghosted
+    preview: {
+      /** The planned road is drawn lighter (mixed toward this) and translucent */
+      tint: 0xffffff,
+      tintMix: 0.6,
+      alpha: 0.62,
+      /** White dots on the tiles that need a new road (radius: share of the hex size) */
+      dotColor: 0xffffff,
+      dotRadius: 0.12,
+    },
   },
 } as const;
