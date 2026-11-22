@@ -32,7 +32,7 @@ import type { AdvanceCheck } from '../core/rules/advance';
 import type { CityReport, CityStats } from '../core/rules/population';
 import type { BuildingStatus, TurnReport } from '../core/rules/production';
 import type { BuildingId, CityLevel, Stock } from '../data';
-import { formatAdvanced, formatBought, formatSold } from '../i18n/format';
+import { fill, formatAdvanced, formatBought, formatSold } from '../i18n/format';
 import { turnSummary } from './turnSummary';
 import type { BuildOption } from './buildOptions';
 import type { Unit } from '../core/state';
@@ -511,7 +511,10 @@ addControl('Settler: can found', () =>
     terrain: 'plains',
     unit: sampleUnit('settler'),
     own: true,
-    found: { ok: true, onFound: () => toast.show(en.flow.cityFounded) },
+    found: {
+      ok: true,
+      onFound: () => toast.show(fill(en.flow.cityFounded, { city: cityName(1) })),
+    },
   }),
 );
 addControl('Settler: blocked', () =>
