@@ -23,6 +23,8 @@ export interface SummaryContext {
   canAdvance?: Readonly<Record<number, CityLevel>>;
   /** Types of the units that appeared this turn; without it only the count is reported. */
   spawnedUnits?: readonly UnitId[];
+  /** City id -> display name; unknown ids fall back to a generic "City". */
+  cityNames?: Readonly<Record<number, string>>;
 }
 
 /**
@@ -32,14 +34,16 @@ export interface SummaryContext {
  */
 export function turnSummary(report: TurnReport, ctx: SummaryContext = {}): SummaryLine[] {
   const lines: SummaryLine[] = [];
+  const nameOf = (id: number): string => ctx.cityNames?.[id] ?? en.cityPanel.fallbackName;
   for (const city of report.cities) {
+    const name = nameOf(city.cityId);
     const change = city.residentsAfter - city.residentsBefore;
     const parts: string[] = [];
     if (change > 0) parts.push(`+${formatResidents(change)}`);
     if (city.taxes > 0) parts.push(`+${formatDrachmas(city.taxes)}`);
     if (parts.length > 0) {
       lines.push({
-        text: fill(en.turnSummary.line, { turn: report.turn, parts: parts.join(', ') }),
+        text: fill(en.turnSummary.line, { turn: report.turn, city: name, parts: parts.join(', ') }),
         kind: 'info',
       });
     }
@@ -47,15 +51,15 @@ export function turnSummary(report: TurnReport, ctx: SummaryContext = {}): Summa
       lines.push({
         text:
           change < 0
-            ? fill(en.turnSummary.hunger, { residents: formatResidents(-change) })
-            : en.turnSummary.hungerNoLoss,
+            ? fill(en.turnSummary.hunger, { city: name, residents: formatResidents(-change) })
+            : fill(en.turnSummary.hungerNoLoss, { city: name }),
         kind: 'error',
       });
     }
     const level = ctx.canAdvance?.[city.cityId];
     if (level) {
       lines.push({
-        text: fill(en.turnSummary.ready, { level: en.levels[level] }),
+        text: fill(en.turnSummary.ready, { city: name, level: en.levels[level] }),
         kind: 'info',
       });
     }
@@ -81,7 +85,7 @@ export function turnSummary(report: TurnReport, ctx: SummaryContext = {}): Summa
     lines.push(orderOutcomeText(entry.outcome, entry.unitType));
   }
   if (report.captured.length > 0) {
-    lines.push({ text: formatCaptured(report.captured.length), kind: 'info' });
+    lines.push({ text: formatCaptured(report.captured.map(nameOf)), kind: 'info' });
   }
   return lines;
 }

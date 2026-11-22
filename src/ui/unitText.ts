@@ -117,7 +117,7 @@ export function trainOptions(facts: {
   cityLevel: CityLevel;
   residents: number;
   stock: Stock;
-  /** The training building (default: barracks; a harbor lists the ships). */
+  /** The training building (default: barracks; a harbor lists the ships; the city center the settler). */
   building?: TrainingBuildingId;
 }): TrainOption[] {
   const options: TrainOption[] = [];

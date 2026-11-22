@@ -97,7 +97,11 @@ export function settlerCandidates(ctx: AiContext): Candidate[] {
     if (u.type !== 'settler' || u.order || u.attacked) continue;
     const group = `cmd:${u.id}`;
     if (ctx.skip.has(group)) continue;
-    const sites = settleSites(view, u.hex);
+    // A site another own settler is already walking to is left to that settler.
+    const taken = view.units
+      .filter((o) => o.id !== u.id && o.type === 'settler' && o.order)
+      .map((o) => o.order!.to);
+    const sites = settleSites(view, u.hex).filter((s) => !taken.some((t) => hexEquals(t, s.hex)));
     if (sites.length > 0 && hexEquals(sites[0].hex, u.hex) && foundOk(view, u)) {
       out.push(found(u, 'found the city at the chosen site', M.utility.foundCity));
       continue;

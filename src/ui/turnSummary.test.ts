@@ -38,30 +38,30 @@ describe('turnSummary', () => {
   });
   it('joins growth and taxes with commas', () => {
     const r = report(cityReport({ residentsAfter: 7, taxes: 3 }));
-    expect(turnSummary(r)).toEqual([{ text: 'Turn 5: +1 resident, +3 drachmas', kind: 'info' }]);
+    expect(turnSummary(r)).toEqual([
+      { text: 'Turn 5, City: +1 resident, +3 drachmas', kind: 'info' },
+    ]);
   });
   it('uses plurals', () => {
     const r = report(cityReport({ residentsAfter: 8, taxes: 1 }));
-    expect(turnSummary(r)[0]?.text).toBe('Turn 5: +2 residents, +1 drachma');
+    expect(turnSummary(r)[0]?.text).toBe('Turn 5, City: +2 residents, +1 drachma');
   });
   it('reports hunger as an error, still showing taxes', () => {
     const r = report(cityReport({ fed: false, residentsAfter: 5, taxes: 2 }));
     expect(turnSummary(r)).toEqual([
-      { text: 'Turn 5: +2 drachmas', kind: 'info' },
-      { text: 'Hunger: lost 1 resident', kind: 'error' },
+      { text: 'Turn 5, City: +2 drachmas', kind: 'info' },
+      { text: 'Hunger in City: lost 1 resident', kind: 'error' },
     ]);
   });
   it('reports hunger without a loss at the minimum', () => {
     const r = report(cityReport({ fed: false, residentsBefore: 1, residentsAfter: 1 }));
-    expect(turnSummary(r)).toEqual([
-      { text: 'Hunger: the city has too little food.', kind: 'error' },
-    ]);
+    expect(turnSummary(r)).toEqual([{ text: 'Hunger in City: too little food.', kind: 'error' }]);
   });
   it('announces cities that are ready to advance', () => {
     const r = report(cityReport({ taxes: 3 }));
     expect(turnSummary(r, { canAdvance: { 1: 'polis' } })).toEqual([
-      { text: 'Turn 5: +3 drachmas', kind: 'info' },
-      { text: 'Ready to advance to Polis', kind: 'info' },
+      { text: 'Turn 5, City: +3 drachmas', kind: 'info' },
+      { text: 'City is ready to advance to Polis', kind: 'info' },
     ]);
   });
   it('reports new units by name or by count', () => {
@@ -98,12 +98,18 @@ describe('turnSummary', () => {
       { text: 'Scout arrived', kind: 'info' },
       { text: 'Spearman stopped: enemy in sight', kind: 'error' },
       { text: 'Settler stopped: the way is blocked', kind: 'error' },
-      { text: 'You captured a city!', kind: 'info' },
+      { text: 'You captured City!', kind: 'info' },
     ]);
   });
   it('reports captured cities', () => {
-    expect(turnSummary({ ...report(), captured: [3] })).toEqual([
-      { text: 'You captured a city!', kind: 'info' },
+    expect(turnSummary({ ...report(), captured: [3] }, { cityNames: { 3: 'Argos' } })).toEqual([
+      { text: 'You captured Argos!', kind: 'info' },
     ]);
+    expect(turnSummary({ ...report(), captured: [3, 4] })).toEqual([
+      { text: 'You captured 2 cities!', kind: 'info' },
+    ]);
+    // Cities are named in the lines when the names are known.
+    const named = turnSummary(report(cityReport({ taxes: 3 })), { cityNames: { 1: 'Delphi' } });
+    expect(named[0]?.text).toBe('Turn 5, Delphi: +3 drachmas');
   });
 });

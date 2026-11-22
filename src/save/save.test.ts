@@ -179,7 +179,10 @@ describe('migration 3 -> 4', () => {
     const buildings = old.buildings as Record<string, unknown>[];
     buildings.push({ id: 900, type: 'bakery', owner: 0, hex: { q: 2, r: 2 }, paused: true });
     old.lastReport = { delta: { bread: 2 } };
-    (old.cities as Record<string, unknown>[]).forEach((c) => (c.supplyStreak = 2));
+    (old.cities as Record<string, unknown>[]).forEach((c) => {
+      c.supplyStreak = 2;
+      delete c.nameIndex;
+    });
     const s = fakeStorage();
     s.setItem(
       'poleis.save.auto',
@@ -206,6 +209,8 @@ describe('migration 3 -> 4', () => {
     });
     expect(res.state.lastReport).toBeNull();
     expect(res.state.cities.every((c) => !('supplyStreak' in c))).toBe(true);
+    // Cities get their list position as name index.
+    expect(res.state.cities.map((c) => c.nameIndex)).toEqual(res.state.cities.map((_, i) => i));
     expect(() => endTurn(res.state)).not.toThrow();
   });
 });

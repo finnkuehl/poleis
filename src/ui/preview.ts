@@ -2,6 +2,7 @@
 import '../style.css';
 import './ui.css';
 import { emptyStock } from '../core/rules/goods';
+import { cityName } from '../i18n/cityNames';
 import { en } from '../i18n/en';
 import {
   createBottomBar,
@@ -194,11 +195,12 @@ function showCity(level: CityLevel, stats: CityStats, check: AdvanceCheck, goods
   panel.showCity({
     hex,
     terrain: 'plains',
+    name: cityName(0),
     level,
     stats,
     check,
     stock: goods,
-    onAdvance: () => toast.show(formatAdvanced(check.to ?? level)),
+    onAdvance: () => toast.show(formatAdvanced(cityName(0), check.to ?? level)),
   });
 }
 addControl('City: settlement, not ready', () =>

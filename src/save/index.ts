@@ -97,7 +97,8 @@ export const MIGRATIONS: Record<number, (env: Record<string, unknown>) => Record
     },
     // 3 -> 4: bread and the bakery were removed (grain is food now). Bread becomes grain,
     // bakeries become farms, and the stored turn report (which may mention bread) is dropped.
-    // Cities lose `supplyStreak` (the level-up supply streak no longer exists).
+    // Cities lose `supplyStreak` (the level-up supply streak no longer exists) and get a
+    // `nameIndex` (their position in the city list, which is the creation order).
     3: (env) => {
       const state = env.state;
       if (!isRecord(state)) return env;
@@ -121,9 +122,11 @@ export const MIGRATIONS: Record<number, (env: Record<string, unknown>) => Record
         }
       }
       if (Array.isArray(state.cities)) {
-        for (const c of state.cities) {
-          if (isRecord(c)) delete c.supplyStreak;
-        }
+        state.cities.forEach((c, index) => {
+          if (!isRecord(c)) return;
+          delete c.supplyStreak;
+          if (typeof c.nameIndex !== 'number') c.nameIndex = index;
+        });
       }
       // Training orders only store the unit type (the cost is paid when ordered): nothing to convert.
       state.lastReport = null;

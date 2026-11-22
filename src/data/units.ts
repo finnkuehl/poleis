@@ -12,12 +12,12 @@ export type UnitId =
 export type UnitDomain = 'land' | 'sea';
 
 /** The building types that train units. */
-export type TrainingBuildingId = 'barracks' | 'harbor';
+export type TrainingBuildingId = 'barracks' | 'harbor' | 'cityCenter';
 
 export interface UnitDef {
   /** 'land' = walks on land (never enters water on its own), 'sea' = sails on coast and ocean. */
   domain: UnitDomain;
-  /** Which building trains the unit (land units: barracks, ships: harbor). */
+  /** Which building trains the unit (land units: barracks, ships: harbor, settlers: city center). */
   trainedIn: TrainingBuildingId;
   /** How many land units a ship carries (0 = carries nobody). */
   capacity: number;
@@ -33,7 +33,7 @@ export interface UnitDef {
   movement: number;
   /** Attack range in tiles. 0 = cannot attack. */
   range: number;
-  /** Goods paid when the unit is ordered in the barracks. */
+  /** Goods paid when the unit is ordered. */
   cost: Goods;
   /** Residents taken from the city when ordering (settlers: 2). */
   residents: number;
@@ -78,7 +78,7 @@ export const UNITS: Record<UnitId, UnitDef> = {
   // Founds a new city. Cannot attack and cannot capture cities.
   settler: {
     domain: 'land',
-    trainedIn: 'barracks',
+    trainedIn: 'cityCenter',
     capacity: 0,
     attacksShips: false,
     attack: 0,

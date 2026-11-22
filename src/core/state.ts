@@ -83,6 +83,8 @@ export interface City {
   center: Hex;
   level: CityLevel;
   residents: number;
+  /** Creation order of the city (0 = first ever): picks its name from the i18n list. */
+  nameIndex: number;
 }
 
 /** A multi-turn move order (docs/GAME_DESIGN.md §7, move orders). */
@@ -281,6 +283,7 @@ export function createGameState(
         center: start,
         level: 'settlement',
         residents: populationConfig.startResidents,
+        nameIndex: 0,
       },
     ],
     tileCity: map.tiles.map(() => -1),

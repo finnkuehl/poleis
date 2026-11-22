@@ -9,9 +9,9 @@ const RICH = { planks: 50, bronze: 50, drachmas: 50, grain: 50 };
 /** 5x5 plains, city at (2,2) with barracks next to it at (1,2). */
 function world(opts: { level?: 'settlement' | 'polis' | 'metropolis'; residents?: number } = {}) {
   const s = makeTestState(['ppppp', 'ppppp', 'ppppp', 'ppppp', 'ppppp'], { goods: RICH });
-  addCity(s, at(2, 2), { level: opts.level, residents: opts.residents ?? 4 });
+  const city = addCity(s, at(2, 2), { level: opts.level, residents: opts.residents ?? 4 });
   const barracks = addBuilding(s, 'barracks', at(1, 2));
-  return { s, barracks };
+  return { s, barracks, city };
 }
 
 function train(s: GameState, barracksId: number, unit: 'spearman' | 'settler' | 'hoplite') {
@@ -31,24 +31,57 @@ describe('train', () => {
   });
 
   it('settler takes 2 residents and needs at least 3', () => {
-    const { s, barracks } = world({ residents: 4 });
-    const res = train(s, barracks, 'settler');
+    const { s, city } = world({ residents: 4 });
+    const res = train(s, city, 'settler');
     expect(res.ok && res.state.cities[0].residents).toBe(2);
     const small = world({ residents: 2 });
-    const bad = train(small.s, small.barracks, 'settler');
+    const bad = train(small.s, small.city, 'settler');
     expect(bad.ok === false && bad.error.code).toBe('notEnoughResidents');
   });
 
   it('settler is paid with grain and planks', () => {
-    const { s, barracks } = world({ residents: 4 });
+    const { s, city } = world({ residents: 4 });
     s.players[0].goods.grain = 10;
     s.players[0].goods.planks = 10;
-    const res = train(s, barracks, 'settler');
+    const res = train(s, city, 'settler');
     expect(res.ok && res.state.players[0].goods.grain).toBe(6);
     expect(res.ok && res.state.players[0].goods.planks).toBe(6);
     s.players[0].goods.grain = 3;
-    const poor = train(s, barracks, 'settler');
+    const poor = train(s, city, 'settler');
     expect(poor.ok === false && poor.error.code).toBe('notAffordable');
+  });
+
+  it('a barracks cannot train settlers, a city center cannot train spearmen', () => {
+    const { s, barracks, city } = world();
+    const atBarracks = train(s, barracks, 'settler');
+    expect(atBarracks.ok === false && atBarracks.error.code).toBe('wrongTrainingBuilding');
+    const atCenter = train(s, city, 'spearman');
+    expect(atCenter.ok === false && atCenter.error.code).toBe('wrongTrainingBuilding');
+    expect(s.cities[0].residents).toBe(4);
+  });
+
+  it('the settler appears next turn on the city center tile or next to it', () => {
+    const { s, city } = world({ residents: 5 });
+    const res = train(s, city, 'settler');
+    if (!res.ok) throw new Error('failed');
+    expect(res.state.units).toHaveLength(0);
+    const next = endTurn(res.state);
+    const settler = next.units.find((u) => u.type === 'settler');
+    expect(settler).toMatchObject({ owner: 0, hex: at(2, 2) });
+    // With the center tile taken, it appears on a free neighbor.
+    const blocked = train(s, city, 'settler');
+    if (!blocked.ok) throw new Error('failed');
+    addUnit(blocked.state, 'scout', at(2, 2));
+    const other = endTurn(blocked.state).units.find((u) => u.type === 'settler');
+    expect(other).toBeDefined();
+    expect(other!.hex).not.toEqual(at(2, 2));
+  });
+
+  it('a settler already queued at a barracks (old save) still finishes', () => {
+    const { s, barracks } = world();
+    s.training.push({ barracksId: barracks, unit: 'settler', owner: 0 });
+    const next = endTurn(s);
+    expect(next.units.find((u) => u.type === 'settler')).toMatchObject({ hex: at(1, 2) });
   });
 
   it('allows one order per barracks per turn', () => {

@@ -82,6 +82,7 @@ describe('fog of war', () => {
       center: at(1, 1),
       level: 'settlement',
       residents: 3,
+      nameIndex: s.cities.length,
     });
     const r = applyAction(s, { type: 'endTurn' });
     if (!r.ok) throw new Error('endTurn failed');
@@ -101,6 +102,7 @@ describe('fog of war', () => {
       center: at(2, 4),
       level: 'settlement',
       residents: 3,
+      nameIndex: s.cities.length,
     });
     const id = addUnit(s, 'settler', at(9, 4));
     updateExplored(s, 0);

@@ -122,9 +122,9 @@ export function formatAdvanceTo(level: CityLevel): string {
   return fill(en.cityPanel.advanceButton, { level: en.levels[level] });
 }
 
-/** Toast after advancing: "Your city is now a Polis." */
-export function formatAdvanced(level: CityLevel): string {
-  return fill(en.flow.advanced, { level: en.levels[level] });
+/** Toast after advancing: "Argos is now a Polis." */
+export function formatAdvanced(city: string, level: CityLevel): string {
+  return fill(en.flow.advanced, { city, level: en.levels[level] });
 }
 
 /** Toast after selling: "Sold 2 Wood for 1 drachma." */
@@ -152,9 +152,11 @@ export function formatUnitsLost(n: number): string {
   return n === 1 ? en.turnSummary.unitsLostOne : fill(en.turnSummary.unitsLostMany, { n });
 }
 
-/** "You captured a city!" / "You captured 2 cities!" */
-export function formatCaptured(n: number): string {
-  return n === 1 ? en.turnSummary.capturedOne : fill(en.turnSummary.capturedMany, { n });
+/** "You captured Argos!" (names = the captured cities) / "You captured 2 cities!" */
+export function formatCaptured(names: readonly string[]): string {
+  return names.length === 1
+    ? fill(en.turnSummary.capturedOne, { city: names[0] })
+    : fill(en.turnSummary.capturedMany, { n: names.length });
 }
 
 /**

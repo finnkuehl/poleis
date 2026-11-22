@@ -26,12 +26,13 @@ export function orderTraining(
   barracksId: number,
   unit: UnitId,
 ): RuleError | null {
-  // `barracksId` is the id of the training building: a barracks (land units) or a harbor (ships).
+  // `barracksId` is the id of the training building: a barracks (land units), a harbor (ships)
+  // or a city center (settlers).
   const barracks = state.buildings.find((b) => b.id === barracksId);
   if (
     !barracks ||
     barracks.owner !== player ||
-    (barracks.type !== 'barracks' && barracks.type !== 'harbor')
+    (barracks.type !== 'barracks' && barracks.type !== 'harbor' && barracks.type !== 'cityCenter')
   ) {
     return { code: 'notOwnBuilding' };
   }
@@ -89,7 +90,8 @@ export function spawnUnits(state: GameState, player: PlayerId): number {
     // The barracks was demolished meanwhile: the order is lost.
     if (!barracks) continue;
     const def = UNITS[order.unit];
-    // Land units: the barracks tile or a free walkable tile next to it.
+    // (The order is not checked against `trainedIn` again: an old barracks order still finishes.)
+    // Land units: the barracks/city center tile or a free walkable tile next to it.
     // Ships: a free water tile next to the harbor.
     const spot =
       def.domain === 'sea'

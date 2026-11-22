@@ -137,6 +137,8 @@ Woodcutter ─Wood─┴► Smelter ──Bronze──► Units, wonder
 
 Every city of a civilization has its own level; the stock is shared.
 
+**City names:** every city gets a Greek name from a fixed list (Argos, Delphi, Thebes, ...), chosen by the order in which cities are created in the game (no randomness). When the list runs out, names repeat with a number ("Argos II"). The name shows in the city panel, turn summary and news.
+
 **Detailed rules (decided in M3)**
 - **Start:** a new city has **4 residents** (its city center is full). Residents live in the city center and the houses in that city's territory (housing, growth and level stay per city), but work in any connected building of the civilization.
 - **The city center feeds a little by itself:** it produces **2 grain per turn** without workers, which feeds its first 4 residents. A city never gets stuck – a fishery or a farm can always be staffed again.
@@ -163,7 +165,7 @@ Every city of a civilization has its own level; the stock is shared.
 | Transport ship | 0 | 1 | 8 | 3 | – | 6 planks | Polis (harbor) |
 | Trireme | 3 | 2 | 12 | 3 | 1 | 8 planks, 2 bronze | Metropolis (harbor) |
 
-- Training: land units in the barracks, ships in the harbor. The unit appears on the next turn.
+- Training: land units in the barracks, ships in the harbor, **settlers in the city center**. The unit appears on the next turn.
 - **Upkeep:** 1 food per unit per turn. If food is missing, every unit loses 2 HP.
 - Per turn: move and/or attack (an attack ends the unit's turn).
 - Healing: +2 HP per turn without acting, +4 inside your own territory.
@@ -185,8 +187,8 @@ An enemy land unit that stands on a city center undisturbed for one turn takes o
 - **Movement:** a unit's movement points are spent on the cost of each tile it enters (plains 1, forest/hills 2; mountains and water are impassable for land units; a road on the entered tile halves the cost, minimum 0.5). **A unit that has not moved yet this turn may always step onto one neighboring tile**, whatever it costs.
 - **One unit per tile.** Units block each other; a unit can stand on buildings and roads.
 - **Only into explored land:** a unit can only move onto tiles its civilization has already explored (so the fog reveals nothing). A scout explores step by step: move, see further, move on. If an unseen enemy unit stands in the way, the move is blocked ("An unseen unit blocks the way.").
-- **Training:** all land units – settlers included – are trained in a barracks; the cost is paid when ordering, the unit appears at the start of the next turn on the barracks tile (or the nearest free walkable tile next to it). One order per barracks per turn.
-- **Settlers** take 2 residents from the barracks' city (that city needs at least 3). A settler founds a city on a free plains tile at least 4 tiles from every city center; the settler is used up, the new city starts with **2 residents** and claims the unclaimed land in radius 2.
+- **Training:** land units are trained in a barracks, **settlers in the city center** (city panel: "Train settler"; no barracks needed to expand); the cost is paid when ordering, the unit appears at the start of the next turn on the training building's tile (or the nearest free walkable tile next to it). One order per training building per turn. A settler order queued at a barracks in an old save still finishes.
+- **Settlers** take 2 residents from the city whose center trains them (that city needs at least 3). A settler founds a city on a free plains tile at least 4 tiles from every city center; the settler is used up, the new city starts with **2 residents** and claims the unclaimed land in radius 2.
 - **Upkeep:** units eat after the residents; if food runs out, every unit loses 2 HP. A unit at 0 HP is gone.
 - **Combat:** move and/or attack per turn; an attack ends the unit's turn. Defender bonuses multiply: forest/hills ×1.5, **a unit defending on a city center counts as walled (×1.5)**. After a win the attacker stays where it is.
 - **Capturing:** a land unit (not a settler) that stands on an enemy city center and is still there, unattacked, at the start of its owner's next turn takes the city with the buildings and territory of that city.
