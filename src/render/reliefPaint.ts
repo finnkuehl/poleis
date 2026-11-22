@@ -29,6 +29,7 @@ import {
 } from './relief';
 import type { TreePlan } from './forest';
 import { ATLAS_GRID, hillGrassPixels, meadowAtlasPixels, meadowGrassPixels } from './meadow';
+import { reefAtlasPixels, REEF_COLUMNS, REEF_ROWS, ripplePixels, swellPixels } from './sea';
 import { ellipsePoints, taperedStroke, tileRng, type FootprintShape } from './terrain';
 import { theme } from './theme';
 
@@ -38,6 +39,7 @@ const M = P.mountains;
 const T = P.terrace;
 const C = P.cuts;
 const G = P.meadow;
+const SEA = P.sea;
 
 /** A filled polygon; with `texture` the texture is stretched over the polygon's bounds and tinted. */
 export interface Shape {
@@ -49,7 +51,7 @@ export interface Shape {
   hole?: number[];
 }
 
-/** A standing object (tree, shrub, massif, boat ...) with its ground point in world px. */
+/** A standing object (tree, shrub, massif, rock ...) with its ground point in world px. */
 export interface Standing {
   x: number;
   y: number;
@@ -76,18 +78,32 @@ export interface Decal {
    * free); `layer`: draw order among the clusters (patches, stones, flowers).
    */
   cell?: number;
+  /** Which atlas the cell is in (absent: the meadow atlas). */
+  atlas?: 'meadow' | 'reef';
   rx?: number;
   ry?: number;
   layer?: number;
 }
 
-export type ReliefTexture = 'spot' | 'mound' | 'face' | 'meadow' | 'hillGrass' | 'meadowAtlas';
+export type ReliefTexture =
+  | 'spot'
+  | 'mound'
+  | 'face'
+  | 'meadow'
+  | 'hillGrass'
+  | 'meadowAtlas'
+  | 'ripple'
+  | 'swell'
+  | 'reefAtlas';
 
 const textures: Partial<Record<ReliefTexture, Texture>> = {};
 
 /** Size (px) and pixels of each shared texture; the grass textures repeat and get mipmaps. */
 const TEXTURE_PIXELS: Readonly<
-  Record<ReliefTexture, { n: number; pixels: (n: number) => Uint8Array; mipmaps: boolean }>
+  Record<
+    ReliefTexture,
+    { n: number; height?: number; pixels: (n: number) => Uint8Array; mipmaps: boolean }
+  >
 > = {
   spot: { n: 64, pixels: softSpotPixels, mipmaps: false },
   mound: { n: 64, pixels: moundShadePixels, mipmaps: false },
@@ -99,18 +115,26 @@ const TEXTURE_PIXELS: Readonly<
     pixels: () => meadowAtlasPixels(G.atlasCell),
     mipmaps: true,
   },
+  ripple: { n: SEA.rippleTexture, pixels: ripplePixels, mipmaps: true },
+  swell: { n: SEA.swellTexture, pixels: swellPixels, mipmaps: true },
+  reefAtlas: {
+    n: SEA.reefCell * REEF_COLUMNS,
+    height: SEA.reefCell * REEF_ROWS,
+    pixels: () => reefAtlasPixels(SEA.reefCell),
+    mipmaps: true,
+  },
 };
 
 /** The shared textures (made once, from pixels: no canvas needed). */
 export function reliefTexture(kind: ReliefTexture): Texture {
   let tex = textures[kind];
   if (!tex) {
-    const { n, pixels, mipmaps } = TEXTURE_PIXELS[kind];
+    const { n, height, pixels, mipmaps } = TEXTURE_PIXELS[kind];
     tex = new Texture({
       source: new BufferImageSource({
         resource: pixels(n),
         width: n,
-        height: n,
+        height: height ?? n,
         format: 'rgba8unorm',
         alphaMode: 'premultiplied-alpha',
         autoGenerateMipmaps: mipmaps,

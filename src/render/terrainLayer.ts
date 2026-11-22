@@ -1,17 +1,27 @@
 // Painted terrain: built ONCE when the map view is created, never per frame.
-// `ground` (one Graphics, flat): tile fills with soft wavy borders where the terrain changes
-//   (meadows covered by a seamless painted grass texture, meadow.ts), large color washes that
-//   flow across tiles, color bleed between land types, sea blends, the rolling hill country with
-//   its valleys where roads run (relief.ts) under a layer of dry grass, beaches, small cliffs,
-//   faint outlines, foam, waves and rocks in the surf.
+// `ground` (one Graphics, flat): first the sea under the whole map (sea.ts: a depth texture of
+//   the distance to land, turquoise shallows into deep blue; seamless swells and ripples; sun
+//   glints), then the land fills with soft wavy borders where the terrain changes (meadows covered
+//   by a seamless painted grass texture, meadow.ts), large color washes that flow across tiles,
+//   color bleed between land types, the rolling hill country with its valleys where roads run
+//   (relief.ts) under a layer of dry grass, beaches with wet sand, small cliffs, faint outlines,
+//   layered foam and rocks in the surf.
 // `rows` (one Graphics per map row, back to front): meadow clusters (flower drifts, clover,
-//   tufts, stones), grass and pebbles, then trees, the texture on the hills, the mountain
-//   massifs, terraces and boats. The rows are sorted together
-//   with the buildings (zIndex = rowDepthKey), so a mountain of a lower row covers a building of
-//   the row above. Footprints, roads and the explored area change what stands on a tile; only
-//   the rows they touch are repainted.
+//   tufts, stones), reefs, shoals and seaweed, grass and pebbles, then trees, the texture on the
+//   hills, the mountain massifs and terraces. No decorative boats: ships are real units. The rows
+//   are sorted together with the buildings (zIndex = rowDepthKey), so a mountain of a lower row
+//   covers a building of the row above. Footprints, roads and the explored area change what
+//   stands on a tile; only the rows they touch are repainted.
 // Light comes from the upper left, so shadows fall to the lower right (docs/ART.md).
-import { Container, Graphics, Matrix, Rectangle, Sprite } from 'pixi.js';
+import {
+  BufferImageSource,
+  Container,
+  Graphics,
+  Matrix,
+  Rectangle,
+  Sprite,
+  Texture,
+} from 'pixi.js';
 import { hexCorners, hexToPixel, pixelToHex, type Hex, type Point } from '../core/hex';
 import { hexAtIndex, tileIndex } from '../core/map';
 import type { MapState } from '../core/state';
@@ -26,6 +36,18 @@ import {
 } from './geometry';
 import { crownRadius, woodlandTrees, type TreePlan, type WoodKind, type WoodTree } from './forest';
 import { ATLAS_GRID, meadowLayout, type MeadowCluster, type MeadowSite } from './meadow';
+import {
+  depthAt,
+  glintLayout,
+  mapOutline,
+  reefLayout,
+  REEF_COLUMNS,
+  REEF_ROWS,
+  seaDepthField,
+  seaDepthPixels,
+  type DepthField,
+  type ReefPatch,
+} from './sea';
 import {
   coastCliffs,
   hillMounds,
@@ -76,6 +98,7 @@ import { theme } from './theme';
 const P = theme.terrainPaint;
 const F = P.forest;
 const G = P.meadow;
+const SEA = P.sea;
 
 /** All six edges (for "keep away from the tile border" checks). */
 const ALL_EDGES: readonly boolean[] = [true, true, true, true, true, true];
@@ -146,20 +169,6 @@ function flat(points: readonly Point[]): number[] {
   const out: number[] = [];
   for (const p of points) out.push(p.x, p.y);
   return out;
-}
-
-/** Points of a quadratic curve from a over control c to b (n segments, a excluded). */
-function quadPoints(a: Point, c: Point, b: Point, n: number): Point[] {
-  const pts: Point[] = [];
-  for (let i = 1; i <= n; i++) {
-    const t = i / n;
-    const u = 1 - t;
-    pts.push({
-      x: u * u * a.x + 2 * u * t * c.x + t * t * b.x,
-      y: u * u * a.y + 2 * u * t * c.y + t * t * b.y,
-    });
-  }
-  return pts;
 }
 
 /** Fills all polygons at once (one draw instruction). */
@@ -302,14 +311,16 @@ function grassMatrix(size: number): Matrix {
 }
 
 /**
- * Tile fills: one flat color per terrain, so tiles of the same terrain read as one surface.
- * Meadows get the painted grass instead: one seamless texture laid over all of them in map
- * space (its mean color is the meadow color), so it runs on from tile to tile without a seam.
+ * Land fills: one flat color per terrain, so tiles of the same terrain read as one surface,
+ * laid over the sea (painted under the whole map first). Meadows get the painted grass instead:
+ * one seamless texture laid over all of them in map space (its mean color is the meadow color),
+ * so it runs on from tile to tile without a seam.
  */
 function paintFills(g: Graphics, tiles: readonly Tile[], size: number): void {
   const groups = new FillGroups();
   const meadows: number[][] = [];
   for (const t of tiles) {
+    if (isWater(t.terrain)) continue;
     const poly = flat(wavyTileOutline(t.corners, t.waves));
     if (t.terrain === 'plains') meadows.push(poly);
     else groups.add(theme.terrainColors[t.terrain], 1, poly);
@@ -346,12 +357,13 @@ function paintWashes(g: Graphics, tiles: readonly Tile[], size: number): void {
   const groups = new FillGroups();
   const scale = P.washNoiseScale * size;
   for (const t of tiles) {
+    // The sea gets its light and shade from its own depth painting
+    if (isWater(t.terrain)) continue;
     const [light, dark] = P.washColors[t.terrain];
-    const water = isWater(t.terrain);
     // A wash must not reach over an edge to another terrain (or over the map border)
     const foreign = t.across.map((n) => n !== t.terrain);
     const rng = tileRng(t.hex.q, t.hex.r, 10);
-    for (let k = 0; k < (water ? P.waterWashCount : P.washCount); k++) {
+    for (let k = 0; k < P.washCount; k++) {
       const p = { x: (rng() - 0.5) * 1.6 * size, y: (rng() - 0.5) * 1.7 * size };
       const rr = rng();
       const seed = rng();
@@ -361,7 +373,7 @@ function paintWashes(g: Graphics, tiles: readonly Tile[], size: number): void {
       if (r < 0.16 * size) continue;
       const x = t.center.x + p.x;
       const y = t.center.y + p.y;
-      const n = smoothNoise(x / scale, y / scale, water ? 2 : 1) - 0.5;
+      const n = smoothNoise(x / scale, y / scale, 1) - 0.5;
       // Noise values cluster around the middle: stretch them, 3 strength levels
       const level = Math.round(Math.min(1, Math.max(0, Math.abs(n) * 6 - 0.1)) * 3);
       if (level === 0) continue;
@@ -413,43 +425,105 @@ function paintForestFloor(g: Graphics, tiles: readonly Tile[], size: number): vo
   for (const shape of groups) fillShape(g, shape);
 }
 
-/** Deep ocean fades into the turquoise coast, lighter shallow water along the shore. */
-function paintSea(g: Graphics, tiles: readonly Tile[], size: number): void {
-  const coastIntoOcean: number[][] = [];
-  const oceanIntoCoast: number[][] = [];
-  const shallow: number[][] = [];
-  const stacked = (out: number[][], t: Tile, mask: boolean[], depths: readonly number[]): void => {
-    for (let e = 0; e < 6; e++) {
-      if (!mask[e]) continue;
-      const rng = tileRng(t.hex.q, t.hex.r, 90 + e);
-      for (const d of depths) {
-        // Inner sides wobble a little, so the stacked bands do not look like contour lines
-        out.push(edgeBand(t, e, 0, d * size, mask, wobble(rng, 0.05 * size), true, true));
-      }
-    }
-  };
-  const shallowDepths = [P.shallowDepth / 3, (P.shallowDepth * 2) / 3, P.shallowDepth];
+/**
+ * The sea under the whole map: inside the map outline the depth texture (the distance to land
+ * painted from turquoise shallows into deep blue, one texture for the whole map), the long swells
+ * over all water and the fine ripples on coastal water (both seamless, their average color is
+ * the water's). The land is painted over it. Returns the depth texture (owned by the layer).
+ */
+/** The distance to land over the whole map; the shore is the wavy edge between land and water. */
+function depthFieldOf(map: MapState, tiles: readonly Tile[], size: number): DepthField {
+  return seaDepthField(map, size, (p) => {
+    const i = tileIndex(map, pixelToHex(p, size));
+    if (i < 0) return false;
+    const t = tiles[i];
+    const d = shoreDistance(t, { x: p.x - t.center.x, y: p.y - t.center.y }, size);
+    // A water tile's point beyond its wavy shore lies on land, and the other way round
+    return isWater(t.terrain) ? d < 0 : d >= 0;
+  });
+}
+
+function paintSeaBase(
+  g: Graphics,
+  tiles: readonly Tile[],
+  map: MapState,
+  field: DepthField,
+  size: number,
+): Texture {
+  const depth = new Texture({
+    source: new BufferImageSource({
+      resource: seaDepthPixels(field, size),
+      width: field.n,
+      height: field.n,
+      format: 'rgba8unorm',
+      alphaMode: 'premultiplied-alpha',
+    }),
+  });
+  const outline = flat(mapOutline(map, size));
+  g.poly(outline).fill({
+    texture: depth,
+    matrix: new Matrix(field.cell, 0, 0, field.cell, field.x0, field.y0),
+    textureSpace: 'global',
+  });
+  const scaled = (texels: number): Matrix => new Matrix(size / texels, 0, 0, size / texels, 0, 0);
+  g.poly(outline).fill({
+    texture: reliefTexture('swell'),
+    matrix: scaled(SEA.swellTexels),
+    textureSpace: 'global',
+  });
+  let coast = false;
   for (const t of tiles) {
-    if (t.terrain === 'coast') {
-      stacked(
-        coastIntoOcean,
-        t,
-        t.across.map((n) => n === 'ocean'),
-        P.seaBlendDepths,
-      );
-      stacked(shallow, t, t.shore, shallowDepths);
-    } else if (t.terrain === 'ocean') {
-      stacked(
-        oceanIntoCoast,
-        t,
-        t.across.map((n) => n === 'coast'),
-        P.seaBlendDepths,
-      );
+    if (t.terrain !== 'coast') continue;
+    g.poly(flat(wavyTileOutline(t.corners, t.waves)));
+    coast = true;
+  }
+  if (coast) {
+    g.fill({
+      texture: reliefTexture('ripple'),
+      matrix: scaled(SEA.rippleTexels),
+      textureSpace: 'global',
+    });
+  }
+  return depth;
+}
+
+/**
+ * Sun glints on the water: tiny sparkles, sparse, more on the open sea and toward the sun in the
+ * upper left of the map, never right at the shore.
+ */
+function paintGlints(g: Graphics, tiles: readonly Tile[], size: number): void {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const t of tiles) {
+    minX = Math.min(minX, t.center.x);
+    minY = Math.min(minY, t.center.y);
+    maxX = Math.max(maxX, t.center.x);
+    maxY = Math.max(maxY, t.center.y);
+  }
+  const sparkles: number[][] = [];
+  for (const t of tiles) {
+    if (!isWater(t.terrain)) continue;
+    const u = (t.center.x - minX) / Math.max(1, maxX - minX);
+    const v = (t.center.y - minY) / Math.max(1, maxY - minY);
+    const glints = glintLayout(
+      tileRng(t.hex.q, t.hex.r, 240),
+      size,
+      t.terrain === 'ocean' ? 1 : 0,
+      1 - (u + v) / 2,
+      (p) => shoreDistance(t, p, size) >= 0.3 * size,
+    );
+    for (const gl of glints) {
+      const x = t.center.x + gl.x;
+      const y = t.center.y + gl.y;
+      const r = gl.r;
+      // A four-pointed sparkle: long and flat across, shorter up and down
+      sparkles.push([x - r, y, x, y - 0.16 * r, x + r, y, x, y + 0.16 * r]);
+      sparkles.push([x - 0.14 * r, y, x, y - 0.55 * r, x + 0.14 * r, y, x, y + 0.45 * r]);
     }
   }
-  fillAll(g, coastIntoOcean, theme.terrainColors.ocean, P.seaBlendAlpha);
-  fillAll(g, oceanIntoCoast, theme.terrainColors.coast, P.seaBlendAlpha);
-  fillAll(g, shallow, P.shallowColor, P.shallowAlpha);
+  fillAll(g, sparkles, SEA.glintColor, SEA.glintAlpha);
 }
 
 /**
@@ -511,13 +585,17 @@ function cliffMask(t: Tile): boolean[] {
   return cliffEdges(t.terrain, t.shore, (e) => tileHash(t.hex.q, t.hex.r, 140 + e));
 }
 
-/** Beaches on land tiles along the water (pebbles below mountains), following the curved shore. */
+/**
+ * Beaches on land tiles along the water (pebbles below mountains), following the curved shore:
+ * dry sand, wet sand at the waterline and the light broken line where the last wave reached.
+ */
 function paintBeaches(g: Graphics, tiles: readonly Tile[], size: number): void {
   const sandFringe: number[][] = [];
   const sand: number[][] = [];
   const pebbleFringe: number[][] = [];
   const pebbles: number[][] = [];
   const wet: number[][] = [];
+  const swash: number[][] = [];
   for (const t of tiles) {
     if (isWater(t.terrain) || !t.shore.some(Boolean)) continue;
     const beach = beachEdges(t.shore, cliffMask(t));
@@ -533,6 +611,17 @@ function paintBeaches(g: Graphics, tiles: readonly Tile[], size: number): void {
         edgeBand(t, e, 0, P.beachDepth * size, beach, wobble(rng, amount)),
       );
       wet.push(edgeBand(t, e, 0, P.beachWetDepth * size, beach));
+      // The reach of the last wave: a light broken line on the wet sand
+      const line = wavyInsetLine(
+        t.center,
+        t.corners,
+        e,
+        t.waves[e] ?? STRAIGHT,
+        SEA.swashInset,
+        beach[(e + 5) % 6],
+        beach[(e + 1) % 6],
+      );
+      swash.push(...dashes(line, 3, 0.75, 1.1, rng));
     }
   }
   fillAll(g, sandFringe, P.sandColor, P.beachFringeAlpha);
@@ -540,6 +629,7 @@ function paintBeaches(g: Graphics, tiles: readonly Tile[], size: number): void {
   fillAll(g, sand, P.sandColor);
   fillAll(g, pebbles, P.pebbleColor);
   fillAll(g, wet, P.sandWetColor, P.beachWetAlpha);
+  fillAll(g, swash, P.foamColor, SEA.swashAlpha);
 }
 
 /** Faint straight outlines (a light hint of the grid): each shared edge once, none at the shore. */
@@ -560,76 +650,82 @@ function paintOutlines(g: Graphics, tiles: readonly Tile[], map: MapState): void
   strokeLines(g, landLines, { ...outline, alpha: theme.outlineAlpha });
 }
 
-/** Foam along the shore, a broken wave line further out, glints and open-sea waves. */
-function paintSurf(g: Graphics, tiles: readonly Tile[], size: number): void {
+/** Broken strokes along a line: `dashes` pieces between 0.06 and 0.94, some left out. */
+function dashes(
+  line: readonly Point[],
+  count: number,
+  keep: number,
+  width: number,
+  rng: () => number,
+): number[][] {
+  const out: number[][] = [];
+  const step = 0.88 / count;
+  for (let i = 0; i < count; i++) {
+    const s0 = 0.06 + i * step + rng() * step * 0.25;
+    const s1 = s0 + step * (0.45 + rng() * 0.4);
+    if (rng() >= keep) continue;
+    out.push(taperedStroke(subPolyline(line, s0, Math.min(0.94, s1)), width));
+  }
+  return out;
+}
+
+/**
+ * Foam along the shore of coastal water, in layers from the land outward: a soft wide band, the
+ * bright line at the waterline, a broken line and a faint, more broken third line. Rocky shores
+ * (cliffs, mountains) get wider, brighter surf; below a cliff face that hangs into the water the
+ * foam starts at the foot of the face.
+ */
+function paintSurf(g: Graphics, tiles: readonly Tile[], map: MapState, size: number): void {
+  const soft: number[][] = [];
   const foam: number[][] = [];
   const foamOuter: number[][] = [];
-  const glints: number[][] = [];
-  const waves: number[][] = [];
+  const foamThird: number[][] = [];
   const half = P.foamWidth / 2;
   for (const t of tiles) {
-    if (t.terrain === 'coast') {
-      const rng = tileRng(t.hex.q, t.hex.r, 60);
-      for (let e = 0; e < 6; e++) {
-        if (!t.shore[e]) continue;
-        foam.push(edgeBand(t, e, P.foamInset - half, P.foamInset + half, t.shore));
-        const line = wavyInsetLine(
-          t.center,
-          t.corners,
+    if (t.terrain !== 'coast') continue;
+    for (let e = 0; e < 6; e++) {
+      if (!t.shore[e]) continue;
+      const rng = tileRng(t.hex.q, t.hex.r, 60 + e);
+      const n = mapEdgeNeighborIndex(map, t.hex, e);
+      const land = n >= 0 ? tiles[n] : null;
+      const back = (e + 3) % 6;
+      const rocky = land !== null && (land.terrain === 'mountains' || cliffMask(land)[back]);
+      // A face hangs from the land's front edges (1, 2) down into this water
+      const hang =
+        rocky && (back === 1 || back === 2)
+          ? (land.terrain === 'mountains'
+              ? (P.mountains.coastFront[0] + P.mountains.coastFront[1]) / 2
+              : P.cliffHeight * 0.75) * size
+          : 0;
+      const k = rocky ? SEA.cliffFoam : 1;
+      const prev = t.shore[(e + 5) % 6];
+      const next = t.shore[(e + 1) % 6];
+      const offsets = t.waves[e] ?? STRAIGHT;
+      soft.push(
+        edgeBand(
+          t,
           e,
-          t.waves[e] ?? STRAIGHT,
-          P.foamOuterInset,
-          t.shore[(e + 5) % 6],
-          t.shore[(e + 1) % 6],
-        );
-        // Two dashes per edge, some left out
-        for (const [s0, s1] of [
-          [0.08, 0.46],
-          [0.56, 0.92],
-        ]) {
-          if (rng() < 0.25) continue;
-          const j = (rng() - 0.5) * 0.08;
-          foamOuter.push(taperedStroke(subPolyline(line, s0 + j, s1 + j), P.foamWidth * 0.9));
-        }
-      }
-      const glintCount = rng() < 0.5 ? 1 : 2;
-      for (let k = 0; k < glintCount; k++) {
-        const p = { x: (rng() - 0.5) * 0.9 * size, y: (rng() - 0.5) * 0.8 * size };
-        const len = (3.5 + rng() * 2.5) * (size / 32);
-        if (shoreDistance(t, p, size) < 0.42 * size) continue;
-        // Small wave crest: a flat arch
-        const x = t.center.x + p.x;
-        const y = t.center.y + p.y;
-        const arch: Point[] = [];
-        for (let s = 0; s <= 4; s++) {
-          const u = s / 4;
-          arch.push({ x: x - len / 2 + len * u, y: y - len * 0.22 * Math.sin(Math.PI * u) });
-        }
-        glints.push(taperedStroke(arch, 1.1));
-      }
-    } else if (t.terrain === 'ocean') {
-      const rng = tileRng(t.hex.q, t.hex.r, 70);
-      let count = rng() < P.waveChance ? 1 : 0;
-      if (count && rng() < 0.3) count = 2;
-      for (let k = 0; k < count; k++) {
-        const x0 = t.center.x + (rng() - 0.5) * 0.9 * size;
-        const y0 = t.center.y + (rng() - 0.5) * 0.9 * size;
-        const w = (0.13 + rng() * 0.06) * size;
-        const h = 0.06 * size;
-        // "~": one sine period
-        const line: Point[] = [];
-        for (let s = 0; s <= 8; s++) {
-          const u = s / 8;
-          line.push({ x: x0 - w + 2 * w * u, y: y0 - h * Math.sin(Math.PI * 2 * u) });
-        }
-        waves.push(taperedStroke(line, P.waveWidth));
-      }
+          hang * 0.8,
+          hang + SEA.foamSoftDepth * size * k,
+          t.shore,
+          wobble(rng, 0.03 * size),
+          true,
+          true,
+        ),
+      );
+      foam.push(
+        edgeBand(t, e, hang + P.foamInset - half * k, hang + P.foamInset + half * k, t.shore),
+      );
+      const line = (depth: number): Point[] =>
+        wavyInsetLine(t.center, t.corners, e, offsets, hang + depth, prev, next);
+      foamOuter.push(...dashes(line(P.foamOuterInset * k), 3, 0.8, P.foamWidth * 0.85, rng));
+      foamThird.push(...dashes(line(SEA.foamThirdInset * k), 3, 0.5, P.foamWidth * 0.7, rng));
     }
   }
-  fillAll(g, waves, P.waveColor, P.waveAlpha);
+  fillAll(g, soft, P.foamColor, SEA.foamSoftAlpha);
+  fillAll(g, foamThird, P.foamColor, SEA.foamThirdAlpha);
   fillAll(g, foamOuter, P.foamColor, P.foamOuterAlpha);
   fillAll(g, foam, P.foamColor, P.foamAlpha);
-  fillAll(g, glints, P.glintColor, P.glintAlpha);
 }
 
 /** Point on the curved edge `e` at t, moved `depth` px into the tile. */
@@ -741,22 +837,31 @@ function paintCliffs(g: Graphics, tiles: readonly Tile[], size: number): void {
 }
 
 /**
- * Flat ground of the whole map (fills and the painted meadow grass, washes, bleed, water, hill
- * mounds and their dry grass, beaches, outlines, surf, cliffs).
+ * Flat ground of the whole map (the sea with its depth, waves and glints, land fills and the
+ * painted meadow grass, washes, bleed, hill mounds and their dry grass, beaches, outlines, foam,
+ * surf rocks, cliffs). Returns the layer's own depth texture.
  */
-function paintGround(g: Graphics, tiles: readonly Tile[], map: MapState, size: number): void {
+function paintGround(
+  g: Graphics,
+  tiles: readonly Tile[],
+  map: MapState,
+  field: DepthField,
+  size: number,
+): Texture {
+  const depth = paintSeaBase(g, tiles, map, field, size);
+  paintGlints(g, tiles, size);
   paintFills(g, tiles, size);
   paintWashes(g, tiles, size);
   paintForestFloor(g, tiles, size);
-  paintSea(g, tiles, size);
   paintBleed(g, tiles, size);
   paintHillMounds(g, hillMounds(map, size, shoreDistanceAt(map, tiles, size)), size);
   paintHillGrass(g, tiles, size);
   paintBeaches(g, tiles, size);
   paintOutlines(g, tiles, map);
-  paintSurf(g, tiles, size);
+  paintSurf(g, tiles, map, size);
   paintSurfRocks(g, tiles, size);
   paintCliffs(g, tiles, size);
+  return depth;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -826,80 +931,6 @@ function treeStanding(fx: number, fy: number, tree: TreeSpot, size: number): Sta
     y: fy,
     shadow: ellipsePoints(fx + 0.13 * k, fy + 0.01 * k, rx, ry, 10),
     shadowAlpha: P.shadowAlpha,
-    shapes,
-  };
-}
-
-/** A small sailing boat on the water (hull, mast, sail), facing left or right. */
-function boatStanding(x: number, y: number, size: number, rng: () => number): Standing {
-  const k = size / 32;
-  const dir = rng() < 0.5 ? -1 : 1;
-  const len = (5.5 + rng() * 1.5) * k;
-  const shapes: Shape[] = [];
-  // Wake behind the boat
-  const wake: Point[] = [];
-  for (let s = 0; s <= 4; s++) {
-    const u = s / 4;
-    wake.push({ x: x - dir * (len * 0.6 + u * len * 1.4), y: y + 0.4 * k + u * u * 0.6 * k });
-  }
-  shapes.push({ poly: taperedStroke(wake, 1.3 * k), color: P.foamColor, alpha: P.boatWakeAlpha });
-  // Hull: flat deck line, rounded keel, raised bow
-  const bow = { x: x + dir * len, y: y - 1.2 * k };
-  const stern = { x: x - dir * len * 0.85, y: y - 0.6 * k };
-  const keel = quadPoints(bow, { x: x + dir * len * 0.2, y: y + 2.6 * k }, stern, 5);
-  shapes.push({ poly: flat([bow, ...keel]), color: P.boatHullColor, alpha: 1 });
-  shapes.push({
-    poly: taperedStroke(
-      [stern, { x, y: y - 0.3 * k }, { x: bow.x - dir * 0.6 * k, y: bow.y + 0.3 * k }],
-      0.9 * k,
-    ),
-    color: P.boatHullLight,
-    alpha: 1,
-  });
-  // Mast and a square sail, lit on the left
-  const mx = x + dir * 0.6 * k;
-  const mastTop = y - 9 * k;
-  shapes.push({
-    poly: [
-      mx - 0.3 * k,
-      y - 0.4 * k,
-      mx + 0.3 * k,
-      y - 0.4 * k,
-      mx + 0.25 * k,
-      mastTop,
-      mx - 0.25 * k,
-      mastTop,
-    ],
-    color: P.boatMastColor,
-    alpha: 1,
-  });
-  const sw = 3.6 * k;
-  const belly = dir * 1.1 * k;
-  const sail = [
-    { x: mx - sw, y: mastTop + 1 * k },
-    { x: mx + sw, y: mastTop + 1 * k },
-    { x: mx + sw * 0.9 + belly, y: mastTop + 4.5 * k },
-    { x: mx + sw * 0.8, y: y - 1.6 * k },
-    { x: mx - sw * 0.8, y: y - 1.6 * k },
-    { x: mx - sw * 0.9 + belly, y: mastTop + 4.5 * k },
-  ];
-  shapes.push({ poly: flat(sail), color: P.boatSailColor, alpha: 1 });
-  shapes.push({
-    poly: flat([
-      { x: mx + 0.1 * k, y: mastTop + 1 * k },
-      sail[1],
-      sail[2],
-      sail[3],
-      { x: mx + 0.1 * k, y: y - 1.6 * k },
-    ]),
-    color: P.boatSailShade,
-    alpha: 1,
-  });
-  return {
-    x,
-    y,
-    shadow: ellipsePoints(x + 0.8 * k, y + 1.4 * k, len * 1.05, 1.3 * k, 10),
-    shadowAlpha: P.shadowAlpha * 0.8,
     shapes,
   };
 }
@@ -998,11 +1029,38 @@ function clusterDecal(c: Point, cl: MeadowCluster): Decal {
   };
 }
 
-/** Paints a meadow cluster: its atlas cell stretched over the quad (local texture space). */
+/** Cells of the reef atlas as texture matrices. */
+const REEF_MATRICES: readonly Matrix[] = Array.from(
+  { length: REEF_COLUMNS * REEF_ROWS },
+  (_, i) =>
+    new Matrix(REEF_COLUMNS, 0, 0, REEF_ROWS, -(i % REEF_COLUMNS), -Math.floor(i / REEF_COLUMNS)),
+);
+
+/** A reef patch as a decal: a quad that shows its cell of the reef atlas. */
+function reefDecal(c: Point, patch: ReefPatch): Decal {
+  const x = c.x + patch.x;
+  const y = c.y + patch.y;
+  const { rx, ry } = patch;
+  return {
+    x,
+    y,
+    color: 0xffffff,
+    alpha: patch.alpha,
+    poly: [x - rx, y - ry, x + rx, y - ry, x + rx, y + ry, x - rx, y + ry],
+    cell: patch.cell,
+    atlas: 'reef',
+    rx,
+    ry,
+    layer: -1,
+  };
+}
+
+/** Paints a meadow cluster or reef patch: its atlas cell stretched over the quad (local texture space). */
 function fillCluster(g: Graphics, d: Decal): void {
+  const reef = d.atlas === 'reef';
   g.poly(d.poly).fill({
-    texture: reliefTexture('meadowAtlas'),
-    matrix: CELL_MATRICES[d.cell ?? 0],
+    texture: reliefTexture(reef ? 'reefAtlas' : 'meadowAtlas'),
+    matrix: (reef ? REEF_MATRICES : CELL_MATRICES)[d.cell ?? 0],
     color: d.color,
     alpha: d.alpha,
     textureSpace: 'local',
@@ -1021,6 +1079,8 @@ function planTile(
   size: number,
   art: ArtKinds,
   wood: readonly WoodTree[] | null,
+  map: MapState,
+  field: DepthField,
 ): TilePlan {
   const decals: Decal[] = [];
   const standing: Standing[] = [];
@@ -1146,13 +1206,28 @@ function planTile(
   } else if (t.terrain === 'plains') {
     for (const tree of spillTrees(t, size)) spill(tree);
   } else if (t.terrain === 'coast') {
-    const rng = tileRng(t.hex.q, t.hex.r, 210);
-    if (rng() < P.boatChance) {
-      const p = { x: (rng() - 0.5) * 0.8 * size, y: (rng() - 0.5) * 0.7 * size };
-      if (shoreDist(p) >= 0.42 * size && distanceToEdges(p, ALL_EDGES, size) >= 0.25 * size) {
-        standing.push(boatStanding(c.x + p.x, c.y + p.y, size, rng));
+    // A few reefs, shoals and seaweed patches (no decorative boats: ships are real units)
+    // They may reach into the next water tile, but keep off the land, the map border and the
+    // middle of every tile (a ship stands there)
+    const patches = reefLayout(tileRng(t.hex.q, t.hex.r, 230), size, (p, r) => {
+      const x = c.x + p.x;
+      const y = c.y + p.y;
+      if (depthAt(field, x, y) * size < SEA.reefShore * size + r) return false;
+      const h = pixelToHex({ x, y }, size);
+      if (tileIndex(map, h) < 0) return false;
+      const hc = hexToPixel(h, size);
+      if (Math.hypot(x - hc.x, y - hc.y) < SEA.reefCenterClear * size + r * 0.4) return false;
+      for (const [dx, dy] of [
+        [-r, 0],
+        [r, 0],
+        [0, -r],
+        [0, r],
+      ]) {
+        if (tileIndex(map, pixelToHex({ x: x + dx, y: y + dy }, size)) < 0) return false;
       }
-    }
+      return true;
+    });
+    for (const patch of patches) decals.push(reefDecal(c, patch));
   }
   return { decals, standing, sprites };
 }
@@ -1447,7 +1522,10 @@ function openDistanceAt(map: MapState, tiles: readonly Tile[], size: number) {
 export function createTerrainLayer(map: MapState, size: number, art?: TerrainArt): TerrainLayer {
   const tiles = buildTiles(map, size);
   const ground = new Graphics();
-  paintGround(ground, tiles, map, size);
+  const field = depthFieldOf(map, tiles, size);
+  const depth = paintGround(ground, tiles, map, field, size);
+  // The depth texture belongs to this map only: freed with the ground
+  ground.once('destroyed', () => depth.destroy(true));
 
   const sprites = artOf(art);
   const kinds: ArtKinds = {
@@ -1481,7 +1559,7 @@ export function createTerrainLayer(map: MapState, size: number, art?: TerrainArt
     }
   }
   const plans = tiles.map((t) =>
-    planTile(t, size, kinds, woodland ? (woodByTile.get(t.index) ?? []) : null),
+    planTile(t, size, kinds, woodland ? (woodByTile.get(t.index) ?? []) : null, map, field),
   );
 
   // Sort every item into the slice of its ground point
