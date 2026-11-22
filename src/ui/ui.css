@@ -100,7 +100,12 @@
   cursor: pointer;
 }
 .resource-chip__icon {
+  flex: none;
+  width: 22px;
+  height: 22px;
   font-size: 18px;
+  line-height: 22px;
+  text-align: center;
 }
 .resource-chip__amount {
   font-weight: 600;
@@ -152,6 +157,60 @@
   box-shadow: var(--shadow);
   z-index: 3;
   pointer-events: none;
+}
+
+/* ---------- Drawn art icons (src/ui/art.ts) ---------- */
+/* The art box fills its container (size the container); the image is zoomed and shifted by
+   --art-zoom / --art-left / --art-top so the miniature fills the square. */
+.art {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  isolation: isolate;
+  pointer-events: none;
+}
+.art__layer {
+  position: absolute;
+  left: var(--art-left, 0%);
+  top: var(--art-top, 0%);
+  width: var(--art-zoom, 100%);
+  height: var(--art-zoom, 100%);
+  max-width: none;
+}
+.art__img {
+  display: block;
+  -webkit-user-drag: none;
+  user-select: none;
+}
+/* Owner-color layer: the grey accent drawing multiplied with the player color. */
+.art__tint {
+  background-position: center;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  background-blend-mode: multiply;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+/* Fallback while a drawing is missing: the emoji in the container's font size. */
+.art--emoji {
+  display: grid;
+  place-items: center;
+  overflow: visible;
+  line-height: 1;
+}
+/* Small goods icon in front of an amount ("[icon] 3 Wood") in cost lists. */
+.cost-part__icon {
+  display: inline-block;
+  width: 1.3em;
+  height: 1.3em;
+  margin-right: 0.2em;
+  vertical-align: -0.3em;
 }
 
 /* ---------- Mode banner ---------- */
@@ -405,9 +464,10 @@
 }
 .build-item__icon {
   flex: none;
-  width: 36px;
+  width: 40px;
+  height: 40px;
   font-size: 28px;
-  line-height: 1.2;
+  line-height: 40px;
   text-align: center;
 }
 .build-item__body {
@@ -465,9 +525,13 @@
   flex: none;
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: var(--radius-button);
+}
+.tile-info__mark .art {
+  width: 40px;
+  height: 40px;
 }
 .tile-info__mark--swatch {
   box-shadow: inset 0 0 0 1px rgba(29, 43, 54, 0.35);
@@ -734,7 +798,9 @@
 .trade__icon {
   flex: none;
   width: 30px;
+  height: 30px;
   font-size: 22px;
+  line-height: 30px;
   text-align: center;
 }
 .trade__body {
@@ -902,7 +968,12 @@
   font-variant-numeric: tabular-nums;
 }
 .economy__icon {
+  flex: none;
+  width: 24px;
+  height: 24px;
   font-size: 20px;
+  line-height: 24px;
+  text-align: center;
 }
 .economy__name {
   flex: 1;
@@ -924,7 +995,7 @@
   color: var(--wine);
 }
 .economy__line {
-  margin: 2px 0 0 28px;
+  margin: 2px 0 0 32px;
   color: var(--ink-soft);
   font-size: 14px;
 }

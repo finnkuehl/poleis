@@ -4,6 +4,7 @@ import { inBounds } from '../core/map';
 import { hexCorners, hexToPixel, type Hex } from '../core/hex';
 import type { BuildingStatus } from '../core/rules/production';
 import type { GameState, MapState, PlayerId } from '../core/state';
+import { NO_ART, type ArtSet } from './art';
 import { mapWorldBounds } from './bounds';
 import type { Rect } from './camera';
 import { hexSize } from './config';
@@ -36,26 +37,24 @@ export interface MapView {
   setOrderPaths(paths: readonly OrderPath[]): void;
 }
 
-export function createMapView(map: MapState): MapView {
+/** `art`: the loaded building and unit art (see art.ts); without it the map uses plates and emoji. */
+export function createMapView(map: MapState, art: ArtSet = NO_ART): MapView {
   const container = new Container();
   // Static painted terrain, built once (see terrainLayer.ts)
   const terrain = createTerrainLayer(map, hexSize);
   const selection = new Graphics();
-  const economy = createEconomyLayers();
-  const unitLayers = createUnitLayers();
+  const economy = createEconomyLayers(art);
+  const unitLayers = createUnitLayers(art);
   const orders = createOrderLayers();
 
-  // economy layers: [tint, border, roads, plates, icons, badges, highlights, preview]
-  const below = economy.layers.slice(0, 6);
-  const above = economy.layers.slice(6);
   container.addChild(
     terrain.ground,
     terrain.details,
-    ...below,
+    ...economy.below,
     unitLayers.units,
     unitLayers.fog,
     orders.layer,
-    ...above,
+    ...economy.above,
     unitLayers.attack,
     selection,
     unitLayers.ghost,

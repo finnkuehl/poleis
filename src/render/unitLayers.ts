@@ -1,10 +1,12 @@
-// Unit tokens, fog of war and attack-target outlines.
-import { Container, Graphics, Text } from 'pixi.js';
+// Unit figures/tokens, fog of war and attack-target outlines.
+import { Container, Graphics, Sprite, Text, type Texture } from 'pixi.js';
 import { hexCorners, hexToPixel, type Hex } from '../core/hex';
 import { hexAtIndex, tileIndex } from '../core/map';
 import { visibleTiles } from '../core/rules/vision';
 import type { GameState, PlayerId } from '../core/state';
-import { UNITS } from '../data';
+import { UNITS, type UnitId } from '../data';
+import { NO_ART, type ArtAsset, type ArtSet } from './art';
+import { artModeOf, depthKey, drawsOwnerDisc, type ArtMode } from './artLayout';
 import { hexSize } from './config';
 import {
   fogEdgeMask,
@@ -49,15 +51,61 @@ function fillAll(g: Graphics, polys: readonly number[][], color: number, alpha: 
   g.fill({ color, alpha });
 }
 
-export function createUnitLayers(): UnitLayers {
+/** Sprite of one art layer with the asset's anchor and scale. */
+function artSprite(asset: ArtAsset, texture: Texture): Sprite {
+  const s = new Sprite(texture);
+  s.anchor.set(asset.anchorX, asset.anchorY);
+  s.scale.set(asset.scale);
+  return s;
+}
+
+/** `art`: the loaded unit art (missing entries fall back to token + emoji). */
+export function createUnitLayers(art: ArtSet = NO_ART): UnitLayers {
   const units = new Container();
+  /** Colored tokens under emoji and old flat art. */
   const tokens = new Graphics();
-  const icons = new Container();
-  units.addChild(tokens, icons);
+  /** Unit art and emoji, sorted by row (a lower figure overlaps the one above). */
+  const figures = new Container();
+  figures.sortableChildren = true;
+  /** HP bars, above all figures so they stay readable. */
+  const bars = new Graphics();
+  units.addChild(tokens, figures, bars);
   const fog = new Graphics();
   const attack = new Graphics();
-  /** One Text per unit id, created/destroyed only when units appear/disappear. */
-  const iconTexts = new Map<number, { text: Text; type: string }>();
+
+  /** Visuals of one unit, created/destroyed only when units appear/disappear. */
+  interface UnitVisual {
+    type: string;
+    mode: ArtMode;
+    art: Sprite | null;
+    accent: Sprite | null;
+    icon: Text | null;
+  }
+  const visuals = new Map<number, UnitVisual>();
+
+  function destroyVisual(v: UnitVisual): void {
+    v.art?.destroy();
+    v.accent?.destroy();
+    v.icon?.destroy();
+  }
+
+  function createVisual(type: UnitId): UnitVisual {
+    const asset = art.units[type];
+    const mode = artModeOf(asset);
+    if (!asset) {
+      const icon = new Text({
+        text: UNITS[type].icon,
+        style: { fontSize: hexSize * theme.unitIconSizeFactor, fontFamily: theme.fontFamily },
+        resolution: 2,
+      });
+      icon.anchor.set(0.5);
+      figures.addChild(icon);
+      return { type, mode, art: null, accent: null, icon };
+    }
+    const main = figures.addChild(artSprite(asset, asset.art));
+    const accent = asset.accent ? figures.addChild(artSprite(asset, asset.accent)) : null;
+    return { type, mode, art: main, accent, icon: null };
+  }
   let fogSig = '';
   /** Test option: show the whole map (no fog, enemy units everywhere). */
   let revealAll = false;
@@ -66,6 +114,7 @@ export function createUnitLayers(): UnitLayers {
 
   function drawUnits(state: GameState, viewer: PlayerId, visible: readonly boolean[]): void {
     tokens.clear();
+    bars.clear();
     const seen = new Set<number>();
     const buildingTiles = new Set<number>();
     for (const b of state.buildings) buildingTiles.add(tileIndex(state.map, b.hex));
@@ -83,39 +132,44 @@ export function createUnitLayers(): UnitLayers {
       const cy = base.y + unitTokenOffset(buildingTiles.has(idx), hexSize);
       const done = u.owner === viewer && u.movesLeft === 0 && (u.attacked || u.hasMoved);
       const alpha = done ? theme.unitDoneAlpha : 1;
+      const color = playerColorOf(state, u.owner);
 
-      tokens
-        .circle(cx, cy, radius)
-        .fill({ color: playerColorOf(state, u.owner), alpha })
-        .stroke({ color: theme.unitRimColor, width: theme.unitRimWidth, alpha });
+      let v = visuals.get(u.id);
+      if (!v || v.type !== u.type) {
+        if (v) destroyVisual(v);
+        v = createVisual(u.type);
+        visuals.set(u.id, v);
+      }
+      // Units move: position and draw order are updated every time
+      for (const [s, layer] of [
+        [v.art, 0],
+        [v.icon, 0],
+        [v.accent, 1],
+      ] as const) {
+        if (!s) continue;
+        s.position.set(cx, cy);
+        s.zIndex = depthKey(u.hex, layer);
+        s.alpha = alpha;
+      }
+      if (v.accent) v.accent.tint = color;
+
+      if (drawsOwnerDisc(v.mode)) {
+        tokens
+          .circle(cx, cy, radius)
+          .fill({ color, alpha })
+          .stroke({ color: theme.unitRimColor, width: theme.unitRimWidth, alpha });
+      }
       // HP bar under the token
       const share = Math.max(0, Math.min(1, u.hp / def.hp));
       const bx = cx - barW / 2;
       const by = cy + radius + 2;
-      tokens.rect(bx, by, barW, barH).fill({ color: theme.hpBarBackColor, alpha });
-      tokens.rect(bx, by, barW * share, barH).fill({ color: hpBarColor(share), alpha });
-
-      let entry = iconTexts.get(u.id);
-      if (!entry || entry.type !== u.type) {
-        entry?.text.destroy();
-        const text = new Text({
-          text: def.icon,
-          style: { fontSize: hexSize * theme.unitIconSizeFactor, fontFamily: theme.fontFamily },
-          resolution: 2,
-        });
-        text.anchor.set(0.5);
-        icons.addChild(text);
-        entry = { text, type: u.type };
-        iconTexts.set(u.id, entry);
-      }
-      entry.text.position.set(cx, cy);
-      entry.text.alpha = alpha;
-      entry.text.visible = true;
+      bars.rect(bx, by, barW, barH).fill({ color: theme.hpBarBackColor, alpha });
+      bars.rect(bx, by, barW * share, barH).fill({ color: hpBarColor(share), alpha });
     }
-    for (const [id, entry] of iconTexts) {
+    for (const [id, v] of visuals) {
       if (seen.has(id)) continue;
-      entry.text.destroy();
-      iconTexts.delete(id);
+      destroyVisual(v);
+      visuals.delete(id);
     }
   }
 
@@ -195,12 +249,14 @@ export function createUnitLayers(): UnitLayers {
     fillAll(fog, feather, theme.fogHiddenColor, theme.fogFeatherAlpha);
   }
 
-  // Drag ghost: same look as a unit token, larger and see-through; drawn above everything.
+  // Drag ghost: same look as a unit, larger and see-through; drawn above everything.
   const ghost = new Container();
   const ghostBody = new Graphics();
+  const ghostArt = new Sprite();
+  const ghostAccent = new Sprite();
   let ghostText: Text | null = null;
   let ghostKey = '';
-  ghost.addChild(ghostBody);
+  ghost.addChild(ghostBody, ghostArt, ghostAccent);
   ghost.visible = false;
   ghost.alpha = theme.dragGhostAlpha;
   ghost.scale.set(theme.dragGhostScale);
@@ -219,20 +275,41 @@ export function createUnitLayers(): UnitLayers {
       const key = `${unit.type}:${unit.owner}:${color}`;
       if (key !== ghostKey) {
         ghostKey = key;
+        const asset = art.units[unit.type];
         const radius = hexSize * theme.unitRadiusFactor;
         ghostBody.clear();
-        ghostBody
-          .circle(0, 0, radius)
-          .fill({ color })
-          .stroke({ color: theme.unitRimColor, width: theme.unitRimWidth });
+        if (drawsOwnerDisc(artModeOf(asset))) {
+          ghostBody
+            .circle(0, 0, radius)
+            .fill({ color })
+            .stroke({ color: theme.unitRimColor, width: theme.unitRimWidth });
+        }
         ghostText?.destroy();
-        ghostText = new Text({
-          text: UNITS[unit.type as keyof typeof UNITS].icon,
-          style: { fontSize: hexSize * theme.unitIconSizeFactor, fontFamily: theme.fontFamily },
-          resolution: 2,
-        });
-        ghostText.anchor.set(0.5);
-        ghost.addChild(ghostText);
+        ghostText = null;
+        ghostArt.visible = false;
+        ghostAccent.visible = false;
+        if (asset) {
+          // Same shared textures as the unit on the map
+          for (const [s, texture] of [
+            [ghostArt, asset.art],
+            [ghostAccent, asset.accent],
+          ] as const) {
+            if (!texture) continue;
+            s.texture = texture;
+            s.anchor.set(asset.anchorX, asset.anchorY);
+            s.scale.set(asset.scale);
+            s.visible = true;
+          }
+          ghostAccent.tint = color;
+        } else {
+          ghostText = new Text({
+            text: UNITS[unit.type as UnitId].icon,
+            style: { fontSize: hexSize * theme.unitIconSizeFactor, fontFamily: theme.fontFamily },
+            resolution: 2,
+          });
+          ghostText.anchor.set(0.5);
+          ghost.addChild(ghostText);
+        }
       }
       ghost.position.set(x, y);
       ghost.visible = true;

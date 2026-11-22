@@ -1,10 +1,12 @@
 // Dynamic map layers: territory, roads, buildings, status badges, highlights, road preview.
-import { Container, Graphics, Text } from 'pixi.js';
+import { Container, Graphics, Sprite, Text, type Texture } from 'pixi.js';
 import { hexCorners, hexToPixel, type Hex, type Point } from '../core/hex';
 import { hexAtIndex } from '../core/map';
 import type { BuildingStatus } from '../core/rules/production';
 import type { GameState } from '../core/state';
-import { BUILDINGS } from '../data';
+import { BUILDINGS, type BuildingId, type CityLevel } from '../data';
+import { NO_ART, type ArtSet } from './art';
+import { artModeOf, depthKey, drawsOwnerDisc, type ArtMode, type ArtPlacement } from './artLayout';
 import { hexSize } from './config';
 import { edgeMaskOf, insetRuns, roadGeometry, territoryEdges, type InsetRun } from './geometry';
 import { playerColorOf } from './playerColor';
@@ -13,8 +15,10 @@ import { ellipsePoints, mixColor, tileHash } from './terrain';
 import { theme } from './theme';
 
 export interface EconomyLayers {
-  /** Layers in drawing order (add all to the map container in this order). */
-  layers: Container[];
+  /** Layers below the units, in drawing order. */
+  below: Container[];
+  /** Layers above the units (highlights, road preview), in drawing order. */
+  above: Container[];
   update(state: GameState, statuses: Record<number, BuildingStatus>): void;
   setHighlights(hexes: readonly Hex[]): void;
   setPathPreview(path: readonly Hex[] | null, newTiles: readonly Hex[]): void;
@@ -39,19 +43,23 @@ function strokeRuns(
   g.stroke({ ...style, cap: 'round', join: 'round' });
 }
 
-export function createEconomyLayers(): EconomyLayers {
+/** `art`: the loaded building art (missing entries fall back to plate + emoji). */
+export function createEconomyLayers(art: ArtSet = NO_ART): EconomyLayers {
   const tint = new Graphics();
   const border = new Graphics();
   const roads = new Graphics();
-  const plates = new Graphics();
-  const icons = new Container();
+  /** On the ground under the buildings: colored plates and city-level rings. */
+  const ground = new Graphics();
+  /** Building art and emoji, sorted by row so lower tiles overlap the tile above. */
+  const objects = new Container();
+  objects.sortableChildren = true;
+  /** Resident counts of the cities (above all building art). */
+  const labels = new Container();
   const badges = new Graphics();
   const highlights = new Graphics();
   const preview = new Graphics();
 
-  /** One Text per building id; created/destroyed only when buildings appear/disappear. */
-  const iconTexts = new Map<number, { text: Text; type: string }>();
-  /** One resident-count Text per city id (same lifecycle as the icons). */
+  /** One resident-count Text per city id (created/destroyed when cities appear/disappear). */
   const residentTexts = new Map<number, Text>();
 
   function drawTerritory(state: GameState): void {
@@ -149,51 +157,148 @@ export function createEconomyLayers(): EconomyLayers {
     });
   }
 
+  /** Visuals of one building, created/destroyed only when buildings appear/disappear. */
+  interface BuildingVisual {
+    type: string;
+    mode: ArtMode;
+    style: ArtPlacement['style'] | null;
+    art: Sprite | null;
+    accent: Sprite | null;
+    icon: Text | null;
+  }
+  const visuals = new Map<number, BuildingVisual>();
+
+  function destroyVisual(v: BuildingVisual): void {
+    v.art?.destroy();
+    v.accent?.destroy();
+    v.icon?.destroy();
+  }
+
+  function createVisual(type: BuildingId, hex: Hex): BuildingVisual {
+    const asset = art.buildings[type];
+    const mode = artModeOf(asset);
+    if (!asset) {
+      const icon = new Text({
+        text: BUILDINGS[type].icon,
+        style: { fontSize: hexSize * theme.iconSizeFactor, fontFamily: theme.fontFamily },
+        resolution: 2,
+      });
+      icon.anchor.set(0.5);
+      objects.addChild(icon);
+      icon.zIndex = depthKey(hex);
+      return { type, mode, style: null, art: null, accent: null, icon };
+    }
+    const sprite = (texture: Texture, layer: number): Sprite => {
+      const s = new Sprite(texture);
+      s.anchor.set(asset.anchorX, asset.anchorY);
+      s.scale.set(asset.scale);
+      objects.addChild(s);
+      s.zIndex = depthKey(hex, layer);
+      return s;
+    };
+    return {
+      type,
+      mode,
+      style: asset.placement.style,
+      art: sprite(asset.art, 0),
+      accent: asset.accent ? sprite(asset.accent, 1) : null,
+      icon: null,
+    };
+  }
+
+  /** City-level rings: circles around the plate, or an ellipse on the ground around a diorama base. */
+  function drawCityRings(p: Point, level: CityLevel, diorama: boolean, radius: number): void {
+    const ring = cityRingStyle(level);
+    if (!diorama) {
+      if (ring.outerColor !== null) {
+        ground
+          .circle(p.x, p.y, radius + ring.outerWidth / 2 + 1)
+          .stroke({ color: ring.outerColor, width: ring.outerWidth });
+      }
+      if (ring.innerColor !== null) {
+        ground
+          .circle(p.x, p.y, radius - theme.cityInnerRingInset)
+          .stroke({ color: ring.innerColor, width: theme.cityInnerRingWidth });
+      }
+      return;
+    }
+    const cy = p.y + hexSize * theme.cityArtRingOffsetFactor;
+    const rx = hexSize * theme.cityArtRingRxFactor + ring.outerWidth / 2;
+    const ry = hexSize * theme.cityArtRingRyFactor + ring.outerWidth / 2;
+    if (ring.outerColor !== null) {
+      ground.ellipse(p.x, cy, rx, ry).stroke({ color: ring.outerColor, width: ring.outerWidth });
+    }
+    if (ring.innerColor !== null) {
+      // Second ring outside the first one: an inner ring would be hidden by the base.
+      const d = ring.outerWidth / 2 + theme.cityArtSecondRingGap;
+      ground
+        .ellipse(p.x, cy, rx + d, ry + d)
+        .stroke({ color: ring.innerColor, width: theme.cityInnerRingWidth });
+    }
+  }
+
+  function drawBadge(bx: number, by: number, kind: 'problem' | 'paused'): void {
+    const badgeR = hexSize * theme.badgeRadiusFactor;
+    badges
+      .circle(bx, by, badgeR)
+      .fill(kind === 'paused' ? theme.pausedBadgeColor : theme.badgeColor)
+      .stroke({ color: theme.plateRimColor, width: 1 });
+    if (kind === 'paused') {
+      // pause sign: two small bars
+      const bw = badgeR * 0.26;
+      const bh = badgeR * 0.9;
+      badges
+        .rect(bx - bw * 1.4, by - bh / 2, bw, bh)
+        .rect(bx + bw * 0.4, by - bh / 2, bw, bh)
+        .fill(theme.badgeMarkColor);
+      return;
+    }
+    // "!" drawn from shapes: a bar and a dot
+    const w = badgeR * 0.28;
+    badges
+      .roundRect(bx - w / 2, by - badgeR * 0.6, w, badgeR * 0.75, w / 2)
+      .circle(bx, by + badgeR * 0.45, w * 0.65)
+      .fill(theme.badgeMarkColor);
+  }
+
   function drawBuildings(state: GameState, statuses: Record<number, BuildingStatus>): void {
-    plates.clear();
+    ground.clear();
     badges.clear();
     const seen = new Set<number>();
     const seenCities = new Set<number>();
     const cityById = new Map(state.cities.map((c) => [c.id, c]));
     const radius = hexSize * theme.plateRadiusFactor;
-    const badgeR = hexSize * theme.badgeRadiusFactor;
     for (const b of state.buildings) {
       seen.add(b.id);
       const p = hexToPixel(b.hex, hexSize);
-      plates.circle(p.x, p.y, radius).fill(playerColorOf(state, b.owner)).stroke({
-        color: theme.plateRimColor,
-        width: theme.plateRimWidth,
-        alpha: 0.85,
-      });
+      const color = playerColorOf(state, b.owner);
 
-      let entry = iconTexts.get(b.id);
-      if (!entry || entry.type !== b.type) {
-        entry?.text.destroy();
-        const text = new Text({
-          text: BUILDINGS[b.type].icon,
-          style: { fontSize: hexSize * theme.iconSizeFactor, fontFamily: theme.fontFamily },
-          resolution: 2,
-        });
-        text.anchor.set(0.5);
-        icons.addChild(text);
-        entry = { text, type: b.type };
-        iconTexts.set(b.id, entry);
+      let v = visuals.get(b.id);
+      if (!v || v.type !== b.type) {
+        if (v) destroyVisual(v);
+        v = createVisual(b.type, b.hex);
+        visuals.set(b.id, v);
       }
-      entry.text.position.set(p.x, p.y);
+      v.art?.position.set(p.x, p.y);
+      v.icon?.position.set(p.x, p.y);
+      if (v.accent) {
+        v.accent.position.set(p.x, p.y);
+        // Owner color (changes when a city is captured)
+        v.accent.tint = color;
+      }
+      const diorama = v.style === 'diorama';
+
+      if (drawsOwnerDisc(v.mode)) {
+        ground.circle(p.x, p.y, radius).fill(color).stroke({
+          color: theme.plateRimColor,
+          width: theme.plateRimWidth,
+          alpha: 0.85,
+        });
+      }
 
       const city = b.type === 'cityCenter' ? cityById.get(b.id) : undefined;
       if (city) {
-        const ring = cityRingStyle(city.level);
-        if (ring.outerColor !== null) {
-          plates
-            .circle(p.x, p.y, radius + ring.outerWidth / 2 + 1)
-            .stroke({ color: ring.outerColor, width: ring.outerWidth });
-        }
-        if (ring.innerColor !== null) {
-          plates
-            .circle(p.x, p.y, radius - theme.cityInnerRingInset)
-            .stroke({ color: ring.innerColor, width: theme.cityInnerRingWidth });
-        }
+        drawCityRings(p, city.level, diorama, radius);
         seenCities.add(city.id);
         let label = residentTexts.get(city.id);
         if (!label) {
@@ -209,7 +314,7 @@ export function createEconomyLayers(): EconomyLayers {
             resolution: 2,
           });
           label.anchor.set(0.5, 0);
-          icons.addChild(label);
+          labels.addChild(label);
           residentTexts.set(city.id, label);
         }
         const str = String(city.residents);
@@ -219,34 +324,21 @@ export function createEconomyLayers(): EconomyLayers {
 
       const kind = badgeKind(statuses[b.id]);
       if (kind) {
-        const bx = p.x + radius * 0.75;
-        const by = p.y - radius * 0.75;
-        badges
-          .circle(bx, by, badgeR)
-          .fill(kind === 'paused' ? theme.pausedBadgeColor : theme.badgeColor)
-          .stroke({ color: theme.plateRimColor, width: 1 });
-        if (kind === 'paused') {
-          // pause sign: two small bars
-          const bw = badgeR * 0.26;
-          const bh = badgeR * 0.9;
-          badges
-            .rect(bx - bw * 1.4, by - bh / 2, bw, bh)
-            .rect(bx + bw * 0.4, by - bh / 2, bw, bh)
-            .fill(theme.badgeMarkColor);
-          continue;
+        if (diorama) {
+          drawBadge(
+            p.x + hexSize * theme.badgeArtOffsetXFactor,
+            p.y + hexSize * theme.badgeArtOffsetYFactor,
+            kind,
+          );
+        } else {
+          drawBadge(p.x + radius * 0.75, p.y - radius * 0.75, kind);
         }
-        // "!" drawn from shapes: a bar and a dot
-        const w = badgeR * 0.28;
-        badges
-          .roundRect(bx - w / 2, by - badgeR * 0.6, w, badgeR * 0.75, w / 2)
-          .circle(bx, by + badgeR * 0.45, w * 0.65)
-          .fill(theme.badgeMarkColor);
       }
     }
-    for (const [id, entry] of iconTexts) {
+    for (const [id, v] of visuals) {
       if (seen.has(id)) continue;
-      entry.text.destroy();
-      iconTexts.delete(id);
+      destroyVisual(v);
+      visuals.delete(id);
     }
     for (const [id, label] of residentTexts) {
       if (seenCities.has(id)) continue;
@@ -256,7 +348,8 @@ export function createEconomyLayers(): EconomyLayers {
   }
 
   return {
-    layers: [tint, border, roads, plates, icons, badges, highlights, preview],
+    below: [tint, border, roads, ground, objects, labels, badges],
+    above: [highlights, preview],
     update(state, statuses) {
       drawTerritory(state);
       drawRoads(state);

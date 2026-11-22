@@ -6,7 +6,6 @@ import type { BuildingStatus } from '../core/rules/production';
 import {
   BUILDING_IDS,
   BUILDINGS,
-  GOODS,
   GOOD_IDS,
   UNITS,
   economyConfig,
@@ -40,6 +39,7 @@ import {
   needText,
   tradeRows,
 } from './cityText';
+import { buildingIcon, goodIcon, goodText, ownerColor, unitIcon } from './art';
 import { button, el } from './dom';
 import {
   onTheWayText,
@@ -209,16 +209,22 @@ export function createTileInfoPanel(root: HTMLElement, onClose: () => void): Til
     }
   });
 
-  function setHeader(h: Hex, name: string, glyph: string | null, terrain: TerrainId): void {
+  /** Header mark: terrain swatch (null), drawn art (element) or a symbol (text). */
+  function setHeader(
+    h: Hex,
+    name: string,
+    glyph: HTMLElement | string | null,
+    terrain: TerrainId,
+  ): void {
     const { col, row } = axialToOffset(h);
     title.textContent = name;
     coords.textContent = `${en.tileInfo.tile} ${col + 1}/${row + 1}`;
     if (glyph === null) {
-      mark.textContent = '';
+      mark.replaceChildren();
       mark.className = 'tile-info__mark tile-info__mark--swatch';
       mark.style.background = cssColor(theme.terrainColors[terrain]);
     } else {
-      mark.textContent = glyph;
+      mark.replaceChildren(glyph);
       mark.className = 'tile-info__mark tile-info__mark--icon';
       mark.style.background = '';
     }
@@ -263,8 +269,9 @@ export function createTileInfoPanel(root: HTMLElement, onClose: () => void): Til
     const list = el('ul', 'trade__list');
     for (const r of rows) {
       const li = el('li', 'trade__row');
-      const icon = el('span', 'trade__icon', GOODS[r.good].icon);
+      const icon = el('span', 'trade__icon');
       icon.setAttribute('aria-hidden', 'true');
+      icon.appendChild(goodIcon(r.good));
       const body = el('span', 'trade__body');
       body.append(
         el('span', 'trade__name', en.goods[r.good]),
@@ -326,8 +333,9 @@ export function createTileInfoPanel(root: HTMLElement, onClose: () => void): Til
       const ok = o.state === 'ok' && !t.pending;
       const item = button(`build-item build-item--here${ok ? '' : ' is-muted'}`, '');
       item.disabled = !ok;
-      const icon = el('span', 'build-item__icon', def.icon);
+      const icon = el('span', 'build-item__icon');
       icon.setAttribute('aria-hidden', 'true');
+      icon.appendChild(unitIcon(o.id));
       const body = el('span', 'build-item__body');
       body.appendChild(el('span', 'build-item__name', en.units[o.id]));
       const sub = el('span', 'build-item__effect');
@@ -339,11 +347,14 @@ export function createTileInfoPanel(root: HTMLElement, onClose: () => void): Til
         sub.className = 'build-item__missing';
         sub.textContent = formatMissing(o.missing);
       } else {
-        const parts = GOOD_IDS.filter((g) => (def.cost[g] ?? 0) > 0).map(
-          (g) => `${GOODS[g].icon} ${def.cost[g]} ${en.goods[g]}`,
+        const parts: Node[] = GOOD_IDS.filter((g) => (def.cost[g] ?? 0) > 0).map((g) =>
+          goodText(g, `${def.cost[g]} ${en.goods[g]}`),
         );
-        if (def.residents > 0) parts.push(formatResidents(def.residents));
-        sub.textContent = parts.join(', ');
+        if (def.residents > 0) parts.push(document.createTextNode(formatResidents(def.residents)));
+        parts.forEach((part, i) => {
+          if (i > 0) sub.appendChild(document.createTextNode(', '));
+          sub.appendChild(part);
+        });
       }
       body.appendChild(sub);
       body.appendChild(el('span', 'build-item__stats', unitStatLine(o.id)));
@@ -358,7 +369,12 @@ export function createTileInfoPanel(root: HTMLElement, onClose: () => void): Til
 
   function showUnit(o: UnitInfo): void {
     const def = UNITS[o.unit.type];
-    setHeader(o.hex, en.units[o.unit.type], def.icon, o.terrain);
+    setHeader(
+      o.hex,
+      en.units[o.unit.type],
+      unitIcon(o.unit.type, ownerColor(o.unit.owner)),
+      o.terrain,
+    );
     const nodes: HTMLElement[] = [];
     if (!o.own) nodes.push(el('p', 'unit-tag', en.unitText.enemy));
     const hp = el('div', 'hp');
@@ -411,8 +427,7 @@ export function createTileInfoPanel(root: HTMLElement, onClose: () => void): Til
   }
 
   function showBuildingInner(o: BuildingInfo): void {
-    const def = BUILDINGS[o.type];
-    setHeader(o.hex, en.buildings[o.type], def.icon, o.terrain);
+    setHeader(o.hex, en.buildings[o.type], buildingIcon(o.type), o.terrain);
     const status = el('p', `tile-info__status is-${statusTone(o.status)}`);
     status.append(el('span', 'status-dot'), document.createTextNode(formatStatus(o.status)));
     const nodes: HTMLElement[] = [status];
@@ -456,7 +471,7 @@ export function createTileInfoPanel(root: HTMLElement, onClose: () => void): Til
   }
 
   function showCity(o: CityInfo): void {
-    setHeader(o.hex, en.levels[o.level], '\u{1F3DB}\uFE0F', o.terrain);
+    setHeader(o.hex, en.levels[o.level], buildingIcon('cityCenter'), o.terrain);
     const nodes: HTMLElement[] = [];
     const rows = el('dl', 'tile-info__rows');
     const row = el('div', 'tile-info__row');
@@ -489,10 +504,10 @@ export function createTileInfoPanel(root: HTMLElement, onClose: () => void): Til
           r.parts.forEach((part, i) => {
             if (i > 0) text.appendChild(document.createTextNode(', '));
             text.appendChild(
-              el(
-                'span',
+              goodText(
+                part.good,
+                `${part.amount} ${en.goods[part.good]}`,
                 `cost-part${part.missing ? ' is-missing' : ''}`,
-                `${GOODS[part.good].icon} ${part.amount} ${en.goods[part.good]}`,
               ),
             );
           });
@@ -525,8 +540,9 @@ export function createTileInfoPanel(root: HTMLElement, onClose: () => void): Til
     const ok = o.state === 'ok';
     const item = button(`build-item build-item--here${ok ? '' : ' is-muted'}`, '');
     item.disabled = !ok;
-    const icon = el('span', 'build-item__icon', def.icon);
+    const icon = el('span', 'build-item__icon');
     icon.setAttribute('aria-hidden', 'true');
+    icon.appendChild(buildingIcon(o.id));
     const body = el('span', 'build-item__body');
     body.appendChild(el('span', 'build-item__name', en.buildings[o.id]));
     const sub = el('span', 'build-item__effect');
@@ -538,9 +554,7 @@ export function createTileInfoPanel(root: HTMLElement, onClose: () => void): Til
     } else {
       costParts(def.cost, stock).forEach((part, i) => {
         if (i > 0) sub.appendChild(document.createTextNode(', '));
-        sub.appendChild(
-          el('span', 'cost-part', `${GOODS[part.good].icon} ${part.amount} ${en.goods[part.good]}`),
-        );
+        sub.appendChild(goodText(part.good, `${part.amount} ${en.goods[part.good]}`));
       });
     }
     if (o.gain !== undefined && o.state !== 'locked') {

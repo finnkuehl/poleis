@@ -144,6 +144,35 @@ export const theme = {
   /** Tiny stones along the road (light and dark), radius as a fraction of the road width */
   roadStoneColors: [0xe6ddc8, 0x7d6a52],
   roadStoneRadiusFactor: 0.13,
+  /**
+   * Drawn art (SVG files in public/assets, see docs/ART.md and src/render/art.ts).
+   * New diorama art: the width of the base's top ellipse as a share of the hex width.
+   */
+  buildingArtWidthFactor: 0.92,
+  unitArtWidthFactor: 0.62,
+  /**
+   * Old flat art (any other canvas, e.g. 96 x 96): drawn centered on the colored plate / token,
+   * its canvas width as a share of the plate / token diameter.
+   */
+  buildingFlatArtFactor: 1.1,
+  unitFlatArtFactor: 0.8,
+  /**
+   * Largest texture an SVG is rasterized to (px, longer side). The game picks the size that stays
+   * sharp at maximum zoom (up to this cap); lower = less memory, softer art when zoomed in.
+   */
+  artMaxTexturePx: 384,
+  /**
+   * City-level rings around a diorama building: an ellipse on the ground around the base
+   * (radii and downward shift are fractions of the hex size). The Metropolis' second ring is
+   * drawn this many px outside the first one (an inner ring would be hidden by the base).
+   */
+  cityArtRingRxFactor: 0.84,
+  cityArtRingRyFactor: 0.48,
+  cityArtRingOffsetFactor: 0.06,
+  cityArtSecondRingGap: 2.5,
+  /** Status badge over a diorama building: offset from the tile center (fractions of hex size) */
+  badgeArtOffsetXFactor: 0.6,
+  badgeArtOffsetYFactor: -0.95,
   /** Building plate: radius (fraction of hex size), light rim, icon size (fraction) */
   plateRadiusFactor: 0.62,
   plateRimColor: 0xf4e9d8,

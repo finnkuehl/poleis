@@ -4,6 +4,7 @@ import { hexToPixel, pixelToHex, type Hex } from '../core/hex';
 import { inBounds } from '../core/map';
 import type { BuildingStatus } from '../core/rules/production';
 import type { GameState, PlayerId } from '../core/state';
+import { loadArt } from './art';
 import { CameraController, screenToWorld } from './camera';
 import { hexSize, startHexScreenRadiusPx } from './config';
 import { createMapView } from './map';
@@ -50,19 +51,23 @@ export async function createRenderer(
   onTileTap: (h: Hex | null) => void,
   drag?: DragHandlers,
 ): Promise<Renderer> {
+  const resolution = Math.min(window.devicePixelRatio || 1, 2);
+  // Load and rasterize the SVG art while the renderer starts (both before the first draw)
+  const artLoading = loadArt(resolution);
   const app = new Application();
   await app.init({
     background: theme.background,
     resizeTo: window,
     antialias: true,
     autoDensity: true,
-    resolution: Math.min(window.devicePixelRatio || 1, 2),
+    resolution,
   });
   container.appendChild(app.canvas);
+  const art = await artLoading;
 
   const world = new Container();
   app.stage.addChild(world);
-  const view = createMapView(state.map);
+  const view = createMapView(state.map, art);
   world.addChild(view.container);
 
   const selectTile = (h: Hex | null): void => view.setSelection(h);

@@ -1,15 +1,17 @@
 // Economy overview: workers and, per good, stock, net per turn, where it comes from and goes.
-import { GOODS, type GoodId } from '../data';
+import type { GoodId } from '../data';
 import type { EconomyOverview, GoodFlow } from '../core/rules/economy';
 import { en } from '../i18n/en';
 import { formatMade, formatNet, formatRunsOut, formatUsed, formatWorkerLine } from '../i18n/format';
+import { goodIcon } from './art';
 import { button, el } from './dom';
 
 function goodRow(flow: GoodFlow, onToggle: (good: GoodId, low: boolean) => void): HTMLElement {
   const row = el('li', 'economy__row');
   const head = el('div', 'economy__head');
-  const icon = el('span', 'economy__icon', GOODS[flow.good].icon);
+  const icon = el('span', 'economy__icon');
   icon.setAttribute('aria-hidden', 'true');
+  icon.appendChild(goodIcon(flow.good));
   const net = el(
     'span',
     `economy__net${flow.net > 0 ? ' is-plus' : flow.net < 0 ? ' is-minus' : ''}`,

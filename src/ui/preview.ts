@@ -19,6 +19,10 @@ import {
   createTileInfoPanel,
   createToast,
   eventLines,
+  buildingIcon,
+  goodIcon,
+  setArtPlayers,
+  unitIcon,
 } from './index';
 import { createGameState, type GameEvent } from '../core/state';
 import type { SaveListEntry } from '../save';
@@ -31,7 +35,9 @@ import { formatAdvanced, formatBought, formatSold } from '../i18n/format';
 import { turnSummary } from './turnSummary';
 import type { BuildOption } from './buildOptions';
 import type { Unit } from '../core/state';
-import { UNITS, type UnitId } from '../data';
+import { BUILDING_IDS, GOOD_IDS, UNIT_IDS, UNITS, type UnitId } from '../data';
+import { el, button } from './dom';
+import { PLAYER_COLOR_COUNT, playerCssColor } from './playerColors';
 import { formatAttacked } from '../i18n/format';
 import { attackPreviewLines, trainOptions } from './unitText';
 
@@ -632,6 +638,8 @@ addControl(
 const game = createGameState('preview', { settings: { aiCount: 3, playerName: 'Ilios' } });
 game.turn = 47;
 game.players[2].alive = false;
+// Owner colors of the drawn art: the human's color for own art, the rivals' for enemy units.
+setArtPlayers(game.players);
 game.buildings.push({
   id: 900,
   type: 'wonder',
@@ -731,4 +739,66 @@ addControl('End: last city fell', () => {
 addControl('Turn summary: rivals', () => {
   const lines = eventLines({ ...game, events: sampleEvents }, 0);
   lines.forEach((line, i) => window.setTimeout(() => toast.show(line.text, line.kind), i * 3200));
+});
+
+// ---- Drawn art: every icon at the sizes the components use (missing files show the emoji) ----
+const artSheet = el('section', 'sheet economy-sheet');
+artSheet.hidden = true;
+const artHeader = el('div', 'sheet__header');
+const artClose = button('icon-button', '\u2715');
+artClose.setAttribute('aria-label', en.ui.close);
+artClose.addEventListener('click', () => {
+  artSheet.hidden = true;
+});
+artHeader.append(el('h2', 'sheet__title', 'Art icons'), artClose);
+const artContent = el('div', 'economy__content');
+artSheet.append(artHeader, artContent);
+ui.appendChild(artSheet);
+
+/** One row: a label and the icons, each in the container class of a real component. */
+function artRow(label: string, icons: HTMLElement[]): HTMLElement {
+  const row = el('div', 'economy__head');
+  row.style.flexWrap = 'wrap';
+  row.style.padding = '4px 0';
+  row.appendChild(el('span', 'economy__name', label));
+  row.append(...icons);
+  return row;
+}
+function boxed(className: string, art: HTMLElement): HTMLElement {
+  const box = el('span', className);
+  box.appendChild(art);
+  return box;
+}
+const colorIndexes = Array.from({ length: PLAYER_COLOR_COUNT }, (_, i) => i);
+
+addControl('Art icons', () => {
+  artContent.replaceChildren(el('h3', 'build-menu__heading', 'Goods (bar, overview, market)'));
+  for (const id of GOOD_IDS) {
+    artContent.appendChild(
+      artRow(en.goods[id], [
+        boxed('resource-chip__icon', goodIcon(id)),
+        boxed('economy__icon', goodIcon(id)),
+        boxed('trade__icon', goodIcon(id)),
+      ]),
+    );
+  }
+  artContent.appendChild(el('h3', 'build-menu__heading', 'Buildings (lists, panel header)'));
+  for (const id of BUILDING_IDS) {
+    artContent.appendChild(
+      artRow(en.buildings[id], [
+        ...colorIndexes.map((c) => boxed('build-item__icon', buildingIcon(id, playerCssColor(c)))),
+        boxed('tile-info__mark tile-info__mark--icon', buildingIcon(id)),
+      ]),
+    );
+  }
+  artContent.appendChild(el('h3', 'build-menu__heading', 'Units (training list, panel header)'));
+  for (const id of UNIT_IDS) {
+    artContent.appendChild(
+      artRow(en.units[id], [
+        ...colorIndexes.map((c) => boxed('build-item__icon', unitIcon(id, playerCssColor(c)))),
+        boxed('tile-info__mark tile-info__mark--icon', unitIcon(id)),
+      ]),
+    );
+  }
+  artSheet.hidden = false;
 });
