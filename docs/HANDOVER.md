@@ -12,6 +12,9 @@ Read it together with `CLAUDE.md` (rules), `docs/GAME_DESIGN.md` (game design in
 - **M4 – Territory & military is merged as `v0.4.0`** (PR #6): units, combat, capturing, settlers, fog of war, plus the user's overview requests (workers working/free, "📊 Overview" economy sheet, drag & drop for units). The user tested it on desktop: "looks good".
 - **Multi-turn move orders are done as `v0.4.1`** (§5a, rules in GAME_DESIGN §7 "decided after M4: move orders").
 - **M5 – First complete game** (`v0.5.0`, branch `m5-complete-game`): start menu, 1–3 AI civilizations (Athens, Sparta, Corinth), victory/defeat, scores, saving (autosave + 3 slots). Rules in GAME_DESIGN "Detailed rules (decided in M5)". Next: M6 – Seafaring (see §6).
+- **Low priority per good** is merged as `v0.5.1` (PR #9).
+- **M6 – Seafaring is paused** (user request); its gameplay decisions are on branch `m6-seafaring`.
+- **M7 graphics in progress** on branch `m7-graphics` (PR for review): see `docs/ART.md` (chosen V1 isometric diorama style, asset layers and anchors) and `tools/art/README.md` (how the art is generated).
 - **Quick-start URLs for testing** skip the start menu: `?seed=1&sandbox` (test mode, no autosave), `?seed=1&ai=3` (3 AIs), `&size=small|normal|large`.
 
 ## 2. How we work (important – the user relies on it)
@@ -39,7 +42,8 @@ Read it together with `CLAUDE.md` (rules), `docs/GAME_DESIGN.md` (game design in
 - `src/data/` – ALL numbers: terrain, goods, buildings, economy (start goods, market, sandbox goods), population, cityLevels, units, military, mapgen, startPosition, game (civs, map sizes, default settings), victory (wonder, points), **ai** (all AI weights/targets per personality, peace time, wonder start turn).
 - `src/ai/` – AI players: `play.ts` (`playAiTurns` after the human's End turn), `turn.ts` (`takeAiTurn`: pick the highest-utility candidate, apply, repeat), `context.ts` (what the AI knows this decision), `view.ts` (fog-fair view of enemies), generators: `economy.ts`, `training.ts`, `units.ts` (scouts, defenders, army), `settle.ts`, `wonder.ts`. Tests run headless multi-AI simulations.
 - `src/save/` – `saveGame`/`loadGame`/`listSaves` with an envelope (`SAVE_VERSION`, migrations). **Bump `SAVE_VERSION` and add a migration whenever `GameState` changes shape.**
-- `src/render/` – PixiJS: terrain once, dynamic layers (territory, roads, buildings, badges, units, fog, highlights, preview, attack targets, selection), camera (pan/pinch/wheel, `centerOn`, `centerOnScreenPoint`).
+- `tools/art/` – Python 3 (stdlib) generators for all building/unit SVGs (`build_all.py`, `preview.py`, `iso.py` library, `units_lib.py`, `lib_*.py`); output in `public/assets/{buildings,units}/<id>.svg` + `<id>.accent.svg` (owner-color layer drawn UNDER the art). Goods icons in `public/assets/goods/` are hand-written flat SVGs. Every asset is listed in `ASSETS.md`.
+- `src/render/` – PixiJS: painted terrain once (`terrainLayer.ts`), art loading (`art.ts`, `artLayout.ts`: rasterize SVGs once, anchors, row sorting, tinted accent layer), dynamic layers (territory, roads, buildings, badges, units, fog, highlights, preview, attack targets, selection), camera (pan/pinch/wheel, `centerOn`, `centerOnScreenPoint`).
 - `src/ui/` – HTML/CSS components (resource bar with menu button, bottom bar, build menu, tile/city/building/unit panels, confirm sheet, toast, mode banner, economy sheet, start menu + seed preview, game menu, scores sheet, end screen, event texts) + **`interaction.ts` = controller** (modes idle / placing / roadStart / roadEnd / unit; refresh after every action; after End turn: AI turns → autosave → summary toast; end screen when `state.result`). `main.ts` boots: quick-start params → boot intent (in-game Load) → start menu. `preview.ts` + `/ui-preview.html` = dev-only component gallery.
 - `src/i18n/en.ts` + `format.ts` – every visible text.
 
