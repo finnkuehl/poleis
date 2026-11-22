@@ -207,6 +207,15 @@ are faint. Everything must stay smooth (60 fps) on a 40 × 40 map on a mid-range
 - **Draw order:** terrain shapes and buildings are sorted together by row, so a mountain in front
   covers a building behind it and vice versa. Units stay on top.
 
+### Seafaring and ocean (decided with the user at the start of M6)
+
+- **Harbor:** drawn like the fishery, as one scene in 6 direction versions facing the real water
+  (stone quay, crane, warehouse, amphorae); the game picks the version toward the coastal water.
+- **Ocean: static, richer painting** – depth, wave patterns, sun glints, foam and reefs, painted
+  once (no moving water for now; movement may come with the M7 animation step).
+- **Ships** use the unit art (transport, trireme) on their water tokens; passengers show as a small
+  marker on the ship.
+
 ## Where the art comes from
 
 All graphics are original work made for Poleis (no downloads). Origin and license of every

@@ -205,6 +205,10 @@ An enemy land unit that stands on a city center undisturbed for one turn takes o
 - **Transport ship:** a land unit steps from the coast onto an adjacent own transport ship; a transport carries **up to 2 units**; they step off onto an adjacent land tile. If the ship sinks, the units on board are lost. This is how settlers reach the islands.
 - **Trireme:** attacks ships and land units on tiles next to the water; land units with a ranged attack (archers, range 2) can shoot at ships near the coast. Ships never capture cities.
 - **AI and ships:** in M6 the AI civilizations do not build harbors or ships – they stay on the mainland. Seafaring AI comes later.
+- **Boarding and landing end the move:** a land unit that steps onto a transport, or off it onto an adjacent land tile, has no movement left that turn. The ship itself can still sail in the same turn (passengers travel along).
+- **No attacks from on board:** passengers cannot attack; they land first and fight from the next turn on. Only the trireme fights at sea.
+- **Where ships go:** both ships sail on coastal water and ocean (land units never enter water on their own). A ship trained in the harbor appears next turn on a free water tile next to the harbor; if none is free, it waits.
+- **Ships and cities:** ships never capture cities and never enter land.
 
 ## 8. Territory & vision
 
