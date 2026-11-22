@@ -163,7 +163,6 @@ export const en = {
     aboardHint: 'On board. Tap a highlighted shore tile to land.',
     aboardNoMoves: 'On board. It can land next turn.',
     aboardNoLanding: 'On board. No free shore tile next to the ship.',
-    boardHint: 'Tap the anchor on your ship to board it.',
     landAria: 'Select {unit} aboard',
     backToShip: 'Back to the ship',
   },
